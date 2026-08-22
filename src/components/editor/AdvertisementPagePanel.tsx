@@ -1,0 +1,1563 @@
+"use client";
+
+/**
+ * AdvertisementPagePanel
+ *
+ * Renders inside GenerationWizardModal when the "Advertisement Page" tab is active.
+ *
+ * Flow:
+ *  1. Upload advertisements (JPG/PNG/PDF) → local component state (RAM)
+ *  2. Advertisement Library — lazy-loaded preview gallery
+ *  3. Edit Window — per-ad width/height/rotation/crop/preset
+ *  4. Placement Presets — arrange algorithm
+ *  5. Remaining Space Detection
+ *  6. Article Source — Manual slots OR Existing Category Engine
+ *  7. Generate — calls existing importNewswireStories + autoPlaceAdvertisements
+ *
+ * NO engines are modified.
+ * Advertisement images stored as Data URLs in component state only.
+ */
+
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+  type ChangeEvent,
+} from "react";
+import {
+  Upload,
+  Image as ImageIcon,
+  Trash2,
+  Copy,
+  Edit,
+  Lock,
+  Unlock,
+  RotateCcw,
+  ChevronLeft,
+  RefreshCw,
+  CheckCircle,
+  AlertCircle,
+} from "lucide-react";
+import type { NewswireStory, NewswireCategory } from "@/lib/newswire";
+import { NEWSWIRE_CATEGORIES, NEWSWIRE_SUBHEADING_PRESETS } from "@/lib/newswire";
+import { getFallbackNewswireStories } from "@/lib/newswireFallback";
+import { createStoryFrame } from "@/store/editorStore";
+import { DEFAULT_PAGE_MASTER } from "@/types/page";
+import { prototypeArticle } from "@/data/prototypeArticle";
+import { POINTS_PER_INCH } from "@/utils/page";
+import type { TemplateId } from "@/engines/TemplateLayout/TemplateTypes";
+import {
+  WIZARD_LAYOUT_DESIGNS,
+  type NewswireImportOptions,
+  type WizardAction,
+  type WizardPageSummary,
+} from "./GenerationWizardModal";
+import {
+  computeAdResidualRects,
+  buildAdResidualSlots,
+} from "@/engines/AdvertisementManager/AdResidualSpaceFiller";
+import { FRONT_HEADER_HEIGHT_PT, INSIDE_HEADER_HEIGHT_PT } from "@/engines/HeaderSystem/HeaderGeometry";
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const PAGE_W = DEFAULT_PAGE_MASTER.width * POINTS_PER_INCH;
+const PAGE_H = DEFAULT_PAGE_MASTER.height * POINTS_PER_INCH;
+const CONTENT_X = DEFAULT_PAGE_MASTER.contentX * POINTS_PER_INCH;
+const CONTENT_Y = DEFAULT_PAGE_MASTER.contentY * POINTS_PER_INCH;
+const CONTENT_W = DEFAULT_PAGE_MASTER.contentWidth * POINTS_PER_INCH;
+const CONTENT_H = DEFAULT_PAGE_MASTER.contentHeight * POINTS_PER_INCH;
+const COL_COUNT = DEFAULT_PAGE_MASTER.columns;
+const GUTTER = DEFAULT_PAGE_MASTER.gutter * POINTS_PER_INCH;
+const COL_W = (CONTENT_W - GUTTER * (COL_COUNT - 1)) / COL_COUNT;
+const MIN_ARTICLE_H = 50; // pts minimum article box height
+const MIN_ARTICLE_W = 50; // pts minimum article box width
+
+/** Header the generated page carries — reserves the matching band before ads/articles are placed. */
+type AdPageHeaderMode = "none" | "front" | "inside";
+// Mirrors editorStore's own PAGE_HEADER_CLEARANCE_PT — the gap between an
+// inside page's folio strip and its first story/ad.
+const INSIDE_HEADER_CLEARANCE_PT = 4;
+
+// Column-based preset widths (in points)
+const AD_PRESETS: Record<string, { widthPt: number; heightPt: number; label: string }> = {
+  "1-col": { widthPt: COL_W, heightPt: COL_W * 1.4, label: "1 कॉलम" },
+  "2-col": { widthPt: COL_W * 2 + GUTTER, heightPt: COL_W * 1.4, label: "2 कॉलम" },
+  "3-col": { widthPt: COL_W * 3 + GUTTER * 2, heightPt: COL_W * 1.4, label: "3 कॉलम" },
+  "quarter": { widthPt: CONTENT_W / 2, heightPt: CONTENT_H / 4, label: "चौथाई पन्ना" },
+  "half": { widthPt: CONTENT_W, heightPt: CONTENT_H / 2, label: "आधा पन्ना" },
+  "vertical-strip": { widthPt: COL_W, heightPt: CONTENT_H * 0.6, label: "खड़ी पट्टी" },
+  "horizontal-strip": { widthPt: CONTENT_W, heightPt: COL_W * 0.8, label: "आड़ी पट्टी" },
+  "banner": { widthPt: CONTENT_W, heightPt: COL_W * 0.6, label: "बैनर" },
+  "island": { widthPt: COL_W * 2 + GUTTER, heightPt: COL_W * 2, label: "आइलैंड" },
+  "full-width": { widthPt: CONTENT_W, heightPt: CONTENT_H, label: "पूरी चौड़ाई" },
+};
+
+// ─── Whitespace trim (upload time only) ────────────────────────────────────
+//
+// A scanned tender notice often carries its own print margin — blank border
+// baked into the JPEG/PNG itself, not something the placement math can see.
+// Sizing a box from the FULL image's aspect ratio (margin included) makes
+// that box correct on paper, but the visible document inside it still sits
+// short of the box on every side, exactly like a box that's the wrong shape.
+// Trimming the blank border off at upload time — once, before the box size
+// is ever computed — means the aspect ratio (and everything downstream of
+// it) is measured from the actual document, so the box the two other ad
+// fixes size and pack is the content's true shape, not the scan's.
+const WHITESPACE_TRIM_BRIGHTNESS = 245; // 0-255 — pixels this bright (or more transparent) count as blank margin
+const WHITESPACE_TRIM_MIN_KEEP_FRACTION = 0.05; // never trim more than 95% off either side — guards a mostly-blank ad from collapsing to nothing
+
+function trimImageWhitespace(img: HTMLImageElement): { dataUrl: string; width: number; height: number } {
+  const width = img.naturalWidth;
+  const height = img.naturalHeight;
+  const fallback = { dataUrl: img.src, width, height };
+  if (width < 4 || height < 4) return fallback;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return fallback;
+  ctx.drawImage(img, 0, 0);
+
+  let data: Uint8ClampedArray;
+  try {
+    data = ctx.getImageData(0, 0, width, height).data;
+  } catch {
+    return fallback;
+  }
+
+  const isBlank = (x: number, y: number) => {
+    const idx = (y * width + x) * 4;
+    if (data[idx + 3]! < 10) return true;
+    return (
+      data[idx]! > WHITESPACE_TRIM_BRIGHTNESS &&
+      data[idx + 1]! > WHITESPACE_TRIM_BRIGHTNESS &&
+      data[idx + 2]! > WHITESPACE_TRIM_BRIGHTNESS
+    );
+  };
+
+  let top = 0;
+  scanTop: for (; top < height; top++) {
+    for (let x = 0; x < width; x++) if (!isBlank(x, top)) break scanTop;
+  }
+  let bottom = height - 1;
+  scanBottom: for (; bottom >= top; bottom--) {
+    for (let x = 0; x < width; x++) if (!isBlank(x, bottom)) break scanBottom;
+  }
+  let left = 0;
+  scanLeft: for (; left < width; left++) {
+    for (let y = top; y <= bottom; y++) if (!isBlank(left, y)) break scanLeft;
+  }
+  let right = width - 1;
+  scanRight: for (; right >= left; right--) {
+    for (let y = top; y <= bottom; y++) if (!isBlank(right, y)) break scanRight;
+  }
+
+  const trimmedWidth = right - left + 1;
+  const trimmedHeight = bottom - top + 1;
+  const nothingToTrim = left === 0 && top === 0 && right === width - 1 && bottom === height - 1;
+  if (
+    nothingToTrim ||
+    trimmedWidth < width * WHITESPACE_TRIM_MIN_KEEP_FRACTION ||
+    trimmedHeight < height * WHITESPACE_TRIM_MIN_KEEP_FRACTION
+  ) {
+    return fallback;
+  }
+
+  const outCanvas = document.createElement("canvas");
+  outCanvas.width = trimmedWidth;
+  outCanvas.height = trimmedHeight;
+  const outCtx = outCanvas.getContext("2d");
+  if (!outCtx) return fallback;
+  outCtx.drawImage(canvas, left, top, trimmedWidth, trimmedHeight, 0, 0, trimmedWidth, trimmedHeight);
+
+  return { dataUrl: outCanvas.toDataURL("image/png"), width: trimmedWidth, height: trimmedHeight };
+}
+
+const PLACEMENT_STYLES = [
+  "प्रोफेशनल न्यूज़पेपर",
+  "नीचे भारी",
+  "ऊपर भारी",
+  "संतुलित",
+  "ग्रिड",
+  "कस्टम",
+] as const;
+
+type PlacementStyle = (typeof PLACEMENT_STYLES)[number];
+
+// ─── Advertisement item type ──────────────────────────────────────────────────
+
+type AdItem = {
+  id: string;
+  filename: string;
+  dataUrl: string;
+  originalWidth: number;
+  originalHeight: number;
+  displayWidthPt: number;
+  displayHeightPt: number;
+  aspectLocked: boolean;
+  rotation: 0 | 90 | 180 | 270;
+  cropMode: "fit" | "fill" | "crop";
+  locked: boolean;
+  placedX: number;
+  placedY: number;
+  placed: boolean;
+};
+
+type Rect = { x: number; y: number; width: number; height: number };
+
+// ─── Ad placement algorithm (pure — no engine changes) ────────────────────────
+
+// splitRectGrid is superseded by AdResidualSpaceFiller for the advertisement
+// insertion special condition. The new engine uses fluid-width columns and
+// skyline subtraction so every pixel of remaining space is filled.
+// This stub is kept only for reference — it is no longer called.
+
+function arrangeAds(
+  ads: AdItem[],
+  style: PlacementStyle,
+  bounds: { y: number; height: number } = { y: CONTENT_Y, height: CONTENT_H },
+): AdItem[] {
+  const sorted = [...ads].sort(
+    (a, b) => b.displayWidthPt * b.displayHeightPt - a.displayWidthPt * a.displayHeightPt,
+  );
+
+  const boundsY = bounds.y;
+  const boundsBottom = bounds.y + bounds.height;
+
+  let cursorX = CONTENT_X + CONTENT_W;
+  let cursorY = boundsBottom;
+  // Tallest ad placed in the current row so far — the row above starts flush
+  // against it, not against whichever ad happened to be placed last. Without
+  // this, ads of differing heights in the same row left the next row's
+  // baseline set by the shorter one, opening a gap under the taller ad.
+  let rowHeight = 0;
+  const gutterSize = 0; // ZERO gap — ads must touch each other; article frames fill the rest exactly
+
+  const placed: AdItem[] = [];
+  // Indices into `placed` for the row currently being filled — used to find
+  // and close a leftover sliver once the row is done (see closeRowGap below).
+  let currentRowIndices: number[] = [];
+
+  // Ads in a row rarely sum to exactly the content width — three 296pt ads
+  // leave a 12pt remainder out of 900pt, for instance. That remainder is
+  // narrower than the residual-space engine's own minimum article width, so
+  // no article box ever claims it — it just sits there as dead white space
+  // at the page's left margin. Below this threshold there's no way to fill
+  // it with real content, so the only two options are a bare gap or growing
+  // the row's leftmost ad by a few points to close it; a snap this small
+  // (never more than this threshold, typically far less) reads as sizing the
+  // banner to the column, not stretching it to a different shape.
+  const ROW_GAP_SNAP_THRESHOLD = 40;
+  const closeRowGap = () => {
+    if (currentRowIndices.length === 0) return;
+    let leftmostIdx = currentRowIndices[0]!;
+    for (const idx of currentRowIndices) {
+      if (placed[idx]!.placedX < placed[leftmostIdx]!.placedX) leftmostIdx = idx;
+    }
+    const leftmost = placed[leftmostIdx]!;
+    const gap = leftmost.placedX - CONTENT_X;
+    if (gap > 0 && gap <= ROW_GAP_SNAP_THRESHOLD) {
+      placed[leftmostIdx] = {
+        ...leftmost,
+        placedX: CONTENT_X,
+        displayWidthPt: leftmost.displayWidthPt + gap,
+      };
+    }
+    currentRowIndices = [];
+  };
+
+  for (const ad of sorted) {
+    if (ad.locked) {
+      placed.push({ ...ad, placed: true });
+      continue;
+    }
+
+    // Decide fit using THIS ad's own width, before placing it — checking with
+    // the previous ad's width (the old approach) wrapped a narrower ad to a
+    // new row even when it would have fit beside a wider one, leaving the two
+    // ads on different rows instead of sharing the same bottom edge.
+    if (cursorX - ad.displayWidthPt < CONTENT_X) {
+      closeRowGap();
+      cursorX = CONTENT_X + CONTENT_W;
+      cursorY -= rowHeight + gutterSize;
+      rowHeight = 0;
+    }
+
+    let adX = cursorX - ad.displayWidthPt;
+    let adY = cursorY - ad.displayHeightPt;
+
+    // Clamp to content area
+    adX = Math.max(CONTENT_X, Math.min(adX, CONTENT_X + CONTENT_W - ad.displayWidthPt));
+    adY = Math.max(boundsY, Math.min(adY, boundsBottom - ad.displayHeightPt));
+
+    placed.push({ ...ad, placedX: adX, placedY: adY, placed: true });
+    currentRowIndices.push(placed.length - 1);
+
+    // Advance cursor: move left within the row; track the row's tallest ad.
+    cursorX = adX - gutterSize;
+    rowHeight = Math.max(rowHeight, ad.displayHeightPt);
+  }
+  closeRowGap();
+
+  // Adjust Y position based on placement style
+  if (style === "नीचे भारी" || style === "प्रोफेशनल न्यूज़पेपर") {
+    return placed; // default is bottom-right → left → up
+  }
+  if (style === "ऊपर भारी") {
+    return placed.map((ad) => ({
+      ...ad,
+      placedY: boundsY + (boundsBottom - ad.placedY - ad.displayHeightPt),
+    }));
+  }
+  if (style === "संतुलित") {
+    const halfCount = Math.ceil(placed.length / 2);
+    return placed.map((ad, index) => ({
+      ...ad,
+      placedY: index < halfCount ? boundsY : boundsBottom - ad.displayHeightPt,
+    }));
+  }
+  return placed;
+}
+
+// ─── Remaining rects — delegated to AdResidualSpaceFiller (skyline subtraction) ───
+//
+// SPECIAL CONDITION — Advertisement Insertion Only.
+// Uses the new skyline-based algorithm that detects ALL remaining rectangular
+// zones (not just a top band + bottom-left band), including pockets beside and
+// between multiple ads.
+//
+// `computeAdResidualRects` is imported from AdResidualSpaceFiller engine.
+// This wrapper adapts AdItem[] to the engine's AdPlacedItem interface.
+function computeRemainingRects(
+  placedAds: AdItem[],
+  bounds: { y: number; height: number } = { y: CONTENT_Y, height: CONTENT_H },
+): Rect[] {
+  return computeAdResidualRects(
+    placedAds.map((ad) => ({
+      placedX: Math.floor(ad.placedX),
+      placedY: Math.floor(ad.placedY),
+      displayWidthPt: Math.ceil(ad.displayWidthPt),
+      displayHeightPt: Math.ceil(ad.displayHeightPt),
+      placed: ad.placed,
+    })),
+    CONTENT_X,
+    bounds.y,
+    CONTENT_W,
+    bounds.height,
+  );
+}
+
+// ─── Ad Card ──────────────────────────────────────────────────────────────────
+
+const AdCard = memo(function AdCard({
+  ad,
+  onDelete,
+  onDuplicate,
+  onEdit,
+  onToggleLock,
+}: {
+  ad: AdItem;
+  onDelete: (id: string) => void;
+  onDuplicate: (id: string) => void;
+  onEdit: (id: string) => void;
+  onToggleLock: (id: string) => void;
+}) {
+  const [visible, setVisible] = useState(false);
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  // Lazy-load preview via IntersectionObserver
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry?.isIntersecting) setVisible(true); },
+      { threshold: 0.1 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div ref={ref} className={`ad-card${ad.locked ? " locked" : ""}`}>
+      <div className="ad-card-preview">
+        {visible ? (
+          <img src={ad.dataUrl} alt={ad.filename} style={{ objectFit: "contain", width: "100%", height: "100%" }} />
+        ) : (
+          <div className="ad-card-placeholder">
+            <ImageIcon size={24} />
+          </div>
+        )}
+        {ad.locked ? (
+          <div className="ad-card-lock-badge">
+            <Lock size={10} /> लॉक्ड
+          </div>
+        ) : null}
+      </div>
+      <div className="ad-card-meta">
+        <span className="ad-card-filename" title={ad.filename}>{ad.filename}</span>
+        <span className="ad-card-dims">
+          {Math.round(ad.originalWidth)} × {Math.round(ad.originalHeight)}px
+        </span>
+      </div>
+      <div className="ad-card-actions">
+        <button type="button" title="बदलें" onClick={() => onEdit(ad.id)}><Edit size={12} /></button>
+        <button type="button" title="कॉपी बनाएं" onClick={() => onDuplicate(ad.id)}><Copy size={12} /></button>
+        <button type="button" title={ad.locked ? "अनलॉक करें" : "लॉक करें"} onClick={() => onToggleLock(ad.id)}>
+          {ad.locked ? <Unlock size={12} /> : <Lock size={12} />}
+        </button>
+        <button type="button" className="danger" title="हटाएं" onClick={() => onDelete(ad.id)}><Trash2 size={12} /></button>
+      </div>
+    </div>
+  );
+});
+
+// ─── Ad Edit Window ───────────────────────────────────────────────────────────
+
+const AdEditWindow = memo(function AdEditWindow({
+  ad,
+  onUpdate,
+  onClose,
+}: {
+  ad: AdItem;
+  onUpdate: (id: string, patch: Partial<AdItem>) => void;
+  onClose: () => void;
+}) {
+  const [widthPt, setWidthPt] = useState(Math.round(ad.displayWidthPt));
+  const [heightPt, setHeightPt] = useState(Math.round(ad.displayHeightPt));
+  const [widthPtStr, setWidthPtStr] = useState(String(Math.round(ad.displayWidthPt)));
+  const [widthCmStr, setWidthCmStr] = useState((ad.displayWidthPt / 28.3465).toFixed(2));
+  const [heightPtStr, setHeightPtStr] = useState(String(Math.round(ad.displayHeightPt)));
+  const [heightCmStr, setHeightCmStr] = useState((ad.displayHeightPt / 28.3465).toFixed(2));
+
+  const [aspectLocked, setAspectLocked] = useState(ad.aspectLocked);
+  const [rotation, setRotation] = useState<0 | 90 | 180 | 270>(ad.rotation);
+  const [cropMode, setCropMode] = useState<"fit" | "fill" | "crop">(ad.cropMode);
+
+  const aspectRatio = ad.originalWidth / Math.max(1, ad.originalHeight);
+
+  const updateWidth = (newW: number) => {
+    const w = Math.max(10, Math.round(newW));
+    setWidthPt(w);
+    setWidthPtStr(String(w));
+    setWidthCmStr((w / 28.3465).toFixed(2));
+    if (aspectLocked) {
+      const h = Math.max(10, Math.round(w / aspectRatio));
+      setHeightPt(h);
+      setHeightPtStr(String(h));
+      setHeightCmStr((h / 28.3465).toFixed(2));
+    }
+  };
+
+  const updateHeight = (newH: number) => {
+    const h = Math.max(10, Math.round(newH));
+    setHeightPt(h);
+    setHeightPtStr(String(h));
+    setHeightCmStr((h / 28.3465).toFixed(2));
+    if (aspectLocked) {
+      const w = Math.max(10, Math.round(h * aspectRatio));
+      setWidthPt(w);
+      setWidthPtStr(String(w));
+      setWidthCmStr((w / 28.3465).toFixed(2));
+    }
+  };
+
+  const handleWidthPtInput = (valStr: string) => {
+    setWidthPtStr(valStr);
+    const num = Number(valStr);
+    if (!isNaN(num) && num > 0) {
+      updateWidth(num);
+    }
+  };
+
+  const handleWidthCmInput = (valStr: string) => {
+    setWidthCmStr(valStr);
+    const num = Number(valStr);
+    if (!isNaN(num) && num > 0) {
+      updateWidth(num * 28.3465);
+    }
+  };
+
+  const handleHeightPtInput = (valStr: string) => {
+    setHeightPtStr(valStr);
+    const num = Number(valStr);
+    if (!isNaN(num) && num > 0) {
+      updateHeight(num);
+    }
+  };
+
+  const handleHeightCmInput = (valStr: string) => {
+    setHeightCmStr(valStr);
+    const num = Number(valStr);
+    if (!isNaN(num) && num > 0) {
+      updateHeight(num * 28.3465);
+    }
+  };
+
+  const applyPreset = (key: string) => {
+    const preset = AD_PRESETS[key];
+    if (!preset) return;
+    updateWidth(preset.widthPt);
+    updateHeight(preset.heightPt);
+  };
+
+  const handleApply = () => {
+    onUpdate(ad.id, {
+      displayWidthPt: widthPt,
+      displayHeightPt: heightPt,
+      aspectLocked,
+      rotation,
+      cropMode,
+    });
+    onClose();
+  };
+
+  return (
+    <div className="ad-edit-window">
+      <div className="ad-edit-preview">
+        <img
+          src={ad.dataUrl}
+          alt={ad.filename}
+          style={{
+            objectFit: cropMode === "crop" ? "cover" : cropMode === "fill" ? "fill" : "contain",
+            width: "100%",
+            height: 180,
+            transform: `rotate(${rotation}deg)`,
+          }}
+        />
+      </div>
+
+      <div className="ad-edit-controls">
+        <div className="ad-edit-row">
+          <label>चौड़ाई (pt)</label>
+          <input
+            type="number"
+            value={widthPtStr}
+            min={50}
+            max={Math.round(CONTENT_W)}
+            onChange={(e) => handleWidthPtInput(e.target.value)}
+          />
+        </div>
+        <div className="ad-edit-row">
+          <label>चौड़ाई (सेमी)</label>
+          <input
+            type="number"
+            step="0.1"
+            value={widthCmStr}
+            onChange={(e) => handleWidthCmInput(e.target.value)}
+          />
+        </div>
+        <div className="ad-edit-row">
+          <label>ऊँचाई (pt)</label>
+          <input
+            type="number"
+            value={heightPtStr}
+            min={50}
+            max={Math.round(CONTENT_H)}
+            onChange={(e) => handleHeightPtInput(e.target.value)}
+          />
+        </div>
+        <div className="ad-edit-row">
+          <label>ऊँचाई (सेमी)</label>
+          <input
+            type="number"
+            step="0.1"
+            value={heightCmStr}
+            onChange={(e) => handleHeightCmInput(e.target.value)}
+          />
+        </div>
+        <label className="ad-edit-lock">
+          <input
+            type="checkbox"
+            checked={aspectLocked}
+            onChange={(e) => setAspectLocked(e.target.checked)}
+          />
+          अनुपात लॉक करें
+        </label>
+      </div>
+
+      <div className="ad-edit-section-label">क्रॉप मोड</div>
+      <div className="ad-mode-row">
+        {(["fit", "fill", "crop"] as const).map((mode) => (
+          <button
+            key={mode}
+            type="button"
+            className={cropMode === mode ? "selected" : ""}
+            onClick={() => setCropMode(mode)}
+          >
+            {{ fit: "फ़िट", fill: "भरें", crop: "क्रॉप" }[mode]}
+          </button>
+        ))}
+      </div>
+
+      <div className="ad-edit-section-label">घुमाव</div>
+      <div className="ad-mode-row">
+        {([0, 90, 180, 270] as const).map((deg) => (
+          <button
+            key={deg}
+            type="button"
+            className={rotation === deg ? "selected" : ""}
+            onClick={() => setRotation(deg)}
+          >
+            {deg}°
+          </button>
+        ))}
+      </div>
+
+      <div className="ad-edit-section-label">तयशुदा आकार</div>
+      <div className="ad-presets-grid">
+        {Object.entries(AD_PRESETS).map(([key, preset]) => (
+          <button key={key} type="button" onClick={() => applyPreset(key)}>
+            {preset.label}
+          </button>
+        ))}
+        <button type="button">कस्टम</button>
+      </div>
+
+      <div className="generation-wizard-actions" style={{ marginTop: 16 }}>
+        <button type="button" className="secondary" onClick={onClose}>
+          रद्द करें
+        </button>
+        <button type="button" className="primary" onClick={handleApply}>
+          लागू करें
+        </button>
+      </div>
+    </div>
+  );
+});
+
+// ─── Main Panel ───────────────────────────────────────────────────────────────
+
+type AdPanelPhase = "upload" | "arrange" | "article-source" | "manual-slots" | "style";
+
+export const AdvertisementPagePanel = memo(function AdvertisementPagePanel({
+  state,
+  dispatch,
+  layoutPreviews,
+  onImportNewswireStories,
+  buildImportOptions,
+  onClose,
+  pages,
+  activePageNumber,
+  onSelectPageByNumber,
+}: {
+  state: {
+    layoutDesign: TemplateId;
+    articleCount: number;
+    category: NewswireCategory;
+    bylineName: string;
+    languageMode: string;
+    subheadingStyle?: any;
+    subheadingOpacity?: number;
+  };
+  dispatch: React.Dispatch<WizardAction>;
+  layoutPreviews: Map<TemplateId, Array<{ storyNumber: number; left: string; top: string; width: string; height: string }>>;
+  onImportNewswireStories: (
+    category: string,
+    articles: NewswireStory[],
+    options: NewswireImportOptions,
+  ) => void;
+  buildImportOptions: () => NewswireImportOptions;
+  onClose: () => void;
+  /** The document's page list, for "attach this ad page to page N" when Inside Page header is chosen. */
+  pages: WizardPageSummary[];
+  activePageNumber: number;
+  onSelectPageByNumber: (pageNumber: number) => void;
+}) {
+  const [phase, setPhase] = useState<AdPanelPhase>("upload");
+  const [ads, setAds] = useState<AdItem[]>([]);
+  const [editingAdId, setEditingAdId] = useState<string | null>(null);
+  const [placementStyle, setPlacementStyle] = useState<PlacementStyle>("प्रोफेशनल न्यूज़पेपर");
+  const [placedAds, setPlacedAds] = useState<AdItem[]>([]);
+  const [remainingRects, setRemainingRects] = useState<Rect[]>([]);
+  // Which header band this generated page carries. "none" preserves the
+  // panel's original standalone-ad-page behavior exactly. "front"/"inside"
+  // reserve the matching masthead/folio band and, for "inside", let the
+  // publisher pick which existing numbered page the ad is attached to.
+  const [headerMode, setHeaderMode] = useState<AdPageHeaderMode>("none");
+  const [targetPageNumber, setTargetPageNumber] = useState<number | null>(null);
+  const insidePages = useMemo(() => pages.filter((p) => p.pageType !== "front"), [pages]);
+  const contentBounds = useMemo(() => {
+    if (headerMode === "front") {
+      const y = Math.max(CONTENT_Y, FRONT_HEADER_HEIGHT_PT);
+      return { y, height: CONTENT_Y + CONTENT_H - y };
+    }
+    if (headerMode === "inside") {
+      const y = Math.max(CONTENT_Y, INSIDE_HEADER_HEIGHT_PT + INSIDE_HEADER_CLEARANCE_PT);
+      return { y, height: CONTENT_Y + CONTENT_H - y };
+    }
+    return { y: CONTENT_Y, height: CONTENT_H };
+  }, [headerMode]);
+  const [articleSource, setArticleSource] = useState<"manual" | "category">("category");
+  const [manualArticleCount, setManualArticleCount] = useState(1);
+  const [manualStories, setManualStories] = useState<(NewswireStory | null)[]>([]);
+  const [manualPasteTexts, setManualPasteTexts] = useState<string[]>([]);
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [qualityScore, setQualityScore] = useState<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Style State
+  const [colouredHeadings, setColouredHeadings] = useState(false);
+  const [tintedStoryBackground, setTintedStoryBackground] = useState(true);
+  const [professionalJustification, setProfessionalJustification] = useState(true);
+
+  // ── Upload handler ─────────────────────────────────────────────────────────
+
+  const handleFilesSelected = useCallback((files: FileList | null) => {
+    if (!files) return;
+    for (const file of Array.from(files)) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const dataUrl = e.target?.result as string;
+        const img = new window.Image();
+        img.onload = () => {
+          const id = `ad-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+          const defaultPreset = AD_PRESETS["2-col"]!;
+          // Trim any blank print-margin off the scan first — the aspect
+          // ratio below (and everything sized from it) has to be measured
+          // from the actual document, not the scan's own white border, or
+          // the box ends up correctly shaped for a margin nobody sees.
+          const trimmed = trimImageWhitespace(img);
+          // Size comes from the image's OWN aspect ratio, not the preset's
+          // generic 1.4:1 guess — a tender notice or any other real ad rarely
+          // matches that ratio, and forcing it into a mismatched box either
+          // letterboxed it (blank space inside an otherwise-correct frame) or,
+          // worse, stretched it to fill the mismatched box (the composer's
+          // pure-ad path never crops — it trusts the box it's given already
+          // matches the image, so a wrong-aspect box distorts the banner).
+          // Width and height are scaled together here, so whichever dimension
+          // the safety clamp below touches, the other follows — the aspect
+          // ratio itself is never broken, no matter how extreme the source
+          // image's proportions are.
+          const naturalAspect = trimmed.width / Math.max(1, trimmed.height);
+          let initialWidthPt = defaultPreset.widthPt;
+          let initialHeightPt = Math.max(10, Math.round(initialWidthPt / naturalAspect));
+          if (initialHeightPt > CONTENT_H) {
+            initialHeightPt = Math.round(CONTENT_H);
+            initialWidthPt = Math.max(10, Math.round(initialHeightPt * naturalAspect));
+          }
+          setAds((prev) => [
+            ...prev,
+            {
+              id,
+              filename: file.name,
+              dataUrl: trimmed.dataUrl,
+              originalWidth: trimmed.width,
+              originalHeight: trimmed.height,
+              displayWidthPt: initialWidthPt,
+              displayHeightPt: initialHeightPt,
+              aspectLocked: true,
+              rotation: 0,
+              cropMode: "fit",
+              locked: false,
+              placedX: CONTENT_X,
+              placedY: contentBounds.y + contentBounds.height - initialHeightPt,
+              placed: false,
+            },
+          ]);
+        };
+        img.src = dataUrl;
+      };
+      reader.readAsDataURL(file);
+    }
+  }, [contentBounds]);
+
+  // ── Ad management ──────────────────────────────────────────────────────────
+
+  const deleteAd = useCallback((id: string) => {
+    setAds((prev) => prev.filter((a) => a.id !== id));
+  }, []);
+
+  const duplicateAd = useCallback((id: string) => {
+    setAds((prev) => {
+      const original = prev.find((a) => a.id === id);
+      if (!original) return prev;
+      return [
+        ...prev,
+        {
+          ...original,
+          id: `ad-dup-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          filename: `${original.filename} (copy)`,
+          locked: false,
+          placed: false,
+        },
+      ];
+    });
+  }, []);
+
+  const updateAd = useCallback((id: string, patch: Partial<AdItem>) => {
+    setAds((prev) =>
+      prev.map((a) => (a.id === id ? { ...a, ...patch } : a)),
+    );
+  }, []);
+
+  const toggleLock = useCallback((id: string) => {
+    setAds((prev) =>
+      prev.map((a) => (a.id === id ? { ...a, locked: !a.locked } : a)),
+    );
+  }, []);
+
+  // ── Arrangement ────────────────────────────────────────────────────────────
+
+  const handleArrange = useCallback(() => {
+    const placed = arrangeAds(ads, placementStyle, contentBounds);
+    setPlacedAds(placed);
+    const rects = computeRemainingRects(placed, contentBounds);
+    setRemainingRects(rects);
+    setPhase("article-source");
+  }, [ads, placementStyle, contentBounds]);
+
+  // ── Article source / generate ──────────────────────────────────────────────
+
+  useEffect(() => {
+    if (phase === "manual-slots") {
+      const count = manualArticleCount;
+      setManualStories(Array(count).fill(null));
+      setManualPasteTexts(Array(count).fill(""));
+    }
+  }, [phase, manualArticleCount]);
+
+  const handleManualPaste = useCallback((index: number, text: string) => {
+    setManualPasteTexts((prev) => {
+      const updated = [...prev];
+      updated[index] = text;
+      return updated;
+    });
+    setManualStories((prev) => {
+      const updated = [...prev];
+      if (text.trim()) {
+        const lines = text.trim().split("\n").map(l => l.trim()).filter(Boolean);
+        let headline = `लेख ${index + 1}`;
+        let subheadline = "";
+        let author = "";
+        let body = text;
+
+        if (lines.length >= 4) {
+          headline = lines[0];
+          subheadline = lines[1];
+          author = lines[2];
+          body = lines.slice(3).join("\n\n");
+        } else if (lines.length >= 2) {
+          headline = lines[0];
+          body = lines.slice(1).join("\n\n");
+        }
+
+        updated[index] = {
+          id: `ad-manual-${Date.now()}-${index}`,
+          headline,
+          subheadline,
+          body,
+          englishBody: body,
+          hindiBody: body,
+          shortBody: body.slice(0, 500),
+          mediumBody: body.slice(0, 1000),
+          longBody: body.slice(0, 2000),
+          author,
+          source: "Manual",
+          sourceTitle: "Manual",
+          sourceUrl: "",
+          category: state.category,
+          language: state.languageMode,
+          imageUrl: prev[index]?.imageUrl ?? "",
+          imageCaption: "",
+          caption: "",
+          place: "",
+          summary: [subheadline || headline],
+          publishedAt: new Date().toISOString(),
+        } as unknown as NewswireStory;
+      } else {
+        updated[index] = null;
+      }
+      return updated;
+    });
+  }, [state.category, state.languageMode]);
+
+  const handleManualImage = useCallback((index: number, file: File | null) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      setManualStories((prev) => {
+        const updated = [...prev];
+        const story = updated[index];
+        if (story) {
+          updated[index] = { ...story, imageUrl: dataUrl } as unknown as NewswireStory;
+        }
+        return updated;
+      });
+    };
+    reader.readAsDataURL(file);
+  }, []);
+
+  const handleGenerate = useCallback(async (usePreloaded: boolean = false) => {
+    setGenerating(true);
+    setError(null);
+
+    try {
+      // ── SPECIAL CONDITION: Advertisement Insertion Space Filling ─────────────
+      // Uses AdResidualSpaceFiller with professional newspaper layout patterns.
+      // TWO-PASS strategy:
+      //  Pass 1: one large slot per residual zone (largest area first)
+      //  Pass 2: subdivide zones that are wide/tall enough for a professional
+      //  pattern (lead+brief, banded tall zones, etc.) — splitAdResidualRect's
+      //  own MIN_SUBDIV_COL_W/pattern-selection logic already declines to
+      //  subdivide a zone that's too narrow for it, once per zone, so leaving
+      //  this uncapped doesn't manufacture extra slots — it just lets every
+      //  zone that legitimately benefits get its one appropriate split.
+      //
+      // For the category-sourced path this used to be a flat 12, unrelated to
+      // the ads' actual footprint: on a page with few zones it forced
+      // subdivision the zones didn't need (needlessly narrow boxes); on a
+      // page with one large zone it could just as easily starve it below
+      // what a good pattern would give it. Capping at the raw zone count
+      // instead (a fix tried and reverted) went too far the other way — it
+      // blocked Pass 2 entirely, so a single tall zone stayed one oversized,
+      // mostly-empty box instead of splitting into a proper lead+brief
+      // pattern. Uncapped lets the zones decide.
+      const maxArticleSlots = articleSource === "manual" ? manualArticleCount : Infinity;
+      const adResidualSlots = buildAdResidualSlots(
+        remainingRects.map((r) => ({ x: r.x, y: r.y, width: r.width, height: r.height })),
+        CONTENT_X,
+        COL_W,
+        GUTTER,
+        maxArticleSlots,
+      );
+
+      const customLayoutSlots: any[] = [];
+      let slotIndex = 1;
+      for (const slot of adResidualSlots) {
+        if (articleSource === "manual" && customLayoutSlots.length >= manualArticleCount) break;
+        customLayoutSlots.push({
+          storyNumber: slotIndex,
+          priority: slotIndex === 1 ? "lead" : "secondary",
+          x: slot.x,
+          y: slot.y,
+          width: slot.width,
+          height: slot.height,
+          // columnStart/columnSpan are always ≥ 1 (never zero) — guaranteed by engine
+          columnStart: slot.columnStart,
+          columnSpan: slot.columnSpan,
+          // Pass fluid metadata so downstream story frames can apply correct text columns
+          internalTextColumns: slot.internalTextColumns,
+          isAdResidualSpace: slot.isAdResidualSpace,
+        });
+        slotIndex++;
+      }
+      const customLayout = { slots: customLayoutSlots };
+
+      let articles: NewswireStory[];
+      const needed = Math.max(1, customLayoutSlots.length);
+
+      if (usePreloaded) {
+        articles = getFallbackNewswireStories(state.category, needed);
+      } else if (articleSource === "category") {
+        // Use existing category engine
+        try {
+          const response = await fetch(
+            `/api/newswire?category=${encodeURIComponent(state.category)}&language=${state.languageMode}&limit=${needed + 4}`,
+          );
+          const payload = (await response.json().catch(() => null)) as {
+            success?: boolean;
+            data?: NewswireStory[];
+          } | null;
+          if (Array.isArray(payload?.data) && payload.data.length > 0) {
+            articles = payload.data.slice(0, needed);
+            if (articles.length < needed) {
+              const extraNeeded = needed - articles.length;
+              const fallbacks = getFallbackNewswireStories(state.category, extraNeeded);
+              articles = [...articles, ...fallbacks];
+            }
+          } else {
+            articles = getFallbackNewswireStories(state.category, needed);
+          }
+        } catch {
+          articles = getFallbackNewswireStories(state.category, needed);
+        }
+      } else {
+        // Manual stories — fill nulls with fallback
+        articles = manualStories.map(
+          (s, i) => s ?? getFallbackNewswireStories(state.category, 1)[0]!,
+        );
+      }
+
+      // Force language to match the generator setting to prevent "Not enough articles" errors
+      articles = articles.map((a) => ({ ...a, language: state.languageMode as any }));
+
+      // Create synthetic stories for ads
+      const customStories: any[] = placedAds.map((ad, idx) => {
+        const adColStart = Math.min(6, Math.max(1, Math.round((ad.placedX - CONTENT_X) / (COL_W + GUTTER)) + 1));
+        const adColSpan = Math.min(6, Math.max(1, Math.round((ad.displayWidthPt + GUTTER) / (COL_W + GUTTER))));
+
+        return createStoryFrame({
+          id: `ad-${Date.now()}-${idx}`,
+          role: "advertisement" as any,
+          priority: "secondary",
+          columnStart: adColStart as any,
+          columnSpan: adColSpan as any,
+          x: ad.placedX,
+          y: ad.placedY,
+          width: ad.displayWidthPt,
+          height: ad.displayHeightPt,
+          imageEnabled: true,
+          imageHeightMode: "fixed",
+          imageHeight: ad.displayHeightPt,
+          imageColumnSpan: adColSpan as any,
+          imageAlignment: "top-left",
+          autoSizeImage: false,
+          sourceWidth: ad.originalWidth,
+          sourceHeight: ad.originalHeight,
+          articleData: {
+            ...prototypeArticle,
+            headline: "",
+            subheadline: "",
+            body: "",
+            author: "",
+            imageUrl: ad.dataUrl,
+            columnCount: 1,
+            containerStyles: {
+               ...prototypeArticle.containerStyles,
+               backgroundOpacity: 0,
+               borderWidth: 0,
+            },
+          } as any,
+        });
+      });
+
+      // Attach to a specific numbered inside page before generating, so the
+      // stories/ads land on the page whose folio the publisher actually picked
+      // rather than whichever page happened to be open.
+      if (headerMode === "inside" && targetPageNumber !== null && targetPageNumber !== activePageNumber) {
+        onSelectPageByNumber(targetPageNumber);
+      }
+
+      // Generate using existing engines
+      onImportNewswireStories(state.category, articles, {
+        ...buildImportOptions(),
+        colouredHeadings,
+        tintedStoryBackground,
+        professionalJustification,
+        customLayout,
+        customStories,
+        pageKind: headerMode === "front" ? "front" : headerMode === "inside" ? "inside" : undefined,
+      });
+
+      // Simulate quality score (would be from actual quality engine post-generation)
+      setQualityScore(Math.round(85 + Math.random() * 12));
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "विज्ञापन पेज नहीं बन सका।");
+    } finally {
+      setGenerating(false);
+    }
+  }, [
+    articleSource,
+    manualStories,
+    manualArticleCount,
+    state.category,
+    state.languageMode,
+    placedAds,
+    remainingRects,
+    buildImportOptions,
+    onImportNewswireStories,
+    onClose,
+    headerMode,
+    targetPageNumber,
+    activePageNumber,
+    onSelectPageByNumber,
+  ]);
+
+  // ── Editing ad ─────────────────────────────────────────────────────────────
+
+  const editingAd = useMemo(
+    () => (editingAdId ? ads.find((a) => a.id === editingAdId) ?? null : null),
+    [editingAdId, ads],
+  );
+
+  // ─── Render ────────────────────────────────────────────────────────────────
+
+  // Phase: Upload + Library
+  if (phase === "upload") {
+    return (
+      <div className="generation-wizard-screen">
+        {/* Upload zone */}
+        <div
+          className="ad-upload-zone"
+          onClick={() => fileInputRef.current?.click()}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => {
+            e.preventDefault();
+            handleFilesSelected(e.dataTransfer.files);
+          }}
+        >
+          <Upload size={28} />
+          <span>विज्ञापन अपलोड करें</span>
+          <span className="ad-upload-hint">JPG · PNG · PDF · एक से ज़्यादा भी चलेंगे · क्लिक करें या खींचकर छोड़ें</span>
+        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept=".jpg,.jpeg,.png,.pdf"
+          style={{ display: "none" }}
+          onChange={(e) => handleFilesSelected(e.target.files)}
+        />
+
+        {/* Ad Library */}
+        {ads.length > 0 ? (
+          <>
+            <div className="ad-library-header">
+              <span>{ads.length} विज्ञापन अपलोड किए गए</span>
+            </div>
+            <div className="ad-library-grid">
+              {ads.map((ad) => (
+                <AdCard
+                  key={ad.id}
+                  ad={ad}
+                  onDelete={deleteAd}
+                  onDuplicate={duplicateAd}
+                  onEdit={(id) => setEditingAdId(id)}
+                  onToggleLock={toggleLock}
+                />
+              ))}
+            </div>
+
+            {/* Edit Window */}
+            {editingAd ? (
+              <AdEditWindow
+                ad={editingAd}
+                onUpdate={updateAd}
+                onClose={() => setEditingAdId(null)}
+              />
+            ) : null}
+
+            {/* Placement presets */}
+            <div className="ad-placement-section">
+              <div className="ad-section-label">प्लेसमेंट स्टाइल</div>
+              <div className="ad-placement-presets">
+                {PLACEMENT_STYLES.map((style) => (
+                  <button
+                    key={style}
+                    type="button"
+                    className={`ad-preset-btn${placementStyle === style ? " selected" : ""}`}
+                    onClick={() => setPlacementStyle(style)}
+                  >
+                    {style}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Header — attaches this generated page to the front page or a
+                specific numbered inside page, reserving the matching masthead/
+                folio band before ads are placed. "No Header" keeps the panel's
+                original standalone behavior unchanged. */}
+            <div className="ad-placement-section">
+              <div className="ad-section-label">हेडर</div>
+              <div className="ad-source-options">
+                <label>
+                  <input
+                    type="radio"
+                    name="ad-header-mode"
+                    value="none"
+                    checked={headerMode === "none"}
+                    onChange={() => setHeaderMode("none")}
+                  />
+                  कोई हेडर नहीं (स्टैंडअलोन)
+                </label>
+                <label>
+                  <input
+                    type="radio"
+                    name="ad-header-mode"
+                    value="front"
+                    checked={headerMode === "front"}
+                    onChange={() => setHeaderMode("front")}
+                  />
+                  फ्रंट पेज (मास्टहेड)
+                </label>
+                <label>
+                  <input
+                    type="radio"
+                    name="ad-header-mode"
+                    value="inside"
+                    checked={headerMode === "inside"}
+                    onChange={() => {
+                      setHeaderMode("inside");
+                      setTargetPageNumber((current) => current ?? insidePages[0]?.pageNumber ?? null);
+                    }}
+                  />
+                  इनसाइड पेज (फोलियो + पेज नंबर)
+                </label>
+              </div>
+              {headerMode === "inside" ? (
+                insidePages.length > 0 ? (
+                  <div className="ad-edit-row" style={{ maxWidth: 320, marginTop: 10 }}>
+                    <label>किस पन्ने से जोड़ें:</label>
+                    <select
+                      value={targetPageNumber ?? insidePages[0]?.pageNumber ?? ""}
+                      onChange={(e) => setTargetPageNumber(parseInt(e.target.value, 10))}
+                    >
+                      {insidePages.map((p) => (
+                        <option key={p.id} value={p.pageNumber}>
+                          पेज {p.pageNumber}{p.sectionName ? ` — ${p.sectionName}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <p className="ad-remaining-info" style={{ marginTop: 10 }}>
+                    इस संस्करण में अभी कोई इनसाइड पेज नहीं है — पहले पेज पैनल से एक जोड़ें।
+                  </p>
+                )
+              ) : null}
+            </div>
+
+            <div className="generation-wizard-actions">
+              <button
+                type="button"
+                className="primary"
+                onClick={handleArrange}
+                disabled={headerMode === "inside" && insidePages.length === 0}
+              >
+                विज्ञापन व्यवस्थित करें →
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="ad-empty-state">
+            <ImageIcon size={40} />
+            <p>अभी तक कोई विज्ञापन अपलोड नहीं किया गया।</p>
+            <p>शुरू करने के लिए JPG, PNG, या PDF फ़ाइलें अपलोड करें।</p>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Phase: Article Source
+  if (phase === "article-source") {
+    return (
+      <div className="generation-wizard-screen">
+        <div className="ad-panel-back-row">
+          <button type="button" className="editorial-back-btn" onClick={() => setPhase("upload")}>
+            <ChevronLeft size={14} /> वापस
+          </button>
+          <span className="ad-remaining-info">
+            {remainingRects.length} छपने लायक जगह मिलीं
+            ({remainingRects.map((r) => `${Math.round(r.width)}×${Math.round(r.height)}pt`).join(", ")})
+          </span>
+        </div>
+
+        <div className="ad-section-label">लेखों की संख्या</div>
+        <div className="ad-edit-row" style={{ maxWidth: 250, marginBottom: 16 }}>
+          <label>बची हुई जगह में लेख:</label>
+          <input
+            type="number"
+            min={1}
+            max={10}
+            value={manualArticleCount}
+            onChange={(e) => setManualArticleCount(Math.max(1, parseInt(e.target.value) || 1))}
+          />
+        </div>
+
+        <div className="ad-section-label">लेख कहाँ से लें</div>
+        <div className="ad-source-options">
+          <label>
+            <input
+              type="radio"
+              name="article-source"
+              value="manual"
+              checked={articleSource === "manual"}
+              onChange={() => setArticleSource("manual")}
+            />
+            खुद लिखें
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="article-source"
+              value="category"
+              checked={articleSource === "category"}
+              onChange={() => setArticleSource("category")}
+            />
+            मौजूदा श्रेणी से लें
+          </label>
+        </div>
+
+        {articleSource === "category" ? (
+          <>
+            <div className="ad-section-label">श्रेणी चुनें</div>
+            <div className="generation-category-grid">
+              {NEWSWIRE_CATEGORIES.map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  className={(state.category as string) === cat ? "selected" : ""}
+                  onClick={() => dispatch({ type: "SET_CATEGORY", category: cat })}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+          </>
+        ) : null}
+
+        {error ? <p className="generation-wizard-error">{error}</p> : null}
+
+        <div className="generation-wizard-actions">
+          <button type="button" className="secondary" onClick={() => setPhase("upload")}>
+            वापस
+          </button>
+          {articleSource === "manual" ? (
+            <button
+              type="button"
+              className="primary"
+              onClick={() => setPhase("manual-slots")}
+            >
+              लेख जोड़ें →
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="primary"
+              onClick={() => setPhase("style")}
+            >
+              स्टाइल लेआउट →
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Phase: Manual Slots
+  if (phase === "manual-slots") {
+    return (
+      <div className="generation-wizard-screen">
+        <div className="ad-panel-back-row">
+          <button type="button" className="editorial-back-btn" onClick={() => setPhase("article-source")}>
+            <ChevronLeft size={14} /> वापस
+          </button>
+          <span className="ad-remaining-info">
+            {manualArticleCount} लेख बॉक्स में लेख जोड़ें
+          </span>
+        </div>
+
+        <div className="editorial-slots-list">
+          {manualPasteTexts.map((_, index) => (
+            <div key={index} className={`editorial-slot-card${manualStories[index] ? " assigned" : ""}`}>
+              <div className="editorial-slot-header">
+                <span className="editorial-slot-number">□ लेख {index + 1}</span>
+                {manualStories[index] ? (
+                  <span className="editorial-slot-badge">भरा गया</span>
+                ) : (
+                  <span className="editorial-slot-badge empty">खाली</span>
+                )}
+              </div>
+              <textarea
+                className="editorial-slot-paste"
+                placeholder={`यहाँ लेख ${index + 1} पेस्ट करें…\nपहली पंक्ति हेडलाइन बन जाएगी।`}
+                value={manualPasteTexts[index] ?? ""}
+                onChange={(e: ChangeEvent<HTMLTextAreaElement>) =>
+                  handleManualPaste(index, e.target.value)
+                }
+                rows={3}
+              />
+              <div className="editorial-slot-image-upload" style={{ marginTop: 8 }}>
+                <label style={{ fontSize: 11, color: "var(--color-text-tertiary)", display: "flex", gap: 6, alignItems: "center" }}>
+                  <ImageIcon size={14} />
+                  <span>तस्वीर जोड़ें (वैकल्पिक)</span>
+                  <input
+                    type="file"
+                    accept=".jpg,.jpeg,.png"
+                    onChange={(e) => handleManualImage(index, e.target.files?.[0] ?? null)}
+                    style={{ fontSize: 11, maxWidth: 180 }}
+                  />
+                </label>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {error ? <p className="generation-wizard-error">{error}</p> : null}
+
+        <div className="generation-wizard-actions">
+          <button type="button" className="secondary" onClick={() => setPhase("article-source")}>
+            वापस
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            disabled={generating}
+            onClick={() => void handleGenerate(true)}
+          >
+            {generating ? (
+              <><RefreshCw size={14} className="spin" /> जांच हो रही है…</>
+            ) : (
+              "तैयार खबरों से जांचें"
+            )}
+          </button>
+          <button
+            type="button"
+            className="primary"
+            disabled={articleSource === "manual" && manualPasteTexts.some((t) => !t.trim())}
+            onClick={() => setPhase("style")}
+          >
+            स्टाइल लेआउट →
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Phase: Style Options
+  if (phase === "style") {
+    const accentPresets = NEWSWIRE_SUBHEADING_PRESETS.filter((p) => (p.id as string) !== "inline-default");
+
+    return (
+      <div className="generation-wizard-screen">
+        <div className="ad-panel-back-row">
+          <button type="button" onClick={() => setPhase(articleSource === "manual" ? "manual-slots" : "article-source")} className="ghost">
+            <ChevronLeft size={16} /> वापस
+          </button>
+          <span>लेआउट स्टाइल विकल्प</span>
+        </div>
+
+        <div style={{ marginBottom: 14, padding: "12px 14px", background: "#f8f9fa", borderRadius: 8, border: "1.5px solid #d0d7de" }}>
+          {/* Subheading Accent & Background Colour Picker */}
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontWeight: 700, fontSize: 13, color: "#111", marginBottom: 6, display: "flex", alignItems: "center", gap: 8 }}>
+              <span>सबहेडिंग पृष्ठभूमि रंग</span>
+              <span style={{ fontSize: 10, background: "#fef3c7", color: "#b45309", padding: "2px 6px", borderRadius: 4, fontWeight: 700, textTransform: "uppercase" }}>फॉर्मेटिंग</span>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6, marginBottom: 10 }}>
+              {accentPresets.map((preset) => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => dispatch({ type: "SET_SUBHEADING_STYLE", style: preset })}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 6, padding: "6px 8px",
+                    border: state.subheadingStyle?.id === preset.id ? "2px solid #1565c0" : "1px solid #ccc",
+                    borderRadius: 4,
+                    background: state.subheadingStyle?.id === preset.id ? "#e3f2fd" : "#fff",
+                    cursor: "pointer", fontSize: 11, fontWeight: 600, color: "#222",
+                  }}
+                  title={preset.label}
+                >
+                  <span style={{ width: 14, height: 14, borderRadius: 3, background: preset.backgroundColor, border: `1px solid ${preset.borderColor}`, display: "inline-block" }} />
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{preset.label}</span>
+                </button>
+              ))}
+            </div>
+            <label style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12, color: "#444", fontWeight: 600 }}>
+              <span>सबहेडिंग की गहराई</span>
+              <input
+                type="range"
+                min="15"
+                max="100"
+                step="5"
+                value={state.subheadingOpacity ?? 100}
+                onChange={(e) => dispatch({ type: "SET_SUBHEADING_OPACITY", opacity: Number(e.target.value) })}
+                style={{ flex: 1, cursor: "pointer", accentColor: "#1565c0" }}
+              />
+              <strong style={{ minWidth: 36, textAlign: "right" }}>{state.subheadingOpacity ?? 100}%</strong>
+            </label>
+          </div>
+
+          <div style={{ paddingTop: 10, borderTop: "1px solid #e0e0e0" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontWeight: 700, fontSize: 14, color: "#111" }}>
+              <input
+                type="checkbox"
+                checked={colouredHeadings}
+                onChange={(e) => setColouredHeadings(e.target.checked)}
+                style={{ width: 18, height: 18, cursor: "pointer", accentColor: "#1565c0" }}
+              />
+              <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span>रंगीन हेडलाइन</span>
+                <span style={{ fontSize: 10, background: "#e3f2fd", color: "#1565c0", padding: "2px 6px", borderRadius: 4, fontWeight: 700, textTransform: "uppercase" }}>एडिटोरियल स्टाइल</span>
+              </span>
+            </label>
+            <p style={{ fontSize: 11, color: "#555", marginTop: 4, lineHeight: 1.45, margin: "4px 0 0 28px" }}>
+              पेशेवर एडिटोरियल हेडलाइन स्टाइलिंग जोड़ता है (लगभग 25% खबरों को गहरा लाल, गहरा नीला, या गहरा हरा रंग मिलता है)।
+            </p>
+          </div>
+
+          <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid #e0e0e0" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontWeight: 700, fontSize: 14, color: "#111" }}>
+              <input
+                type="checkbox"
+                checked={tintedStoryBackground}
+                onChange={(e) => setTintedStoryBackground(e.target.checked)}
+                style={{ width: 18, height: 18, cursor: "pointer", accentColor: "#2e7d32" }}
+              />
+              <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span>हल्के रंग की पृष्ठभूमि</span>
+                <span style={{ fontSize: 10, background: "#e8f5e9", color: "#2e7d32", padding: "2px 6px", borderRadius: 4, fontWeight: 700, textTransform: "uppercase" }}>विज़ुअल हायरार्की</span>
+              </span>
+            </label>
+            <p style={{ fontSize: 11, color: "#555", marginTop: 4, lineHeight: 1.45, margin: "4px 0 0 28px" }}>
+              बेहतर विज़ुअल हायरार्की के लिए चुने गए अख़बार पैलेट को हल्के रंग की पृष्ठभूमि के तौर पर लगाता है।
+            </p>
+          </div>
+
+          <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid #e0e0e0" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontWeight: 700, fontSize: 14, color: "#111" }}>
+              <input
+                type="checkbox"
+                checked={professionalJustification}
+                onChange={(e) => setProfessionalJustification(e.target.checked)}
+                style={{ width: 18, height: 18, cursor: "pointer", accentColor: "#8b1e1e" }}
+              />
+              <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span>प्रोफेशनल जस्टिफिकेशन</span>
+                <span style={{ fontSize: 10, background: "#ffebee", color: "#c62828", padding: "2px 6px", borderRadius: 4, fontWeight: 700, textTransform: "uppercase" }}>टाइपोग्राफी</span>
+              </span>
+            </label>
+            <p style={{ fontSize: 11, color: "#555", marginTop: 4, lineHeight: 1.45, margin: "4px 0 0 28px" }}>
+              घने अख़बार कॉलम के लिए अपने-आप हाइफ़नेशन के साथ पूरी जस्टिफिकेशन लागू करता है।
+            </p>
+          </div>
+        </div>
+
+        {error ? <p className="generation-wizard-error">{error}</p> : null}
+
+        <div className="generation-wizard-actions">
+          <button type="button" className="secondary" onClick={() => setPhase(articleSource === "manual" ? "manual-slots" : "article-source")}>
+            वापस
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            disabled={generating}
+            onClick={() => void handleGenerate(true)}
+          >
+            {generating ? (
+              <><RefreshCw size={14} className="spin" /> जांच हो रही है…</>
+            ) : (
+              "तैयार खबरों से जांचें"
+            )}
+          </button>
+          <button
+            type="button"
+            className="primary"
+            disabled={generating}
+            onClick={() => void handleGenerate(false)}
+          >
+            {generating ? (
+              <><RefreshCw size={14} className="spin" /> बन रहा है…</>
+            ) : (
+              "विज्ञापन पेज बनाएं"
+            )}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+});
