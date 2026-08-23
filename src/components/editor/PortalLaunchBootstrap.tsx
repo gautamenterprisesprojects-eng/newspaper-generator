@@ -14,6 +14,7 @@ import {
 } from "@/engines/MasterPage/YouthUpdateConfig";
 import { useYouthUpdateTeaserStore, type YouthUpdateTeaserSlot } from "@/store/youthUpdateTeaserStore";
 import { loadYouthUpdateInsideAuthorsFromPortal } from "@/store/youthUpdateInsideAuthorStore";
+import { usePublisherEditorialAuthorStore } from "@/store/publisherEditorialAuthorStore";
 import { fetchYouthUpdateMastheadApiTeasers } from "@/lib/youthUpdateMastheadApiTeasers";
 
 type PortalPageSection = {
@@ -62,6 +63,9 @@ type PublisherProfileResponse = {
   publication_start_year?: number | string | null;
   front_page_header_url?: string;
   remaining_page_header_url?: string;
+  editorial_author_name?: string;
+  editorial_author_image_url?: string;
+  editorial_authors?: Array<{ name?: string; image_url?: string; imageUrl?: string }>;
   youth_update_inside_author_image_url?: string;
   youth_update_inside_author_name?: string;
   youth_update_inside_author_designation?: string;
@@ -213,6 +217,25 @@ export function PortalLaunchBootstrap() {
         const activeHeaderSetId = state.document.headerSystem.activeHeaderSetId;
         const activeHeaderSet = activeHeaderSetId ? state.document.headerSystem.headerSets[activeHeaderSetId] : null;
         const profileId = activeHeaderSet?.publicationProfileId;
+        const editorialAuthors = Array.isArray(profile.editorial_authors)
+          ? profile.editorial_authors
+              .map((author) => ({
+                name: String(author?.name ?? "").trim(),
+                imageUrl: String(author?.image_url ?? author?.imageUrl ?? "").trim(),
+              }))
+              .filter((author) => author.name || author.imageUrl)
+          : [];
+        const editorialAuthorName = String(profile.editorial_author_name ?? "").trim();
+        const editorialAuthorImageUrl = String(profile.editorial_author_image_url ?? "").trim();
+        if (editorialAuthors.length > 0) {
+          usePublisherEditorialAuthorStore.getState().setAuthors(editorialAuthors);
+        } else {
+          usePublisherEditorialAuthorStore.getState().setDefaults(
+            editorialAuthorName || editorialAuthorImageUrl
+              ? { name: editorialAuthorName, imageUrl: editorialAuthorImageUrl }
+              : null,
+          );
+        }
 
         if (!profileId) return;
 

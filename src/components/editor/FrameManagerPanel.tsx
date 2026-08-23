@@ -33,6 +33,7 @@ import {
   Type,
   Ungroup,
   Unlock,
+  X,
 } from "lucide-react";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
@@ -40,6 +41,7 @@ import {
   getMasterBadgeForPage,
   getResolvedMasterElementsForPage,
 } from "@/engines/MasterPage/MasterPageEngine";
+import { richTextToPlainText } from "@/engines/RichText/RichTextUtils";
 import {
   calculateFrameManagerStatus,
   calculateFrameManagerVirtualRange,
@@ -70,6 +72,8 @@ import {
   type NewswireStory,
 } from "@/lib/newswire";
 import {
+  buildEditorialHealthStory,
+  buildEditorialStory,
   buildEditorialStories,
   getHealthSlotIndex,
   getRashifalSlotIndex,
@@ -85,6 +89,26 @@ const EXPANSION_STORAGE_KEY = "cliff-newspaper-frame-tree-expanded";
 const OBJECT_META_STORAGE_KEY = "cliff-newspaper-frame-tree-object-meta";
 const OBJECT_ORDER_STORAGE_KEY = "cliff-newspaper-frame-tree-object-order";
 const EDITORIAL_TEMPLATE_ID: TemplateId = "CliffEditorial8A";
+
+type NewswirePanelImportOptions = {
+  colouredHeadings?: boolean;
+  tintedStoryBackground?: boolean;
+  tintColor?: string;
+  inlineColumnSubheadings?: boolean;
+  inlineSubheadingColor?: string;
+  palettePreset?: NewswireSubheadingPreset;
+  subheadingStyle: {
+    backgroundColor: string;
+    textColor: string;
+    borderColor: string;
+    backgroundOpacity: number;
+  };
+  headlineAlignment?: Exclude<EditorialTextAlignment, "justify">;
+  bodyAlignment?: EditorialTextAlignment;
+  languageMode?: "hindi" | "english" | "bilingual";
+  pageKind?: "front" | "inside" | "editorial";
+  templateId?: TemplateId;
+};
 
 type FrameManagerPanelProps = {
   document: NewspaperDocument;
@@ -121,26 +145,14 @@ type FrameManagerPanelProps = {
   onImportNewswireStories: (
     category: string,
     articles: NewswireStory[],
-    options: {
-      colouredHeadings?: boolean;
-      tintedStoryBackground?: boolean;
-      tintColor?: string;
-      inlineColumnSubheadings?: boolean;
-      inlineSubheadingColor?: string;
-      palettePreset?: NewswireSubheadingPreset;
-      subheadingStyle: {
-        backgroundColor: string;
-        textColor: string;
-        borderColor: string;
-        backgroundOpacity: number;
-      };
-      headlineAlignment?: Exclude<EditorialTextAlignment, "justify">;
-      bodyAlignment?: EditorialTextAlignment;
-      languageMode?: "hindi" | "english" | "bilingual";
-      pageKind?: "front" | "inside" | "editorial";
-      templateId?: TemplateId;
-    },
+    options: NewswirePanelImportOptions,
   ) => void;
+  onReplaceStoryArticle: (
+    storyId: string,
+    article: NewswireStory,
+    options: NewswirePanelImportOptions,
+  ) => void;
+  compactPublisherMode?: boolean;
 };
 
 type NewswireRouteResponse = {
@@ -158,6 +170,114 @@ type EditorialRouteResponse = {
   rashifal?: RashifalRecord[];
   health?: EditorialFeedRecord[];
   error?: string;
+};
+
+type ReplacementManualEntry = {
+  place: string;
+  headline: string;
+  subheadline: string;
+  body: string;
+  imageUrl: string;
+  imageCaption: string;
+};
+
+const emptyReplacementManualEntry = (): ReplacementManualEntry => ({
+  place: "",
+  headline: "",
+  subheadline: "",
+  body: "",
+  imageUrl: "",
+  imageCaption: "",
+});
+
+const countArticleWords = (value: string) => value.match(/[\p{L}\p{N}]+(?:[’'-][\p{L}\p{N}]+)*/gu)?.length ?? 0;
+
+const getWordRangeText = (min: number, max: number) => `${min}-${max}`;
+
+const getManualFieldStatusClass = (count: number, min: number, max: number) => {
+  if (count === 0) return "manual-box-fit-hint";
+  if (count < min || count > max) return "manual-box-fit-bad";
+  return "manual-box-fit-ok";
+};
+
+const estimateManualBodyWordRange = (card: FrameManagerCard | null, hasImage: boolean) => {
+  if (!card) return { min: 120, max: 180 };
+
+  const { width, height } = card.frame.bounds;
+  const usableArea = Math.max(1, width * height);
+  const imageFactor = hasImage ? 0.72 : 0.92;
+  const estimated = Math.round((usableArea / 430) * imageFactor);
+  const min = Math.max(35, Math.round(estimated * 0.76));
+  const max = Math.max(min + 20, Math.round(estimated * 1.18));
+
+  return { min, max };
+};
+
+const estimateManualHeadlineWordRange = (card: FrameManagerCard | null) => {
+  const columnSpan = card?.frame.geometry.columnSpan ?? 2;
+  const min = Math.max(3, Math.round(columnSpan * 2));
+  const max = Math.max(min + 4, Math.round(columnSpan * 4.2));
+  return { min, max };
+};
+
+const estimateManualSubheadlineWordRange = (card: FrameManagerCard | null) => {
+  const columnSpan = card?.frame.geometry.columnSpan ?? 2;
+  const min = Math.max(6, Math.round(columnSpan * 3));
+  const max = Math.max(min + 6, Math.round(columnSpan * 6.5));
+  return { min, max };
+};
+
+const replacementEntryToStory = (
+  entry: ReplacementManualEntry,
+  slotNumber: number,
+): NewswireStory => {
+  const headline = entry.headline.trim();
+  const subheadline = entry.subheadline.trim();
+  const body = entry.body.trim();
+  const place = entry.place.trim();
+  const imageUrl = entry.imageUrl.trim();
+  const imageCaption = entry.imageCaption.trim();
+  const localized = {
+    headline,
+    kicker: "",
+    subheadings: [],
+    subheadline,
+    body,
+    shortBody: body,
+    mediumBody: body,
+    longBody: body,
+    caption: imageCaption,
+    imageCaption,
+    place,
+    imageUrl,
+    sourceUrl: "",
+    category: "Manual",
+  };
+
+  return {
+    id: `manual-replace-${slotNumber}-${Date.now()}`,
+    category: "Manual",
+    headline,
+    subheadline,
+    body,
+    shortBody: body,
+    mediumBody: body,
+    longBody: body,
+    summary: [],
+    caption: imageCaption,
+    imageUrl,
+    imageCaption,
+    place,
+    sourceTitle: "",
+    sourceUrl: "",
+    publishedAt: null,
+    manualPinned: true,
+    manualTargetSlotIndex: Math.max(0, slotNumber - 1),
+    localized: {
+      hindi: { ...localized, language: "hindi" },
+      english: { ...localized, language: "english" },
+    },
+  } as NewswireStory;
 };
 
 type TreeNode =
@@ -788,6 +908,8 @@ export function FrameManagerPanel({
   onDetachActivePageMaster,
   onOverrideMasterElement,
   onImportNewswireStories,
+  onReplaceStoryArticle,
+  compactPublisherMode = false,
 }: FrameManagerPanelProps) {
   const [scrollTop, setScrollTop] = useState(0);
   const [collapsedNodes, setCollapsedNodes] = useState<Set<string>>(() => readStoredSet(new Set()));
@@ -820,6 +942,14 @@ export function FrameManagerPanel({
     useState<EditorialTextAlignment>("justify");
   const [newswireLoading, setNewswireLoading] = useState(false);
   const [newswireStatus, setNewswireStatus] = useState("");
+  const [replacementLoading, setReplacementLoading] = useState(false);
+  const [replacementStatus, setReplacementStatus] = useState("");
+  const [replacementCandidates, setReplacementCandidates] = useState<NewswireStory[]>([]);
+  const [manualReplacementFrameId, setManualReplacementFrameId] = useState<NewspaperFrameId | null>(null);
+  const [manualReplacementEntry, setManualReplacementEntry] = useState<ReplacementManualEntry>(() =>
+    emptyReplacementManualEntry(),
+  );
+  const replacementImageInputRef = useRef<HTMLInputElement>(null);
   const selectedFrameSet = useMemo(() => new Set(selectedFrameIds), [selectedFrameIds]);
   const groups = useMemo(
     () => createFrameManagerGroups({ document, selectedFrameIds: selectedFrameSet }),
@@ -922,6 +1052,440 @@ export function FrameManagerPanel({
       : {
           ...getPaletteSubheadingStyle(selectedSubheadingPreset, newswireSubheadingOpacity / 100),
         };
+  const activePageArticleCards = useMemo(
+    () =>
+      allCards
+        .filter((card) => card.pageId === activePage?.id && card.frameType === "article" && card.storyId)
+        .sort((first, second) => {
+          const firstStoryNumber = Number(first.storyId?.match(/story-(\d+)/)?.[1] ?? Number.NaN);
+          const secondStoryNumber = Number(second.storyId?.match(/story-(\d+)/)?.[1] ?? Number.NaN);
+
+          if (Number.isFinite(firstStoryNumber) && Number.isFinite(secondStoryNumber)) {
+            return firstStoryNumber - secondStoryNumber;
+          }
+
+          return first.frame.bounds.y - second.frame.bounds.y || first.frame.bounds.x - second.frame.bounds.x;
+        }),
+    [activePage?.id, allCards],
+  );
+  const layoutPreviewBounds = useMemo(() => {
+    if (activePageArticleCards.length === 0) {
+      return null;
+    }
+
+    const left = Math.min(...activePageArticleCards.map((card) => card.frame.bounds.x));
+    const top = Math.min(...activePageArticleCards.map((card) => card.frame.bounds.y));
+    const right = Math.max(...activePageArticleCards.map((card) => card.frame.bounds.x + card.frame.bounds.width));
+    const bottom = Math.max(...activePageArticleCards.map((card) => card.frame.bounds.y + card.frame.bounds.height));
+
+    return {
+      left,
+      top,
+      width: Math.max(1, right - left),
+      height: Math.max(1, bottom - top),
+    };
+  }, [activePageArticleCards]);
+  const selectedReplacementCard =
+    activePageArticleCards.find((card) => card.frameId === selectedFrameId) ??
+    activePageArticleCards.find((card) => card.storyId && card.storyId === selectedCard?.storyId) ??
+    null;
+  const selectedReplacementStoryId = selectedReplacementCard?.storyId ?? null;
+  const selectedReplacementBoxNumber = selectedReplacementCard
+    ? Number(selectedReplacementCard.storyId?.match(/story-(\d+)/)?.[1] ?? activePageArticleCards.indexOf(selectedReplacementCard) + 1)
+    : null;
+  const manualReplacementCard = manualReplacementFrameId
+    ? activePageArticleCards.find((card) => card.frameId === manualReplacementFrameId) ?? null
+    : null;
+  const manualReplacementStoryId = manualReplacementCard?.storyId ?? null;
+  const manualReplacementBoxNumber = manualReplacementCard
+    ? Number(manualReplacementCard.storyId?.match(/story-(\d+)/)?.[1] ?? activePageArticleCards.indexOf(manualReplacementCard) + 1)
+    : 0;
+  const manualHeadlineWordCount = countArticleWords(manualReplacementEntry.headline);
+  const manualSubheadlineWordCount = countArticleWords(manualReplacementEntry.subheadline);
+  const manualBodyWordCount = countArticleWords(manualReplacementEntry.body);
+  const manualHeadlineRange = estimateManualHeadlineWordRange(manualReplacementCard);
+  const manualSubheadlineRange = estimateManualSubheadlineWordRange(manualReplacementCard);
+  const manualBodyRange = estimateManualBodyWordRange(manualReplacementCard, Boolean(manualReplacementEntry.imageUrl));
+  const manualHeadlineStatusClass = getManualFieldStatusClass(
+    manualHeadlineWordCount,
+    manualHeadlineRange.min,
+    manualHeadlineRange.max,
+  );
+  const manualSubheadlineStatusClass =
+    manualSubheadlineWordCount === 0
+      ? "manual-box-fit-hint"
+      : getManualFieldStatusClass(manualSubheadlineWordCount, manualSubheadlineRange.min, manualSubheadlineRange.max);
+  const manualBodyStatusClass = getManualFieldStatusClass(
+    manualBodyWordCount,
+    manualBodyRange.min,
+    manualBodyRange.max,
+  );
+
+  const createReplacementEntryFromCard = (card: FrameManagerCard): ReplacementManualEntry => {
+    const storyObject = card.storyId ? document.stories[card.storyId] : null;
+    const photoAsset = storyObject?.photo ? document.assets[storyObject.photo] : null;
+
+    return {
+      place: storyObject?.byline.location ?? "",
+      headline: storyObject ? richTextToPlainText(storyObject.headline) : card.storyName,
+      subheadline: storyObject ? richTextToPlainText(storyObject.subheadline) : "",
+      body: storyObject ? richTextToPlainText(storyObject.body) : "",
+      imageUrl: photoAsset?.source ?? photoAsset?.previewUrl ?? photoAsset?.thumbnailUrl ?? "",
+      imageCaption: storyObject ? richTextToPlainText(storyObject.caption.text) : "",
+    };
+  };
+
+  const openManualReplacementPopup = (card: FrameManagerCard) => {
+    onSelectFrame(card.frameId);
+    onZoomToFrame(card.frameId);
+    setManualReplacementFrameId(card.frameId);
+    setManualReplacementEntry(createReplacementEntryFromCard(card));
+  };
+
+  const setManualReplacementField = (patch: Partial<ReplacementManualEntry>) => {
+    setManualReplacementEntry((current) => ({
+      ...current,
+      ...patch,
+    }));
+  };
+
+  const pickManualReplacementImage = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const imageUrl = typeof reader.result === "string" ? reader.result : "";
+
+      if (imageUrl) {
+        setManualReplacementField({ imageUrl });
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const applyManualReplacement = () => {
+    if (!manualReplacementStoryId) {
+      setReplacementStatus("Select a story box first");
+      return;
+    }
+
+    if (!manualReplacementEntry.headline.trim() || !manualReplacementEntry.body.trim()) {
+      setReplacementStatus("Headline and body text are required");
+      return;
+    }
+
+    onReplaceStoryArticle(
+      manualReplacementStoryId,
+      replacementEntryToStory(manualReplacementEntry, manualReplacementBoxNumber || 1),
+      buildNewswirePanelOptions(),
+    );
+    setManualReplacementFrameId(null);
+    setReplacementStatus("Story article replaced");
+  };
+
+  useEffect(() => {
+    setReplacementCandidates([]);
+    setReplacementStatus("");
+  }, [activePageId, selectedReplacementStoryId]);
+
+  const buildNewswirePanelOptions = (): NewswirePanelImportOptions => ({
+    colouredHeadings: newswireColouredHeadings,
+    tintedStoryBackground: newswireTintedStoryBackground,
+    tintColor: getPaletteTintColor(selectedSubheadingPreset),
+    inlineColumnSubheadings: newswireInlineColumnSubheadings,
+    inlineSubheadingColor: getPaletteInlineAccent(selectedSubheadingPreset),
+    palettePreset: selectedSubheadingPreset,
+    subheadingStyle,
+    headlineAlignment: newswireHeadlineAlignment,
+    bodyAlignment: newswireBodyAlignment,
+    languageMode: "hindi",
+    pageKind: isActiveEditorialPage ? "editorial" : activePage?.pageType === "front" ? "front" : "inside",
+    templateId: isActiveEditorialPage ? EDITORIAL_TEMPLATE_ID : undefined,
+  });
+
+  const loadReplacementCandidates = async () => {
+    if (!selectedReplacementCard || !selectedReplacementStoryId) {
+      setReplacementStatus("Select a story box from the page map first");
+      return;
+    }
+
+    setReplacementLoading(true);
+    setReplacementStatus("");
+    setReplacementCandidates([]);
+
+    try {
+      let candidates: NewswireStory[] = [];
+
+      if (isActiveEditorialPage) {
+        const response = await fetch(`/api/editorial?limit=50&ts=${Date.now()}`, { cache: "no-store" });
+        const payload = (await response.json().catch(() => null)) as EditorialRouteResponse | null;
+
+        if (!response.ok || !payload?.success || !Array.isArray(payload.articles)) {
+          throw new Error(payload?.error || `Editorial API failed with ${response.status}`);
+        }
+
+        const columnSpans = getTemplateColumnSpans(EDITORIAL_TEMPLATE_ID);
+        const slotIndex = Math.max(0, (selectedReplacementBoxNumber ?? 1) - 1);
+
+        if (slotIndex === getRashifalSlotIndex(EDITORIAL_TEMPLATE_ID)) {
+          setReplacementStatus("Rashifal box uses the horoscope feed, not editorial news");
+          return;
+        }
+
+        candidates =
+          slotIndex === getHealthSlotIndex(EDITORIAL_TEMPLATE_ID)
+            ? (payload.health ?? []).map((record, index) => buildEditorialHealthStory(record, "Health"))
+            : payload.articles.map((record, index) =>
+                buildEditorialStory(record, columnSpans[slotIndex] ?? selectedReplacementCard.frame.geometry.columnSpan ?? 2, "Editorial", index),
+              );
+      } else {
+        const params = new URLSearchParams({
+          category: newswireCategory,
+          language: "hindi",
+          limit: "20",
+          ts: String(Date.now()),
+        });
+        const response = await fetch(`/api/newswire?${params.toString()}`, { cache: "no-store" });
+        const payload = await response.json() as NewswireRouteResponse;
+
+        if (!response.ok || !payload.success) {
+          throw new Error(payload.error || `News API failed with ${response.status}`);
+        }
+
+        candidates = payload.data ?? [];
+      }
+
+      const pageHeadlineKeys = new Set(
+        activePageArticleCards
+          .map((card) => card.storyName.trim().toLowerCase())
+          .filter(Boolean),
+      );
+      const uniqueCandidates = candidates.filter((candidate, index, list) => {
+        const id = candidate.id.trim();
+        const headlineKey = candidate.headline.trim().toLowerCase();
+
+        return (
+          headlineKey.length > 0 &&
+          headlineKey !== selectedReplacementCard.storyName.trim().toLowerCase() &&
+          !pageHeadlineKeys.has(headlineKey) &&
+          list.findIndex((other) => other.id === id || other.headline.trim().toLowerCase() === headlineKey) === index
+        );
+      });
+
+      setReplacementCandidates(uniqueCandidates.slice(0, 8));
+      setReplacementStatus(
+        uniqueCandidates.length > 0
+          ? `Found ${Math.min(uniqueCandidates.length, 8)} replacement option${uniqueCandidates.length === 1 ? "" : "s"}`
+          : "No unused replacement articles found",
+      );
+    } catch (error) {
+      setReplacementStatus(error instanceof Error ? error.message : "Replacement lookup failed");
+    } finally {
+      setReplacementLoading(false);
+    }
+  };
+
+  const applyReplacementCandidate = (candidate: NewswireStory) => {
+    if (!selectedReplacementStoryId) {
+      setReplacementStatus("Select a story box from the page map first");
+      return;
+    }
+
+    onReplaceStoryArticle(selectedReplacementStoryId, candidate, buildNewswirePanelOptions());
+    setReplacementStatus("Story article replaced");
+  };
+
+  const liveReplacementSection = (
+    <section className="live-layout-replacer" aria-label="Live layout story replacement">
+      <div className="live-layout-help">
+        <strong>लाइव पेज लेआउट</strong>
+        <p>जिस बॉक्स की खबर बदलनी है उस नंबर पर क्लिक करें। पॉपअप में टेक्स्ट या फोटो बदलकर सिर्फ वही बॉक्स अपडेट होगा।</p>
+      </div>
+      {layoutPreviewBounds ? (
+        <div
+          className="live-layout-map"
+          style={{
+            aspectRatio: `${layoutPreviewBounds.width} / ${layoutPreviewBounds.height}`,
+          }}
+        >
+          {activePageArticleCards.map((card, index) => {
+            const boxNumber = Number(card.storyId?.match(/story-(\d+)/)?.[1] ?? index + 1);
+            const bounds = card.frame.bounds;
+            const isSelected = card.frameId === selectedReplacementCard?.frameId;
+
+            return (
+              <button
+                key={card.frameId}
+                type="button"
+                className={isSelected ? "selected" : ""}
+                style={{
+                  left: `${((bounds.x - layoutPreviewBounds.left) / layoutPreviewBounds.width) * 100}%`,
+                  top: `${((bounds.y - layoutPreviewBounds.top) / layoutPreviewBounds.height) * 100}%`,
+                  width: `${(bounds.width / layoutPreviewBounds.width) * 100}%`,
+                  height: `${(bounds.height / layoutPreviewBounds.height) * 100}%`,
+                }}
+                onClick={() => openManualReplacementPopup(card)}
+                title={`Select box ${boxNumber}: ${card.storyName}`}
+              >
+                <span>{boxNumber}</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <p>No story boxes on this page.</p>
+      )}
+      <div className="live-layout-selected">
+        <span>Selected Box</span>
+        <strong>
+          {selectedReplacementCard
+            ? `${selectedReplacementBoxNumber ?? "-"} - ${selectedReplacementCard.storyName || "Untitled"}`
+            : "Select a box"}
+        </strong>
+      </div>
+      <button
+        type="button"
+        className="live-layout-load"
+        onClick={loadReplacementCandidates}
+        disabled={replacementLoading || !selectedReplacementStoryId}
+      >
+        <DownloadCloud size={13} />
+        <span>{replacementLoading ? "Loading options" : "Load Replacement News"}</span>
+      </button>
+      {replacementCandidates.length > 0 ? (
+        <div className="live-layout-candidates">
+          {replacementCandidates.map((candidate) => (
+            <button
+              key={`${candidate.id}-${candidate.headline}`}
+              type="button"
+              onClick={() => applyReplacementCandidate(candidate)}
+              title={candidate.headline}
+            >
+              <FileText size={13} />
+              <span>{candidate.headline}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {replacementStatus ? <p>{replacementStatus}</p> : null}
+    </section>
+  );
+
+  const manualReplacementPopup = manualReplacementCard ? (
+    <div className="manual-box-popup-backdrop" onClick={() => setManualReplacementFrameId(null)}>
+      <div className="manual-box-popup" onClick={(event) => event.stopPropagation()}>
+        <button
+          type="button"
+          className="manual-box-popup-close"
+          onClick={() => setManualReplacementFrameId(null)}
+          aria-label="Close"
+        >
+          <X size={16} strokeWidth={2.2} />
+        </button>
+        <div className="manual-box-card filled">
+          <div className="manual-box-card-header">
+            <span>Box {manualReplacementBoxNumber || "-"}</span>
+            <span className="manual-box-card-span">
+              {manualReplacementCard.frame.geometry.columnSpan ?? 1}-column
+            </span>
+            <button
+              type="button"
+              className="manual-box-clear-btn"
+              onClick={() => setManualReplacementEntry(emptyReplacementManualEntry())}
+            >
+              Clear
+            </button>
+          </div>
+
+          <label className="manual-box-field">
+            <span>Place name</span>
+            <input
+              value={manualReplacementEntry.place}
+              onChange={(event) => setManualReplacementField({ place: event.target.value })}
+              placeholder="Optional dateline, e.g. Bhopal"
+            />
+          </label>
+
+          <label className="manual-box-field">
+            <span>Headline *</span>
+            <textarea
+              rows={2}
+              value={manualReplacementEntry.headline}
+              onChange={(event) => setManualReplacementField({ headline: event.target.value })}
+              placeholder="Write the replacement headline"
+            />
+            <em className={manualHeadlineStatusClass}>
+              {manualHeadlineWordCount} शब्द / words | suggested {getWordRangeText(manualHeadlineRange.min, manualHeadlineRange.max)}
+            </em>
+          </label>
+
+          <label className="manual-box-field">
+            <span>Subheadline</span>
+            <textarea
+              rows={2}
+              value={manualReplacementEntry.subheadline}
+              onChange={(event) => setManualReplacementField({ subheadline: event.target.value })}
+              placeholder="Optional"
+            />
+            <em className={manualSubheadlineStatusClass}>
+              {manualSubheadlineWordCount} शब्द / words | suggested {getWordRangeText(manualSubheadlineRange.min, manualSubheadlineRange.max)}
+            </em>
+          </label>
+
+          <label className="manual-box-field">
+            <span>Body text *</span>
+            <textarea
+              rows={6}
+              value={manualReplacementEntry.body}
+              onChange={(event) => setManualReplacementField({ body: event.target.value })}
+              placeholder="Full article body text"
+            />
+            <em className="manual-box-fit-hint">
+              Approx fit changes with headline and image size.
+            </em>
+            <em className={manualBodyStatusClass}>
+              {manualBodyWordCount} शब्द / words | suggested {getWordRangeText(manualBodyRange.min, manualBodyRange.max)}
+            </em>
+          </label>
+
+          <div className="manual-box-field manual-box-image-picker">
+            <span>{manualReplacementEntry.imageUrl ? "Image selected" : "Image (optional)"}</span>
+            <input
+              ref={replacementImageInputRef}
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) {
+                  pickManualReplacementImage(file);
+                }
+                event.target.value = "";
+              }}
+            />
+            <button type="button" className="manual-box-choose-btn" onClick={() => replacementImageInputRef.current?.click()}>
+              {manualReplacementEntry.imageUrl ? "Change image" : "Choose image"}
+            </button>
+            {manualReplacementEntry.imageUrl ? (
+              <button type="button" onClick={() => setManualReplacementField({ imageUrl: "" })}>
+                Remove
+              </button>
+            ) : null}
+          </div>
+
+          <label className="manual-box-field">
+            <span>Image caption</span>
+            <input
+              value={manualReplacementEntry.imageCaption}
+              onChange={(event) => setManualReplacementField({ imageCaption: event.target.value })}
+              placeholder="Optional"
+            />
+          </label>
+        </div>
+        <button type="button" className="manual-box-popup-done" onClick={applyManualReplacement}>
+          Replace current article
+        </button>
+      </div>
+    </div>
+  ) : null;
 
   useEffect(() => {
     window.localStorage.setItem(EXPANSION_STORAGE_KEY, JSON.stringify([...collapsedNodes]));
@@ -1163,6 +1727,15 @@ export function FrameManagerPanel({
     }
   };
 
+  if (compactPublisherMode) {
+    return (
+      <aside className="frame-manager publisher-layout-frame-manager" aria-label="Live page layout">
+        {liveReplacementSection}
+        {manualReplacementPopup}
+      </aside>
+    );
+  }
+
   return (
     <aside className="frame-manager" aria-label="Layers and Frame Manager">
       <header className="frame-manager-header">
@@ -1181,6 +1754,195 @@ export function FrameManagerPanel({
         <span>Hidden {status.hiddenFrames + objectStatus.hidden}</span>
         <span>Selected {status.selectedFrames}</span>
       </section>
+
+      <section className="live-layout-replacer" aria-label="Live layout story replacement">
+        <div className="frame-manager-panel-title">Live Page Layout</div>
+        {layoutPreviewBounds ? (
+          <div
+            className="live-layout-map"
+            style={{
+              aspectRatio: `${layoutPreviewBounds.width} / ${layoutPreviewBounds.height}`,
+            }}
+          >
+            {activePageArticleCards.map((card, index) => {
+              const boxNumber = Number(card.storyId?.match(/story-(\d+)/)?.[1] ?? index + 1);
+              const bounds = card.frame.bounds;
+              const isSelected = card.frameId === selectedReplacementCard?.frameId;
+
+              return (
+                <button
+                  key={card.frameId}
+                  type="button"
+                  className={isSelected ? "selected" : ""}
+                  style={{
+                    left: `${((bounds.x - layoutPreviewBounds.left) / layoutPreviewBounds.width) * 100}%`,
+                    top: `${((bounds.y - layoutPreviewBounds.top) / layoutPreviewBounds.height) * 100}%`,
+                    width: `${(bounds.width / layoutPreviewBounds.width) * 100}%`,
+                    height: `${(bounds.height / layoutPreviewBounds.height) * 100}%`,
+                  }}
+                  onClick={() => openManualReplacementPopup(card)}
+                  title={`Select box ${boxNumber}: ${card.storyName}`}
+                >
+                  <span>{boxNumber}</span>
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <p>No story boxes on this page.</p>
+        )}
+        <div className="live-layout-selected">
+          <span>Selected Box</span>
+          <strong>
+            {selectedReplacementCard
+              ? `${selectedReplacementBoxNumber ?? "-"} - ${selectedReplacementCard.storyName || "Untitled"}`
+              : "Select a box"}
+          </strong>
+        </div>
+        <button
+          type="button"
+          className="live-layout-load"
+          onClick={loadReplacementCandidates}
+          disabled={replacementLoading || !selectedReplacementStoryId}
+        >
+          <DownloadCloud size={13} />
+          <span>{replacementLoading ? "Loading options" : "Load Replacement News"}</span>
+        </button>
+        {replacementCandidates.length > 0 ? (
+          <div className="live-layout-candidates">
+            {replacementCandidates.map((candidate) => (
+              <button
+                key={`${candidate.id}-${candidate.headline}`}
+                type="button"
+                onClick={() => applyReplacementCandidate(candidate)}
+                title={candidate.headline}
+              >
+                <FileText size={13} />
+                <span>{candidate.headline}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+        {replacementStatus ? <p>{replacementStatus}</p> : null}
+      </section>
+
+      {manualReplacementCard ? (
+        <div className="manual-box-popup-backdrop" onClick={() => setManualReplacementFrameId(null)}>
+          <div className="manual-box-popup" onClick={(event) => event.stopPropagation()}>
+            <button
+              type="button"
+              className="manual-box-popup-close"
+              onClick={() => setManualReplacementFrameId(null)}
+              aria-label="Close"
+            >
+              <X size={16} strokeWidth={2.2} />
+            </button>
+            <div className="manual-box-card filled">
+              <div className="manual-box-card-header">
+                <span>Box {manualReplacementBoxNumber || "-"}</span>
+                <span className="manual-box-card-span">
+                  {manualReplacementCard.frame.geometry.columnSpan ?? 1}-column
+                </span>
+                <button
+                  type="button"
+                  className="manual-box-clear-btn"
+                  onClick={() => setManualReplacementEntry(emptyReplacementManualEntry())}
+                >
+                  Clear
+                </button>
+              </div>
+
+              <label className="manual-box-field">
+                <span>Place name</span>
+                <input
+                  value={manualReplacementEntry.place}
+                  onChange={(event) => setManualReplacementField({ place: event.target.value })}
+                  placeholder="Optional dateline, e.g. Bhopal"
+                />
+              </label>
+
+              <label className="manual-box-field">
+                <span>Headline *</span>
+                <textarea
+                  rows={2}
+                  value={manualReplacementEntry.headline}
+                  onChange={(event) => setManualReplacementField({ headline: event.target.value })}
+                  placeholder="Write the replacement headline"
+                />
+                <em className={manualHeadlineStatusClass}>
+                  {manualHeadlineWordCount} शब्द / words | suggested {getWordRangeText(manualHeadlineRange.min, manualHeadlineRange.max)}
+                </em>
+              </label>
+
+              <label className="manual-box-field">
+                <span>Subheadline</span>
+                <textarea
+                  rows={2}
+                  value={manualReplacementEntry.subheadline}
+                  onChange={(event) => setManualReplacementField({ subheadline: event.target.value })}
+                  placeholder="Optional"
+                />
+                <em className={manualSubheadlineStatusClass}>
+                  {manualSubheadlineWordCount} शब्द / words | suggested {getWordRangeText(manualSubheadlineRange.min, manualSubheadlineRange.max)}
+                </em>
+              </label>
+
+              <label className="manual-box-field">
+                <span>Body text *</span>
+                <textarea
+                  rows={6}
+                  value={manualReplacementEntry.body}
+                  onChange={(event) => setManualReplacementField({ body: event.target.value })}
+                  placeholder="Full article body text"
+                />
+                <em className="manual-box-fit-hint">
+                  Approx fit changes with headline and image size.
+                </em>
+                <em className={manualBodyStatusClass}>
+                  {manualBodyWordCount} शब्द / words | suggested {getWordRangeText(manualBodyRange.min, manualBodyRange.max)}
+                </em>
+              </label>
+
+              <div className="manual-box-field manual-box-image-picker">
+                <span>{manualReplacementEntry.imageUrl ? "Image selected" : "Image (optional)"}</span>
+                <input
+                  ref={replacementImageInputRef}
+                  type="file"
+                  accept="image/*"
+                  hidden
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) {
+                      pickManualReplacementImage(file);
+                    }
+                    event.target.value = "";
+                  }}
+                />
+                <button type="button" className="manual-box-choose-btn" onClick={() => replacementImageInputRef.current?.click()}>
+                  {manualReplacementEntry.imageUrl ? "Change image" : "Choose image"}
+                </button>
+                {manualReplacementEntry.imageUrl ? (
+                  <button type="button" onClick={() => setManualReplacementField({ imageUrl: "" })}>
+                    Remove
+                  </button>
+                ) : null}
+              </div>
+
+              <label className="manual-box-field">
+                <span>Image caption</span>
+                <input
+                  value={manualReplacementEntry.imageCaption}
+                  onChange={(event) => setManualReplacementField({ imageCaption: event.target.value })}
+                  placeholder="Optional"
+                />
+              </label>
+            </div>
+            <button type="button" className="manual-box-popup-done" onClick={applyManualReplacement}>
+              Replace current article
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <section className="newswire-importer" aria-label="AI news importer">
         <div className="frame-manager-panel-title">AI News</div>

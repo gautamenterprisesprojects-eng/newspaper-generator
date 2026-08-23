@@ -28,8 +28,10 @@ export type FrontHeaderDynamicValues = {
   year: string;
   volume: string;
   issue?: string;
+  teaserHeadline?: string;
+  teaserImageUrl?: string;
 };
-type FrontHeaderTemplateField = Exclude<keyof FrontHeaderDynamicValues, "issue">;
+type FrontHeaderTemplateField = Exclude<keyof FrontHeaderDynamicValues, "issue" | "teaserHeadline" | "teaserImageUrl">;
 
 export type InsideHeaderDynamicValues = {
   category: string;
@@ -126,6 +128,9 @@ const INSIDE_FIELD_CENTER_X: Partial<Record<keyof InsideHeaderDynamicValues, num
 const escapeXmlText = (text: string) =>
   text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
+const escapeXmlAttribute = (text: string) =>
+  escapeXmlText(text).replace(/"/g, "&quot;");
+
 const textContentPattern = /(<text\b[^>]*>)([\s\S]*?)(<\/text>)/g;
 
 const stripXmlTags = (value: string) => value.replace(/<[^>]+>/g, "").trim();
@@ -175,10 +180,96 @@ const withTextLength = (openTag: string, textLength: number): string => {
   );
 };
 
-const withFontWeightBold = (openTag: string): string =>
-  /font-weight="[^"]*"/.test(openTag)
-    ? openTag.replace(/font-weight="[^"]*"/, 'font-weight="700"')
-    : openTag.replace(/^<text\b/, '<text font-weight="700"');
+const withFontWeight = (openTag: string, weight = "800"): string => {
+  const withAttribute = /font-weight="[^"]*"/.test(openTag)
+    ? openTag.replace(/font-weight="[^"]*"/, `font-weight="${weight}"`)
+    : openTag.replace(/^<text\b/, `<text font-weight="${weight}"`);
+
+  if (/style="[^"]*"/.test(withAttribute)) {
+    return withAttribute.replace(/style="([^"]*)"/, (_match, style: string) => {
+      const withoutWeight = style
+        .split(";")
+        .map((part) => part.trim())
+        .filter((part) => part && !part.toLowerCase().startsWith("font-weight:"))
+        .join("; ");
+      return `style="${withoutWeight ? `${withoutWeight}; ` : ""}font-weight:${weight}"`;
+    });
+  }
+
+  return withAttribute.replace(/^<text\b/, `<text style="font-weight:${weight}"`);
+};
+
+const resolveSvgImageHref = (source: string): string => {
+  if (source.startsWith("/") && typeof window !== "undefined") {
+    return `${window.location.origin}${source}`;
+  }
+  return source;
+};
+
+const AKHAND_TEASER_TEXT_CENTER_X = 852.85;
+const AKHAND_TEASER_TEXT_TOP_Y = 99.8;
+const AKHAND_TEASER_TEXT_MAX_HEIGHT = 37.5;
+
+const splitAkhandTeaserHeadline = (headline: string): string[] => {
+  const words = headline.replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
+  const lines: string[] = [];
+  let current = "";
+
+  for (const word of words) {
+    const next = current ? `${current} ${word}` : word;
+    if (next.length > 19 && current) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = next;
+    }
+  }
+
+  if (current) {
+    lines.push(current);
+  }
+
+  return lines;
+};
+
+const buildAkhandTeaserHeadlineText = (headline: string): string => {
+  const lines = splitAkhandTeaserHeadline(headline);
+  const lineHeight = Math.min(8.6, Math.max(5.8, AKHAND_TEASER_TEXT_MAX_HEIGHT / Math.max(lines.length, 1)));
+  const fontSize = Math.min(8, Math.max(5.2, lineHeight - 1.1));
+  const firstLineY = AKHAND_TEASER_TEXT_TOP_Y + fontSize;
+  const renderedLines = lines
+    .map((line, index) => {
+      const y = Number((firstLineY + index * lineHeight).toFixed(2));
+      return `<text x="${AKHAND_TEASER_TEXT_CENTER_X}" y="${y}" class="st1" font-size="${fontSize.toFixed(1)}" font-weight="400" fill="#111111" text-anchor="middle">${escapeXmlText(line)}</text>`;
+    })
+    .join("");
+
+  return `<g>${renderedLines}</g>`;
+};
+
+const replaceAkhandTeaserHeadline = (svgText: string, headline: string | undefined): string => {
+  const normalized = headline?.replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return svgText;
+  }
+
+  return svgText.replace(
+    /<text\b(?=[^>]*\btransform="matrix\(1 0 0 1 796\.7996 122\.6447\)")[\s\S]*?<\/text>/,
+    buildAkhandTeaserHeadlineText(normalized),
+  );
+};
+
+const replaceAkhandTeaserImage = (svgText: string, imageUrl: string | undefined): string => {
+  const resolved = resolveSvgImageHref(imageUrl?.trim() ?? "");
+  if (!resolved) {
+    return svgText;
+  }
+
+  return svgText.replace(
+    /(<image\b(?=[^>]*\bid="teaser_image_xA0_Image")[^>]*\bxlink:href=")[^"]*(")/,
+    `$1${escapeXmlAttribute(resolved)}$2`,
+  );
+};
 
 /**
  * Replaces each known `<text>...</text>` body with today's real value, in
@@ -222,22 +313,22 @@ export const applyAkhandFrontHeaderDynamicValues = (
   svgText: string,
   values: FrontHeaderDynamicValues,
 ): string => {
-  let index = 0;
-
-  return svgText.replace(textContentPattern, (match, open: string, body: string, close: string) => {
+  const patchedText = svgText.replace(textContentPattern, (match, open: string, body: string, close: string) => {
     const original = stripXmlTags(body);
-    const next =
-      index === 0
-        ? firstAsciiNumber(values.year) || original
-        : index === 1
+    const normalizedOriginal = original.replace(/\s+/g, " ").trim();
+    const next = normalizedOriginal === "15"
+      ? firstAsciiNumber(values.year) || original
+      : normalizedOriginal === "152"
+        ? firstAsciiNumber(values.issue) || original
+        : normalizedOriginal.includes("2026")
           ? buildHindiDayDate(values) || original
-          : index === 2
-            ? firstAsciiNumber(values.issue) || original
-            : null;
-    index += 1;
+          : null;
 
-    return next === null ? match : `${open}${escapeXmlText(next)}${close}`;
+    return next === null ? match : `${withFontWeight(open)}${escapeXmlText(next)}${close}`;
   });
+
+  const patchedTeaserText = replaceAkhandTeaserHeadline(patchedText, values.teaserHeadline);
+  return replaceAkhandTeaserImage(patchedTeaserText, values.teaserImageUrl);
 };
 
 export const applyInsideHeaderDynamicValues = (
@@ -271,11 +362,9 @@ export const applyAkhandInsideHeaderDynamicValues = (
             : null;
     index += 1;
 
-    const patchedOpen = index === 2
-      ? withTextLength(open, 180)
-      : index === 3
-        ? withFontWeightBold(open)
-        : open;
+    const patchedOpen = withFontWeight(
+      index === 2 ? withTextLength(open, 180) : open,
+    );
 
     return next === null ? match : `${patchedOpen}${escapeXmlText(next)}${close}`;
   });

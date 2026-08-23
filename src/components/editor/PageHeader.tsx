@@ -34,6 +34,10 @@ type PageHeaderProps = {
   resolvedHeader?: ResolvedPageHeader | null;
   masterHeaderEnabled?: boolean;
   logoSource?: string;
+  frontHeaderTeaser?: {
+    headline: string;
+    imageUrl: string;
+  } | null;
 };
 
 const toPoints = (inches: number) => inches * POINTS_PER_INCH;
@@ -268,6 +272,7 @@ export function PageHeader({
   resolvedHeader = null,
   masterHeaderEnabled = false,
   logoSource,
+  frontHeaderTeaser = null,
 }: PageHeaderProps) {
   const width = toPoints(pageMaster.width);
 
@@ -292,6 +297,8 @@ export function PageHeader({
           year: resolvedHeader.header.leftEar.text,
           volume: resolvedHeader.header.rightEar.text,
           issue: resolvedHeader.issueLabel,
+          teaserHeadline: frontHeaderTeaser?.headline,
+          teaserImageUrl: frontHeaderTeaser?.imageUrl,
         }
       : null;
   // `right.text` is already the combined "{{city}},{{day}} {{dayOfMonth}}

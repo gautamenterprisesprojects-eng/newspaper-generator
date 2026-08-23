@@ -1,5 +1,6 @@
 import type { NewspaperDocument } from "@/types/document";
 import type { ResolvedHeaderSlot } from "@/types/header";
+import { richTextToPlainText } from "@/engines/RichText/RichTextUtils";
 import { getHeaderBannerSource } from "./HeaderGeometry";
 import { resolvePageHeader } from "./HeaderResolver";
 import { getFrontHeaderOverlayGeometry, getInsideHeaderOverlayGeometry } from "./HeaderSlotGeometry";
@@ -167,6 +168,7 @@ export const buildHeaderPrintModel = async (
   // HeaderSvgTemplate.ts).
   const isLiveFrontSvg = header.header.kind === "front" && isLiveHeaderSvgUrl(headerBannerSource);
   const isLiveInsideSvg = header.header.kind === "inside" && isLiveHeaderSvgUrl(headerBannerSource);
+  const frontHeaderTeaser = isLiveFrontSvg ? resolveFrontHeaderTeaser(document, pageId) : null;
   const resolvedBannerSource = isLiveFrontSvg && header.header.kind === "front"
     ? await resolveFrontHeaderSvgSource(headerBannerSource, {
         place: header.header.eyebrowLeft.text,
@@ -176,6 +178,8 @@ export const buildHeaderPrintModel = async (
         year: header.header.leftEar.text,
         volume: header.header.rightEar.text,
         issue: header.issueLabel,
+        teaserHeadline: frontHeaderTeaser?.headline,
+        teaserImageUrl: frontHeaderTeaser?.imageUrl,
       }).catch(() => headerBannerSource)
     : isLiveInsideSvg && header.header.kind === "inside"
       ? await resolveInsideHeaderSvgSource(headerBannerSource, {
@@ -279,4 +283,35 @@ export const buildHeaderPrintModel = async (
     reservedHeight: header.reservedHeight,
     operations,
   };
+};
+
+const getPrintableImageSource = (source: string) =>
+  source.startsWith("http")
+    ? `/api/print-image?url=${encodeURIComponent(source)}`
+    : source;
+
+const resolveFrontHeaderTeaser = (document: NewspaperDocument, pageId: string) => {
+  const page = document.pages.find((candidate) => candidate.id === pageId);
+  if (!page) {
+    return null;
+  }
+
+  for (const frameId of page.frameIds) {
+    const frame = document.frames[frameId];
+    const storyId = frame?.storyId;
+    const story = storyId ? document.stories[storyId] : null;
+    const assetId = story?.photo ?? null;
+    const asset = assetId ? document.assets[assetId] : null;
+    const imageUrl = asset?.previewUrl || asset?.thumbnailUrl || asset?.source || "";
+    const headline = story ? richTextToPlainText(story.headline).replace(/\s+/g, " ").trim() : "";
+
+    if (headline && imageUrl) {
+      return {
+        headline,
+        imageUrl: getPrintableImageSource(imageUrl),
+      };
+    }
+  }
+
+  return null;
 };

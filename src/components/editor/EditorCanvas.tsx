@@ -1,6 +1,7 @@
 "use client";
 
 import { GenerationWizardModal } from "./GenerationWizardModal";
+import type { WizardTab } from "./GenerationWizardModal";
 
 import { Activity, AlignCenter, AlignJustify, AlignLeft, AlignRight, Eye, EyeOff, Minus, Plus, SquarePlus, X } from "lucide-react";
 import { Profiler, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -15,6 +16,7 @@ import { HeaderManagerPanel } from "@/components/editor/HeaderManagerPanel";
 import { InlineObjectTextEditor } from "@/components/editor/InlineObjectTextEditor";
 import { PagePreviewOverlay } from "@/components/editor/PagePreviewOverlay";
 import { ObjectFloatingToolbar } from "@/components/editor/ObjectFloatingToolbar";
+import { usePublisherEditorialAuthorStore } from "@/store/publisherEditorialAuthorStore";
 import { useYouthUpdateTeaserStore, FALLBACK_TEASERS } from "@/store/youthUpdateTeaserStore";
 import { useYouthUpdateInsideTeaserLiveStore } from "@/store/youthUpdateInsideTeaserLiveStore";
 import {
@@ -122,7 +124,6 @@ import {
   type NewswireSubheadingPreset,
   type NewswireTintPreset,
 } from "@/lib/newswire";
-import { getFallbackNewswireStories } from "@/lib/newswireFallback";
 import { computeEvenCategoryTargets, computeWeightedCategoryTargets, shuffleNewswireStories } from "@/lib/newswireCategoryMix";
 import { readPortalIssueArticleSession, saveIssueUsedArticles } from "@/lib/portalIssueArticleUsage";
 import { WIZARD_LAYOUT_DESIGNS, type NewswireImportOptions } from "./GenerationWizardModal";
@@ -207,6 +208,10 @@ const RIGHT_INSPECTOR_WIDTH = 320;
 const PANEL_GAP = 18;
 const TOP_TOOLBAR_HEIGHT = 82;
 const BOTTOM_STATUS_HEIGHT = 116;
+const PUBLISHER_LEFT_RATIO = 0.25;
+const PUBLISHER_CENTER_RATIO = 0.6;
+const PUBLISHER_RIGHT_RATIO = 0.15;
+const PUBLISHER_COLUMN_PADDING = 12;
 const MAJOR_GRID_INTERVAL = POINTS_PER_INCH;
 const pageMaster = DEFAULT_PAGE_MASTER;
 const layoutArticleCounts = [5, 6, 7, 8, 10, 12];
@@ -414,6 +419,12 @@ const shouldChargeSinglePageOnExport = () => getPortalLaunchParam("chargeOnExpor
 // progress to the parent window via postMessage.
 
 type BatchPlannedPage = { page_number: number; category: string; section: string };
+type PortalPagePlan = {
+  page_number: number;
+  section: string;
+  header_type?: string;
+  category?: string;
+};
 
 const parseBatchPlannedPages = (value: string): BatchPlannedPage[] => {
   if (!value) return [];
@@ -433,6 +444,34 @@ const parseBatchPlannedPages = (value: string): BatchPlannedPage[] => {
 };
 
 const isEditorialPlannedSection = (section: string) => section.trim().toLowerCase() === "editorial";
+
+const parsePortalPagePlan = (value: string): PortalPagePlan[] => {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((item) => ({
+        page_number: Number(item?.page_number),
+        section: String(item?.section || "").trim(),
+        header_type: String(item?.header_type || "").trim(),
+        category: String(item?.category || "").trim(),
+      }))
+      .filter((item) => Number.isFinite(item.page_number) && item.page_number > 0);
+  } catch {
+    return [];
+  }
+};
+
+const getWizardTabForPortalPage = (page: PortalPagePlan): WizardTab => {
+  const headerType = (page.header_type || "").toLowerCase();
+  const section = (page.section || "").toLowerCase();
+
+  if (page.page_number === 1) return "front";
+  if (headerType === "advertisement") return "advertisement";
+  if (headerType === "editorial" || section === "editorial" || /sampadak|संपाद/.test(section)) return "editorial";
+  return "inside";
+};
 
 // FRONT_PAGE_TEMPLATE_IDS[1] ("CliffFront11A") is excluded from batch mode's
 // automatic page-1 rotation on request -- left selectable from the manual
@@ -792,7 +831,7 @@ const pickInsideTemplateId = (usedTemplateIds: Set<TemplateId>): TemplateId => {
   );
 };
 
-const chargeSinglePageAfterRender = async () => {
+const chargeSinglePageAfterRender = async (pageNumberOverride?: number, pageNameOverride?: string) => {
   if (!shouldChargeSinglePageOnExport()) {
     return null;
   }
@@ -800,8 +839,8 @@ const chargeSinglePageAfterRender = async () => {
   const apiBase = getPortalLaunchParam("apiBase") || "http://localhost:8080/api/v1";
   const authToken = getPortalLaunchParam("authToken");
   const publisherId = getPortalLaunchParam("publisherId");
-  const selectedPageNumber = Number(getPortalLaunchParam("selectedPageNumber")) || 1;
-  const selectedPageName = getPortalLaunchParam("selectedPageName") || `Page ${selectedPageNumber}`;
+  const selectedPageNumber = pageNumberOverride || Number(getPortalLaunchParam("selectedPageNumber")) || 1;
+  const selectedPageName = pageNameOverride || getPortalLaunchParam("selectedPageName") || `Page ${selectedPageNumber}`;
   const issueNumber = getPortalLaunchParam("issueNumber") || `Ank ${new Date().toISOString().slice(0, 10)}`;
   const publicationDate = getPortalLaunchParam("publicationDate") || new Date().toISOString().slice(0, 10);
 
@@ -1017,16 +1056,16 @@ const buildSequence = (limit: number, step: number) => {
   return values;
 };
 
-const getWorkspaceRect = (viewport: Viewport, hasInspector: boolean) => {
-  const left = LEFT_PANEL_WIDTH + PANEL_GAP;
-  const right = hasInspector ? RIGHT_INSPECTOR_WIDTH + PANEL_GAP : PANEL_GAP;
-  const top = TOP_TOOLBAR_HEIGHT;
-  const bottom = BOTTOM_STATUS_HEIGHT;
+const getWorkspaceRect = (viewport: Viewport, _hasInspector: boolean) => {
+  const left = viewport.width * PUBLISHER_LEFT_RATIO + PUBLISHER_COLUMN_PADDING;
+  const right = viewport.width * PUBLISHER_RIGHT_RATIO + PUBLISHER_COLUMN_PADDING;
+  const top = PUBLISHER_COLUMN_PADDING;
+  const bottom = PUBLISHER_COLUMN_PADDING;
 
   return {
     left,
     top,
-    width: Math.max(1, viewport.width - left - right),
+    width: Math.max(1, viewport.width * PUBLISHER_CENTER_RATIO - PUBLISHER_COLUMN_PADDING * 2),
     height: Math.max(1, viewport.height - top - bottom),
   };
 };
@@ -1043,8 +1082,30 @@ const getPageOrigin = (
   const topY = workspace.top + RULER_SIZE;
 
   return {
-    x: Math.max(workspace.left + RULER_SIZE, centeredX) + pagePanOffset.x,
+    x: centeredX + pagePanOffset.x,
     y: Math.max(workspace.top + RULER_SIZE, topY) + pagePanOffset.y,
+  };
+};
+
+const clampPublisherPanOffset = (
+  current: { x: number; y: number },
+  viewport: Viewport,
+  zoom: number,
+  hasInspector: boolean,
+) => {
+  const workspace = getWorkspaceRect(viewport, hasInspector);
+  const baseOrigin = getPageOrigin(viewport, zoom, hasInspector, { x: 0, y: 0 });
+  const scaledPageWidth = NEWSPAPER_PAGE.width * zoom;
+  const scaledPageHeight = NEWSPAPER_PAGE.height * zoom;
+  const minVisible = 96;
+  const minX = workspace.left + minVisible - (baseOrigin.x + scaledPageWidth);
+  const maxX = workspace.left + workspace.width - minVisible - baseOrigin.x;
+  const minY = workspace.top + minVisible - (baseOrigin.y + scaledPageHeight);
+  const maxY = workspace.top + workspace.height - minVisible - baseOrigin.y;
+
+  return {
+    x: Math.min(Math.max(current.x, Math.min(minX, maxX)), Math.max(minX, maxX)),
+    y: Math.min(Math.max(current.y, Math.min(minY, maxY)), Math.max(minY, maxY)),
   };
 };
 
@@ -1372,6 +1433,9 @@ export function EditorCanvas() {
   const [imageReplacePopup, setImageReplacePopup] = useState<{ storyId: string; target: "photo" | "portrait" | "masthead-teaser" | "inside-teaser"; x: number; y: number } | null>(null);
   const imageReplaceFileInputRef = useRef<HTMLInputElement | null>(null);
   const [pagePreview, setPagePreview] = useState<PagePreviewState | null>(null);
+  const [pdfExporting, setPdfExporting] = useState(false);
+  const [nextPagePickerOpen, setNextPagePickerOpen] = useState(false);
+  const [wizardPreferredTab, setWizardPreferredTab] = useState<WizardTab | undefined>(undefined);
   const [fontManager, setFontManager] = useState<FontManagerState>(() => createInitialFontManagerState());
   const [workspaceState, setWorkspaceState] = usePersistentWorkspaceState();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -1399,7 +1463,7 @@ export function EditorCanvas() {
   // via a single useReducer. EditorCanvas only tracks one boolean here,
   // eliminating full canvas re-renders during every wizard interaction.
   const [wizardOpen, setWizardOpen] = useState(false);
-  const youthUpdateSinglePageWizardAutoOpenedRef = useRef(false);
+  const portalSinglePageWizardAutoOpenedRef = useRef(false);
   const panStartRef = useRef<{ x: number; y: number } | null>(null);
 
   const stories = useEditorStore((state) => state.stories);
@@ -1452,6 +1516,7 @@ export function EditorCanvas() {
   const createStory = useEditorStore((state) => state.createStory);
   const generateStoryLayout = useEditorStore((state) => state.generateStoryLayout);
   const importNewswireStories = useEditorStore((state) => state.importNewswireStories);
+  const replaceStoryArticleFromNewswire = useEditorStore((state) => state.replaceStoryArticleFromNewswire);
   const clearPlacementWarning = useEditorStore((state) => state.clearPlacementWarning);
   const selectStory = useEditorStore((state) => state.selectStory);
   const selectAllStories = useEditorStore((state) => state.selectAllStories);
@@ -1550,11 +1615,19 @@ export function EditorCanvas() {
   // no category field to show).
   const handleImportNewswireStoriesWithSection = useCallback(
     (category: string, articles: NewswireStory[], options: NewswireImportOptions) => {
-      importNewswireStories(category, articles, options);
+      const resolvedOptions: NewswireImportOptions = options?.pageKind === "editorial"
+        ? {
+            ...options,
+            editorialAuthorDefaults: usePublisherEditorialAuthorStore.getState().defaults,
+            editorialAuthorSelections: usePublisherEditorialAuthorStore.getState().selectedAuthors,
+          }
+        : options;
+
+      importNewswireStories(category, articles, resolvedOptions);
       void saveIssueUsedArticles(readPortalIssueArticleSession(), articles);
-      if (options?.pageKind === "inside") {
+      if (resolvedOptions?.pageKind === "inside") {
         updateActivePageProperties({ sectionName: category });
-      } else if (options?.pageKind === "editorial") {
+      } else if (resolvedOptions?.pageKind === "editorial") {
         updateActivePageProperties({ sectionName: "Editorial" });
       }
     },
@@ -1603,24 +1676,26 @@ export function EditorCanvas() {
   // PERFORMANCE: wizard open/close is now a single boolean.
   // All import logic lives inside GenerationWizardModal.
   const openGenerationWizard = useCallback(() => {
+    setWizardPreferredTab(undefined);
     setWizardOpen(true);
     setWorkspaceHistory((current) => ["Open Layout Wizard", ...current].slice(0, 24));
   }, [setWorkspaceHistory]);
 
   useEffect(() => {
-    if (youthUpdateSinglePageWizardAutoOpenedRef.current) {
+    if (portalSinglePageWizardAutoOpenedRef.current) {
       return;
     }
 
-    const isYouthUpdateSinglePageLaunch =
-      getPortalLaunchParam("publisherId") === YOUTH_UPDATE_PUBLISHER_ID &&
-      getPortalLaunchParam("mode") === "single";
+    const isPortalSinglePageLaunch =
+      Boolean(getPortalLaunchParam("publisherId")) &&
+      getPortalLaunchParam("mode") === "single" &&
+      Boolean(getPortalLaunchParam("selectedPageNumber"));
 
-    if (!isYouthUpdateSinglePageLaunch || getPortalLaunchParam("autoOpenLayoutWizard") === "false") {
+    if (!isPortalSinglePageLaunch || getPortalLaunchParam("autoOpenLayoutWizard") === "false") {
       return;
     }
 
-    youthUpdateSinglePageWizardAutoOpenedRef.current = true;
+    portalSinglePageWizardAutoOpenedRef.current = true;
     setWizardOpen(true);
     setWorkspaceHistory((current) => ["Open Layout Wizard", ...current].slice(0, 24));
   }, [setWorkspaceHistory]);
@@ -2145,6 +2220,21 @@ export function EditorCanvas() {
     imageSourcesByStoryIdRef.current = next;
     return next;
   }, [document.assets, document.stories, stories]);
+  const frontHeaderTeaser = useMemo(() => {
+    if (pageType !== "front") {
+      return null;
+    }
+
+    for (const { story } of visibleStoryLayouts) {
+      const imageUrl = imageSourcesByStoryId[story.id];
+      const headline = richTextToPlainText(story.articleData?.headline ?? "").replace(/\s+/g, " ").trim();
+      if (imageUrl && headline) {
+        return { headline, imageUrl };
+      }
+    }
+
+    return null;
+  }, [imageSourcesByStoryId, pageType, visibleStoryLayouts]);
   const layoutNodeCounts = useMemo(
     () =>
       new Map(
@@ -2271,6 +2361,20 @@ export function EditorCanvas() {
     () => document.pages.find((page) => page.id === activePageId) ?? document.pages[0] ?? null,
     [activePageId, document.pages],
   );
+  const portalPagePlan = useMemo(() => {
+    const planned = parsePortalPagePlan(getPortalLaunchParam("pageSections"));
+
+    if (planned.length > 0) {
+      return planned.sort((first, second) => first.page_number - second.page_number);
+    }
+
+    return document.pages.map((page) => ({
+      page_number: page.pageNumber,
+      section: page.sectionName || `Page ${page.pageNumber}`,
+      header_type: page.pageType === "editorial" ? "editorial" : page.pageNumber === 1 ? "front" : "normal",
+      category: page.sectionName || "",
+    }));
+  }, [document.pages]);
   const resolvedPageHeader = useMemo(
     () => (activePage ? resolvePageHeader(document, activePage.id) : null),
     [activePage, document],
@@ -3636,7 +3740,6 @@ export function EditorCanvas() {
 
       await exportDocumentPdf(filename);
       setWorkspaceHistory((current) => [`Exported PDF ${filename}`, ...current].slice(0, 24));
-      redirectToPortalAfterPdfExport();
     } catch (error) {
       console.error("Export PDF failed", error);
       window.alert(`Export PDF failed: ${error instanceof Error ? error.message : "unknown error"}`);
@@ -3660,8 +3763,8 @@ export function EditorCanvas() {
       return;
     }
     const pageIndex = document.pages.findIndex((p) => p.id === pageModel.id);
-    const portalPageNumber = Number(getPortalLaunchParam("selectedPageNumber"));
-    const filenamePageNumber = Number.isFinite(portalPageNumber) && portalPageNumber > 0 ? portalPageNumber : pageIndex >= 0 ? pageIndex + 1 : 1;
+    const filenamePageNumber = pageModel.pageNumber || (pageIndex >= 0 ? pageIndex + 1 : 1);
+    const portalPlanForPage = portalPagePlan.find((page) => page.page_number === filenamePageNumber);
     const filename = `${getSafeFilenamePart(document.metadata.newspaperName)}-page-${filenamePageNumber}.pdf`;
     setWorkspaceHistory((current) => [`Export page PDF started (${filename})`, ...current].slice(0, 24));
     try {
@@ -3671,10 +3774,12 @@ export function EditorCanvas() {
         throw result.error;
       }
       const pdfBytes = await pdfDoc.save({ useObjectStreams: false });
-      await chargeSinglePageAfterRender();
+      await chargeSinglePageAfterRender(
+        filenamePageNumber,
+        portalPlanForPage?.section || pageModel.sectionName || `Page ${filenamePageNumber}`,
+      );
       downloadBytes(pdfBytes, filename, "application/pdf");
       setWorkspaceHistory((current) => [`Exported ${filename}`, ...current].slice(0, 24));
-      redirectToPortalAfterPdfExport();
     } catch (error) {
       console.error("Export page PDF failed", error);
       window.alert(`Export page failed. पैसा नहीं कटा है, कृपया Try Again करें: ${error instanceof Error ? error.message : "unknown error"}`);
@@ -3695,6 +3800,72 @@ export function EditorCanvas() {
   // from "render everything" (phase 2, started only once phase 1's state
   // transition guarantees a fresh render already happened) avoids that class
   // of bug by construction rather than by careful ordering.
+  async function handlePublisherDownloadPdf() {
+    if (pdfExporting) {
+      return;
+    }
+
+    setPdfExporting(true);
+    try {
+      if (getPortalLaunchParam("mode") === "single") {
+        await exportSinglePagePdf(activePageId);
+      } else {
+        await exportCurrentPagePdf();
+      }
+    } finally {
+      setPdfExporting(false);
+    }
+  }
+
+  const openNextPagePicker = useCallback(() => {
+    setNextPagePickerOpen(true);
+  }, []);
+
+  const openWizardForPortalPage = useCallback(
+    (pagePlan: PortalPagePlan) => {
+      const tab = getWizardTabForPortalPage(pagePlan);
+
+      if (getPortalLaunchParam("mode") === "single") {
+        const nextPageType = tab === "front" ? "front" : "city";
+        const nextSectionName =
+          tab === "front"
+            ? "Front Page"
+            : tab === "advertisement"
+              ? pagePlan.section || "Advertisement Page"
+              : pagePlan.section || pagePlan.category || "Normal Page";
+
+        useEditorStore.setState((state) => ({
+          pageType: nextPageType,
+          document: {
+            ...state.document,
+            pages: state.document.pages.map((page) =>
+              page.id === state.activePageId
+                ? {
+                    ...page,
+                    pageNumber: pagePlan.page_number,
+                    pageType: nextPageType,
+                    sectionName: nextSectionName,
+                    updatedAt: new Date().toISOString(),
+                  }
+                : page,
+            ),
+          },
+        }));
+      } else {
+        selectPageByNumber(pagePlan.page_number);
+      }
+
+      setWizardPreferredTab(tab);
+      setNextPagePickerOpen(false);
+      setWizardOpen(true);
+      setWorkspaceHistory((current) => [
+        `Open Layout Wizard for page ${pagePlan.page_number}`,
+        ...current,
+      ].slice(0, 24));
+    },
+    [selectPageByNumber, setWorkspaceHistory],
+  );
+
   const isBatchMode = getPortalLaunchParam("mode") === "batch";
   const [batchPhase, setBatchPhase] = useState<
     { kind: "importing" } | { kind: "rendering"; index: number } | { kind: "done" } | null
@@ -3784,6 +3955,12 @@ export function EditorCanvas() {
         subheadingStyle: getPaletteSubheadingStyle(preset, 1),
         bodyAlignment: "justify",
         professionalJustification: true,
+        editorialAuthorDefaults: pageKind === "editorial"
+          ? usePublisherEditorialAuthorStore.getState().defaults
+          : null,
+        editorialAuthorSelections: pageKind === "editorial"
+          ? usePublisherEditorialAuthorStore.getState().selectedAuthors
+          : undefined,
       });
 
       for (let index = 0; index < initialPages.length; index += 1) {
@@ -3935,7 +4112,7 @@ export function EditorCanvas() {
               // haven't already been drained on this page. Still entirely
               // live content either way; nothing here ever touches the
               // deterministic preloaded pool.
-              if (freshLive.length < remaining) {
+              if (!specificCategory && freshLive.length < remaining) {
                 const stillNeeded = remaining - freshLive.length;
                 const mixedIn = await fetchLiveArticlesFromOtherCategories(
                   specificCategory ?? "",
@@ -3957,20 +4134,13 @@ export function EditorCanvas() {
             // news. Only a genuinely empty page (nothing manual, nothing
             // live anywhere) counts as a failure for this page.
             const wireArticles = freshLive.slice(0, remaining);
-            const fallbackArticles = wireArticles.length < remaining
-              ? getFallbackNewswireStories(
-                  specificCategory ?? categoryLabel,
-                  remaining - wireArticles.length,
-                  new Set([...batchUsedArticleIdsRef.current, ...wireArticles.map((article) => article.id)]),
-                )
-              : [];
-            const merged = [...manualArticles, ...wireArticles, ...fallbackArticles];
+            const merged = [...manualArticles, ...wireArticles];
             if (merged.length === 0) {
               throw new Error("No live news articles could be found for this page.");
             }
             useEditorStore.getState().importNewswireStories(categoryLabel, merged, options);
             imported = true;
-            usedFallback = fallbackArticles.length > 0;
+            usedFallback = false;
             for (const article of merged) {
               batchUsedArticleIdsRef.current.add(article.id);
               batchUsedHeadlinesRef.current.add(normalizeHeadlineKey(article.headline));
@@ -4815,9 +4985,29 @@ export function EditorCanvas() {
   const handleWheel = useCallback((event: Konva.KonvaEventObject<WheelEvent>) => {
     event.evt.preventDefault();
 
-    const direction = event.evt.deltaY > 0 ? -1 : 1;
-    setZoom(zoom + direction * 0.05);
-  }, [setZoom, zoom]);
+    if (event.evt.ctrlKey || event.evt.metaKey) {
+      const direction = event.evt.deltaY > 0 ? -1 : 1;
+      const nextZoom = Math.min(2.4, Math.max(0.2, zoom + direction * 0.05));
+
+      setZoom(nextZoom);
+      setPagePanOffset((current) =>
+        clampPublisherPanOffset(current, viewport, nextZoom, Boolean(selectedStoryLayout)),
+      );
+      return;
+    }
+
+    setPagePanOffset((current) =>
+      clampPublisherPanOffset(
+        {
+          x: current.x - event.evt.deltaX,
+          y: current.y - event.evt.deltaY,
+        },
+        viewport,
+        zoom,
+        Boolean(selectedStoryLayout),
+      ),
+    );
+  }, [selectedStoryLayout, setZoom, viewport, zoom]);
 
   const handleStageMouseDown = useCallback(
     (event: Konva.KonvaEventObject<MouseEvent>) => {
@@ -5922,6 +6112,8 @@ export function EditorCanvas() {
         onDetachActivePageMaster={detachActivePageMaster}
         onOverrideMasterElement={overrideActivePageMasterElement}
         onImportNewswireStories={handleImportNewswireStoriesWithSection}
+        onReplaceStoryArticle={replaceStoryArticleFromNewswire}
+        compactPublisherMode
       />
     ),
     assets: (
@@ -6027,45 +6219,51 @@ export function EditorCanvas() {
       className={`editor-shell has-story-manager${selectedStoryLayout ? " has-inspector" : ""}`}
       ref={containerRef}
     >
-      <WorkspaceToolbar
-        state={workspaceState}
-        onStateChange={setWorkspaceState}
-        onOpenCommandPalette={() => setCommandPaletteOpen(true)}
-      />
-      <WorkspaceDock
-        dockId="left"
-        state={workspaceState}
-        panels={leftWorkspacePanels}
-        onStateChange={setWorkspaceState}
-      />
-      <WorkspaceDock
-        dockId="right"
-        state={workspaceState}
-        panels={rightWorkspacePanels}
-        onStateChange={setWorkspaceState}
-      />
-      <WorkspaceDock
-        dockId="bottom"
-        state={workspaceState}
-        panels={bottomWorkspacePanels}
-        onStateChange={setWorkspaceState}
-      />
-      <FloatingWorkspacePanels
-        state={workspaceState}
-        panels={{ ...leftWorkspacePanels, ...rightWorkspacePanels, ...bottomWorkspacePanels }}
-        onStateChange={setWorkspaceState}
-      />
-      <CommandPalette
-        open={commandPaletteOpen}
-        commands={workspaceCommands}
-        recentCommands={workspaceHistory}
-        onClose={() => setCommandPaletteOpen(false)}
-      />
-      <ShortcutOverlay
-        open={shortcutOverlayOpen}
-        commands={workspaceCommands}
-        onClose={() => setShortcutOverlayOpen(false)}
-      />
+      <div className="publisher-focused-shell" aria-label="Publisher page workspace">
+        <section className="publisher-focused-left" aria-label="Live page layout">
+          {leftWorkspacePanels.frames}
+        </section>
+        <section className="publisher-focused-center" aria-hidden="true" />
+        <section className="publisher-focused-actions" aria-label="Page actions">
+          <button
+            type="button"
+            className="publisher-action-button"
+            onClick={() => void openPagePreview()}
+            disabled={pagePreview?.status === "loading"}
+          >
+            प्रीव्यू
+          </button>
+          <button
+            type="button"
+            className="publisher-action-button"
+            onClick={() => void handlePublisherDownloadPdf()}
+            disabled={pdfExporting}
+          >
+            {pdfExporting ? (
+              <>
+                <span className="publisher-button-loader" aria-hidden="true" />
+                PDF बन रहा है
+              </>
+            ) : (
+              "PDF डाउनलोड"
+            )}
+          </button>
+          <button
+            type="button"
+            className="publisher-action-button"
+            onClick={openGenerationWizard}
+          >
+            रीजनरेट पेज
+          </button>
+          <button
+            type="button"
+            className="publisher-action-button primary"
+            onClick={openNextPagePicker}
+          >
+            अगला पेज बनाएं
+          </button>
+        </section>
+      </div>
 
       {fontManager.status !== "loaded" ? (
         <div className="font-diagnostics-shell">
@@ -6110,6 +6308,7 @@ export function EditorCanvas() {
                   resolvedHeader={resolvedPageHeader}
                   masterHeaderEnabled={masterHeaderEnabled}
                   headerLogoSource={headerLogoSource}
+                  frontHeaderTeaser={frontHeaderTeaser}
                   useYouthUpdateMasthead={isYouthUpdateFrontLayout}
                   useYouthUpdateInsideHeader={isYouthUpdateInsideLayout}
                   useYouthUpdateInsideTeaser={isYouthUpdateInsideLayout && !youthUpdateInsideHeaderOnly}
@@ -6281,6 +6480,52 @@ export function EditorCanvas() {
           </Profiler>
         </Layer>
       </Stage>
+
+      {nextPagePickerOpen ? (
+        <div className="publisher-page-picker-backdrop" onClick={() => setNextPagePickerOpen(false)}>
+          <div className="publisher-page-picker" onClick={(event) => event.stopPropagation()}>
+            <button
+              type="button"
+              className="publisher-page-picker-close"
+              onClick={() => setNextPagePickerOpen(false)}
+              aria-label="Close page picker"
+            >
+              <X size={17} strokeWidth={2.2} />
+            </button>
+            <div className="publisher-page-picker-heading">
+              <span>एक पेज बनाएं</span>
+              <strong>कौन सा पेज तैयार करना है?</strong>
+            </div>
+            <div className="publisher-page-picker-grid">
+              {portalPagePlan.map((pagePlan) => {
+                const tab = getWizardTabForPortalPage(pagePlan);
+                const isCurrent = pagePlan.page_number === (activePage?.pageNumber ?? 1);
+                const typeLabel =
+                  tab === "front"
+                    ? "फ्रंट पेज"
+                    : tab === "editorial"
+                      ? "एडिटोरियल"
+                      : tab === "advertisement"
+                        ? "विज्ञापन"
+                        : "इनसाइड पेज";
+
+                return (
+                  <button
+                    key={pagePlan.page_number}
+                    type="button"
+                    className={isCurrent ? "active" : ""}
+                    onClick={() => openWizardForPortalPage(pagePlan)}
+                  >
+                    <span>{pagePlan.page_number}</span>
+                    <strong>{pagePlan.section || `Page ${pagePlan.page_number}`}</strong>
+                    <em>{typeLabel}</em>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="story-toolbar" aria-label="Story controls">
         <div className="toolbar-group" data-label="FILE">
@@ -6460,6 +6705,7 @@ export function EditorCanvas() {
         defaultLanguageMode="hindi"
         onClose={() => {
           setWizardOpen(false);
+          setWizardPreferredTab(undefined);
           // Surface the zoom/fit controls the moment a page finishes
           // generating, so the user can immediately check it at a glance.
           setWorkspaceState((current) => activateDockPanel(current, "right", "navigator"));
@@ -6469,6 +6715,7 @@ export function EditorCanvas() {
         pages={wizardPageSummaries}
         activePageNumber={activePage?.pageNumber ?? 1}
         onSelectPageByNumber={selectPageByNumber}
+        preferredTab={wizardPreferredTab}
       />
 
 

@@ -14,8 +14,6 @@ import {
   type LocalizedNewswireContent,
   type NewswireStory,
 } from "@/lib/newswire";
-import { getFallbackNewswireStories } from "@/lib/newswireFallback";
-import { getRecentlyUsedNewswireTimestamps, markNewswireIdsUsed } from "@/lib/newswireUsageStore";
 
 const DEFAULT_API_BASE_URL = "https://api.gautamenterprises.org";
 const GAUTAM_ENGLISH_API_BASE_URL = "https://api.gautamenterprises.org";
@@ -232,6 +230,127 @@ const getString = (...values: unknown[]) => {
   return "";
 };
 
+const normalizeCategoryKey = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/[\s_\-–—]+/g, "")
+    .replace(/[()]/g, "");
+
+const CATEGORY_ALIASES: Record<string, string[]> = {
+  National: ["national", "rashtriya", "राष्ट्रीय", "देश"],
+  "Madhya Pradesh": ["madhyapradesh", "madhyapradeshnews", "mp", "state", "मध्यप्रदेश", "प्रदेश"],
+  International: ["international", "world", "deshvidesh", "विदेश", "विश्व", "अंतरराष्ट्रीय"],
+  Sports: ["sports", "sport", "khel", "खेल"],
+  Business: ["business", "biz", "व्यापार", "कारोबार", "बिजनेस"],
+  Health: ["health", "medical", "स्वास्थ्य", "हेल्थ"],
+  Entertainment: ["entertainment", "film", "cinema", "मनोरंजन"],
+};
+
+const categoryMatches = (actual: string, requested: string) => {
+  const actualKey = normalizeCategoryKey(actual);
+  const requestedKey = normalizeCategoryKey(requested);
+  const requestedAliases = CATEGORY_ALIASES[requested] ?? [requestedKey];
+
+  return actualKey === requestedKey || requestedAliases.some((alias) => actualKey === normalizeCategoryKey(alias));
+};
+
+const recordMatchesRequestedCategory = (record: DeliveryRecord, requestedCategory: string) => {
+  const declaredCategories = [
+    record.category,
+    record.ui_hindi?.category,
+    record.ui_english?.category,
+    record.article?.category,
+    record.article?.hindi?.category,
+    record.article?.english?.category,
+    record.hindi?.category,
+    record.english?.category,
+    record.raw_articles_by_language?.hindi?.category,
+    record.raw_articles_by_language?.english?.category,
+  ].map(cleanNewswireText).filter(Boolean);
+
+  if (declaredCategories.length === 0) {
+    return true;
+  }
+
+  return declaredCategories.some((candidate) => categoryMatches(candidate, requestedCategory));
+};
+
+const getRecordSearchText = (record: DeliveryRecord) =>
+  getString(
+    record.title,
+    record.secondary_headline,
+    record.article?.headline,
+    record.article?.secondary_headline,
+    record.article?.short_description,
+    record.article?.long_description,
+    record.ui_hindi?.title,
+    record.ui_hindi?.secondary_headline,
+    record.ui_hindi?.short_250,
+    record.ui_hindi?.medium_500,
+    record.ui_english?.title,
+    record.ui_english?.secondary_headline,
+    record.ui_english?.short_250,
+    record.raw_articles_by_language?.hindi?.headline,
+    record.raw_articles_by_language?.hindi?.words_250,
+    record.raw_articles_by_language?.english?.headline,
+    record.raw_articles_by_language?.english?.words_250,
+  ).toLowerCase();
+
+const hasAnyTerm = (text: string, terms: string[]) => terms.some((term) => text.includes(term.toLowerCase()));
+
+const recordPassesCategoryContentGuard = (record: DeliveryRecord, requestedCategory: string) => {
+  if (requestedCategory !== "Madhya Pradesh") {
+    return true;
+  }
+
+  const text = getRecordSearchText(record);
+  const madhyaPradeshSignals = [
+    "madhya pradesh",
+    "madhyapradesh",
+    "mp ",
+    "m.p.",
+    "मध्य प्रदेश",
+    "मध्यप्रदेश",
+    "मप्र",
+    "भोपाल",
+    "इंदौर",
+    "जबलपुर",
+    "ग्वालियर",
+    "उज्जैन",
+    "खंडवा",
+    "सागर",
+    "रीवा",
+    "सीहोर",
+    "छिंदवाड़ा",
+    "बड़वानी",
+    "मऊगंज",
+  ];
+  const obviousOtherCategorySignals = [
+    "क्रिकेट",
+    "मैच",
+    "खिलाड़ी",
+    "टीम",
+    "फुटबॉल",
+    "ट्रॉफी",
+    "पाकिस्तान",
+    "अमेरिका",
+    "ईरान",
+    "रूस",
+    "यूक्रेन",
+    "चीन",
+    "इजराइल",
+    "वैश्विक",
+    "शेयर",
+    "सेंसेक्स",
+    "निफ्टी",
+    "बाजार",
+    "stock",
+    "market",
+  ];
+
+  return hasAnyTerm(text, madhyaPradeshSignals) || !hasAnyTerm(text, obviousOtherCategorySignals);
+};
+
 const getPlaceString = (...records: Array<Record<string, unknown> | null | undefined>) =>
   getString(
     ...records.flatMap((record) =>
@@ -444,8 +563,7 @@ const FRESHNESS_WINDOW_MS = 24 * 60 * 60 * 1000;
  * pool (see the `limit=100`/`limit=50` request sizes below, independent of
  * the caller's own requested count) so there is a real pool to pick from
  * here: restrict to the last 24h, prefer whatever this process hasn't
- * served recently (see newswireUsageStore), shuffle, then take however many
- * the caller asked for.
+ * shuffle, then take however many the caller asked for.
  *
  * "No repeat" is a preference, not a hard floor: a category's entire live
  * pool is small (a thin one can be 3-5 articles total) and every caller
@@ -474,25 +592,26 @@ const selectFreshUnusedRandom = async (
     return Number.isFinite(publishedAt) && publishedAt >= cutoff;
   });
 
-  const usedTimestamps = await getRecentlyUsedNewswireTimestamps();
-  const unused = fresh.filter((record) => !(record.id in usedTimestamps));
-
-  for (let i = unused.length - 1; i > 0; i -= 1) {
+  for (let i = fresh.length - 1; i > 0; i -= 1) {
     const j = Math.floor(Math.random() * (i + 1));
-    [unused[i], unused[j]] = [unused[j], unused[i]];
+    [fresh[i], fresh[j]] = [fresh[j], fresh[i]];
   }
 
-  let selected = unused.slice(0, limit);
+  let selected = fresh.slice(0, limit);
 
   if (selected.length < limit) {
     const selectedIds = new Set(selected.map((record) => record.id));
-    const usedButFresh = fresh
-      .filter((record) => !selectedIds.has(record.id) && record.id in usedTimestamps)
-      .sort((a, b) => usedTimestamps[a.id] - usedTimestamps[b.id]);
-    selected = [...selected, ...usedButFresh.slice(0, limit - selected.length)];
+    const freshIds = new Set(fresh.map((record) => record.id));
+    const olderOrUndatedLive = records
+      .filter((record) => !selectedIds.has(record.id) && !freshIds.has(record.id))
+      .sort((a, b) => {
+        const aPublishedAt = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
+        const bPublishedAt = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
+        return bPublishedAt - aPublishedAt;
+      });
+    selected = [...selected, ...olderOrUndatedLive.slice(0, limit - selected.length)];
   }
 
-  await markNewswireIdsUsed(selected.map((record) => record.id));
   return selected;
 };
 
@@ -555,7 +674,10 @@ export async function GET(request: Request) {
       }
 
       const records = await selectFreshUnusedRandom(
-        payload.data.map((record) => normalizeDeliveryRecord(record, category, requestedLanguage)),
+        payload.data
+          .filter((record) => recordMatchesRequestedCategory(record, category))
+          .filter((record) => recordPassesCategoryContentGuard(record, category))
+          .map((record) => normalizeDeliveryRecord(record, category, requestedLanguage)),
         limit,
       );
 
@@ -582,18 +704,20 @@ export async function GET(request: Request) {
   }
 
   if (!apiKey) {
-    const fallbackStories = getFallbackNewswireStories(category, limit);
-    return NextResponse.json({
-      success: true,
-      data: fallbackStories,
-      meta: {
-        category,
-        language,
-        count: fallbackStories.length,
-        baseUrl: "fallback",
-        warning: "NEWSWIRE_API_KEY is not configured - serving built-in fallback Hindi stories.",
+    return NextResponse.json(
+      {
+        success: false,
+        data: [],
+        error: "NEWSWIRE_API_KEY is not configured. Live category news cannot be loaded.",
+        meta: {
+          category,
+          language,
+          count: 0,
+          baseUrl: "unconfigured",
+        },
       },
-    });
+      { status: 503 },
+    );
   }
 
   const errors: string[] = [];
@@ -617,14 +741,15 @@ export async function GET(request: Request) {
   // thing on one unlucky roll; two 12s attempts spend the same rough
   // worst-case total but give a jittery upstream a real second chance
   // before conceding to fallback stories.
-  const UPSTREAM_TIMEOUT_MS = 12000;
+  const UPSTREAM_TIMEOUT_MS = 25000;
   const UPSTREAM_MAX_ATTEMPTS = 2;
+  const upstreamLimit = Math.min(100, Math.max(30, limit * 4 + 10));
 
   for (const baseUrl of getApiBaseUrls()) {
     const upstreamUrl = new URL("/api/v1/delivery/news", baseUrl);
     upstreamUrl.searchParams.set("category", category);
     upstreamUrl.searchParams.set("language", language);
-    upstreamUrl.searchParams.set("limit", "100");
+    upstreamUrl.searchParams.set("limit", String(upstreamLimit));
 
     for (let attempt = 1; attempt <= UPSTREAM_MAX_ATTEMPTS; attempt += 1) {
       const controller = new AbortController();
@@ -647,7 +772,10 @@ export async function GET(request: Request) {
 
         const records = await selectFreshUnusedRandom(
           Array.isArray(payload?.data)
-            ? payload.data.map((record) => normalizeDeliveryRecord(record, category, requestedLanguage))
+            ? payload.data
+                .filter((record) => recordMatchesRequestedCategory(record, category))
+                .filter((record) => recordPassesCategoryContentGuard(record, category))
+                .map((record) => normalizeDeliveryRecord(record, category, requestedLanguage))
             : [],
           limit,
         );
@@ -673,17 +801,18 @@ export async function GET(request: Request) {
     }
   }
 
-  const fallbackStories = getFallbackNewswireStories(category, limit);
-
-  return NextResponse.json({
-    success: true,
-    data: fallbackStories,
-    meta: {
-      category,
-      language,
-      count: fallbackStories.length,
-      baseUrl: "fallback",
-      warning: `All newswire backends failed. ${errors.join(" | ")} - serving built-in fallback stories.`,
+  return NextResponse.json(
+    {
+      success: false,
+      data: [],
+      error: `All newswire backends failed. ${errors.join(" | ")}`,
+      meta: {
+        category,
+        language,
+        count: 0,
+        baseUrl: "failed",
+      },
     },
-  });
+    { status: 502 },
+  );
 }

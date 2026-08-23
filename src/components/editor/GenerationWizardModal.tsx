@@ -90,7 +90,7 @@ import { AdvertisementPagePanel } from "./AdvertisementPagePanel";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type WizardTab = "front" | "inside" | "editorial" | "advertisement";
+export type WizardTab = "front" | "inside" | "editorial" | "advertisement";
 type GenerationWizardStep = "layout" | "style" | "category";
 
 /**
@@ -407,6 +407,19 @@ const isClassifiedLocalMixPage = (): boolean => {
 
 const getInsideFetchCategories = (selectedCategory: NewswireCategory): NewswireCategory[] =>
   isClassifiedLocalMixPage() ? ["Madhya Pradesh", "National"] : [selectedCategory];
+
+const getPortalLaunchWizardTab = (): WizardTab => {
+  const pageKind = getPortalLaunchParamFromWindow("pageKind").toLowerCase();
+  const selectedPageName = getPortalLaunchParamFromWindow("selectedPageName").toLowerCase();
+  const selectedPageNumber = Number(getPortalLaunchParamFromWindow("selectedPageNumber"));
+
+  if (pageKind === "advertisement") return "advertisement";
+  if (pageKind === "editorial" || /editorial|sampadak|संपाद/.test(selectedPageName)) {
+    return "editorial";
+  }
+  if (pageKind === "front" || selectedPageNumber === 1) return "front";
+  return "inside";
+};
 
 const getInsideImportCategory = (selectedCategory: NewswireCategory, languageMode: PageLanguageMode): string => {
   if (!isClassifiedLocalMixPage()) return selectedCategory;
@@ -880,6 +893,14 @@ export type NewswireImportOptions = {
   templateId?: TemplateId;
   languageMode?: PageLanguageMode;
   bylineName?: string;
+  editorialAuthorDefaults?: {
+    name: string;
+    imageUrl: string;
+  } | null;
+  editorialAuthorSelections?: Array<{
+    name: string;
+    imageUrl: string;
+  } | null>;
   colouredHeadings?: boolean;
   tintedStoryBackground?: boolean;
   tintColor?: string;
@@ -925,6 +946,7 @@ type GenerationWizardModalProps = {
   pages: WizardPageSummary[];
   activePageNumber: number;
   onSelectPageByNumber: (pageNumber: number) => void;
+  preferredTab?: WizardTab;
 };
 
 // ─── Layout Preview (lazy — computed only when modal opens) ───────────────────
@@ -1979,13 +2001,37 @@ export const GenerationWizardModal = memo(function GenerationWizardModal({
   pages,
   activePageNumber,
   onSelectPageByNumber,
+  preferredTab,
 }: GenerationWizardModalProps) {
   const bylineSyncedRef = useRef(false);
+  const portalLaunchTabSyncedRef = useRef(false);
   const [state, dispatch] = useReducer(
     wizardReducer,
     defaultBylineName,
     createInitialWizardState,
   );
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    if (preferredTab) {
+      dispatch({ type: "SET_TAB", tab: preferredTab });
+      return;
+    }
+
+    if (portalLaunchTabSyncedRef.current) {
+      return;
+    }
+
+    if (getPortalLaunchParamFromWindow("autoOpenLayoutWizard") !== "true") {
+      return;
+    }
+
+    portalLaunchTabSyncedRef.current = true;
+    dispatch({ type: "SET_TAB", tab: getPortalLaunchWizardTab() });
+  }, [open, preferredTab]);
 
   // Sync language mode from document settings (only once)
   useEffect(() => {
@@ -2131,12 +2177,12 @@ export const GenerationWizardModal = memo(function GenerationWizardModal({
       }
 
       const liveStories = collectFreshStories(shuffleNewswireStories(livePool), needed, exclusions);
-      const fallbackStories = liveStories.length < needed
-        ? fetchCategories.flatMap((category) =>
-            selectFreshFallbackStories(category, needed - liveStories.length, exclusions),
-          ).slice(0, needed - liveStories.length)
-        : [];
-      onImportNewswireStories(getInsideImportCategory(state.category, state.languageMode), [...manualResult.stories, ...liveStories, ...fallbackStories], buildImportOptions());
+      if (liveStories.length < needed) {
+        throw new Error(
+          `Only ${liveStories.length} live ${state.category} articles are available for ${needed} empty boxes. No preloaded articles were used.`,
+        );
+      }
+      onImportNewswireStories(getInsideImportCategory(state.category, state.languageMode), [...manualResult.stories, ...liveStories], buildImportOptions());
       onClose();
     } catch (error) {
       dispatch({
@@ -2242,14 +2288,12 @@ export const GenerationWizardModal = memo(function GenerationWizardModal({
       }
 
       const liveStories = liveArticles;
-      const fallbackStories = liveStories.length < needed
-        ? shuffleNewswireStories(
-            computeWeightedCategoryTargets(needed - liveStories.length)
-              .filter((entry) => entry.target > 0)
-              .flatMap(({ category, target }) => selectFreshFallbackStories(category, target, exclusions)),
-          ).slice(0, needed - liveStories.length)
-        : [];
-      onImportNewswireStories("Mixed", [...manualResult.stories, ...liveStories, ...fallbackStories], buildImportOptions());
+      if (liveStories.length < needed) {
+        throw new Error(
+          `Only ${liveStories.length} live mixed articles are available for ${needed} empty boxes. No preloaded articles were used.`,
+        );
+      }
+      onImportNewswireStories("Mixed", [...manualResult.stories, ...liveStories], buildImportOptions());
       onClose();
     } catch (error) {
       dispatch({

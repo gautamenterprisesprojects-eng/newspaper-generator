@@ -40,6 +40,7 @@ import {
 } from "@/lib/editorialNewswire";
 import { getTemplateDefinition } from "@/engines/TemplateLayout/TemplateRegistry";
 import { getEditorialRailLabel } from "@/engines/MasterPage/AuthorBlockGeometry";
+import { usePublisherEditorialAuthorStore } from "@/store/publisherEditorialAuthorStore";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -659,10 +660,22 @@ export const EditorialSlotPanel = memo(function EditorialSlotPanel({
   } | null>(null);
   const [fetchingFeed, setFetchingFeed] = useState(false);
   const [feedStatus, setFeedStatus] = useState<string | null>(null);
+  const editorialAuthors = usePublisherEditorialAuthorStore((store) => store.authors);
+  const selectedEditorialAuthors = usePublisherEditorialAuthorStore((store) => store.selectedAuthors);
+  const selectEditorialAuthorForRail = usePublisherEditorialAuthorStore((store) => store.selectAuthorForRail);
 
   const fileInputRefs = useRef<Array<React.RefObject<HTMLInputElement | null>>>([]);
   const imageInputRefs = useRef<Array<React.RefObject<HTMLInputElement | null>>>([]);
   const portraitInputRefs = useRef<Array<React.RefObject<HTMLInputElement | null>>>([]);
+  const getSelectedEditorialAuthorId = useCallback(
+    (railIndex: 0 | 1) =>
+      editorialAuthors.find(
+        (author) =>
+          author.name === selectedEditorialAuthors[railIndex]?.name &&
+          author.imageUrl === selectedEditorialAuthors[railIndex]?.imageUrl,
+      )?.id ?? editorialAuthors[Math.min(railIndex, editorialAuthors.length - 1)]?.id ?? editorialAuthors[0]?.id ?? "",
+    [editorialAuthors, selectedEditorialAuthors],
+  );
 
   // Derive slot count from the selected layout via composeEditorialPage
   const detectedSlotCount = useMemo(() => {
@@ -1100,6 +1113,43 @@ export const EditorialSlotPanel = memo(function EditorialSlotPanel({
           </div>
         </div>
       </div>
+
+      {editorialAuthors.length > 0 ? (
+        <div className="editorial-author-picker">
+          {[0, 1].map((railIndex) => {
+            const typedRailIndex = railIndex as 0 | 1;
+            const selected = selectedEditorialAuthors[typedRailIndex];
+            const label = getEditorialRailLabel(railIndex + 1) || (railIndex === 0 ? "Sampadakiya author" : "Vichar Manthan author");
+            return (
+              <div className="editorial-author-select-card" key={railIndex}>
+                <label htmlFor={`editorial-author-select-${railIndex}`}>
+                  {label}
+                </label>
+                <select
+                  id={`editorial-author-select-${railIndex}`}
+                  value={getSelectedEditorialAuthorId(typedRailIndex)}
+                  onChange={(event) => selectEditorialAuthorForRail(typedRailIndex, event.target.value)}
+                >
+                  {editorialAuthors.map((author, index) => (
+                    <option key={author.id} value={author.id}>
+                      {author.name || `Author ${index + 1}`}
+                    </option>
+                  ))}
+                </select>
+                {selected?.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={selected.imageUrl} alt="" />
+                ) : null}
+                <span>{selected?.name || "Saved author will print in this rail."}</span>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="editorial-author-picker muted">
+          Profile me editorial author save karne ke baad yaha dropdown dikhega.
+        </div>
+      )}
 
       <div className="editorial-slot-workspace">
         <div className="editorial-slot-map-card">

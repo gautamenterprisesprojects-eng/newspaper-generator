@@ -1553,6 +1553,14 @@ type NewswireImportOptions = {
   pageKind?: PageKind;
   languageMode?: PageLanguageMode;
   bylineName?: string;
+  editorialAuthorDefaults?: {
+    name: string;
+    imageUrl: string;
+  } | null;
+  editorialAuthorSelections?: Array<{
+    name: string;
+    imageUrl: string;
+  } | null>;
   colouredHeadings?: boolean;
   tintedStoryBackground?: boolean;
   tintColor?: string;
@@ -1917,6 +1925,11 @@ type EditorActions = {
   importNewswireStories: (
     category: string,
     articles: NewswireStory[],
+    options: NewswireImportOptions,
+  ) => void;
+  replaceStoryArticleFromNewswire: (
+    storyId: StoryFrameId,
+    article: NewswireStory,
     options: NewswireImportOptions,
   ) => void;
   clearPlacementWarning: () => void;
@@ -4097,6 +4110,19 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           articleData.inlineSubheadingColor = YOUTH_UPDATE_COLORS.wordmarkLight;
         }
 
+        if (options?.pageKind === "editorial" && isEditorialAuthorSlot(slot.storyNumber)) {
+          const authorIndex = slot.storyNumber === 2 ? 1 : 0;
+          const authorDefaults =
+            options.editorialAuthorSelections?.[authorIndex] ??
+            options.editorialAuthorDefaults;
+          if (authorDefaults?.name) {
+            articleData.editorName = authorDefaults.name;
+          }
+          if (authorDefaults?.imageUrl) {
+            articleData.editorPortraitUrl = authorDefaults.imageUrl;
+          }
+        }
+
         return {
           ...markStoryDirty(baseStory, {
             textDirty: true,
@@ -4396,6 +4422,177 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         caretPosition: null,
         selectionBounds: null,
         placementWarning: importMessage,
+      };
+    }),
+
+  replaceStoryArticleFromNewswire: (storyId, article, options) =>
+    set((state) => {
+      const story = state.stories.find((candidate) => candidate.id === storyId);
+
+      if (!story) {
+        return { placementWarning: "Story box not found" };
+      }
+
+      if (story.locked) {
+        return { placementWarning: "Locked story cannot be replaced" };
+      }
+
+      const languageMode = options.languageMode ?? state.document.settings.languageMode ?? "hindi";
+      const language = story.contentLanguage ?? (languageMode === "english" ? "english" : "hindi");
+      const bylineName = options.bylineName?.trim() ?? state.document.settings.bylineName ?? "";
+      const capacity =
+        options.pageKind === "editorial" && story.columnSpan >= EDITORIAL_FILL_MIN_COLUMN_SPAN
+          ? Math.max(estimateStoryWordCapacity(story), EDITORIAL_FILL_WORD_TIER)
+          : estimateStoryWordCapacity(story);
+
+      let articleData: ArticleData;
+
+      try {
+        articleData = chooseLayoutFittedNewswireArticleData({
+          baseStory: story,
+          item: article,
+          language,
+          bylineName,
+          subheadingStyle: options.subheadingStyle,
+          initialCapacity: capacity,
+          finalSubheadlineBanner: story.articleData.subheadlineBanner,
+          finalContainerStyles: story.articleData.containerStyles,
+          finalHeadlineColor: story.articleData.headlineColor,
+          options,
+          typographyTransform:
+            options.templateId && isYouthUpdateInsideTemplateId(options.templateId)
+              ? applyYouthUpdateEnglishBodyTypography
+              : undefined,
+        });
+      } catch (error) {
+        return {
+          placementWarning: error instanceof Error ? error.message : "Replacement article could not fit this box",
+        };
+      }
+
+      const previousStoryObjects = state.document.stories;
+      const previousSelectedStoryObject = previousStoryObjects[storyId];
+      const previousSelectedPhotoAsset = previousSelectedStoryObject?.photo
+        ? state.document.assets[previousSelectedStoryObject.photo]
+        : null;
+      const replacementImageUrl = article.imageUrl?.trim() ?? "";
+      const previousSelectedPhotoUrl =
+        previousSelectedPhotoAsset?.source ??
+        previousSelectedPhotoAsset?.previewUrl ??
+        previousSelectedPhotoAsset?.thumbnailUrl ??
+        "";
+      const replacementUsesNewImage = Boolean(
+        replacementImageUrl && replacementImageUrl !== previousSelectedPhotoUrl,
+      );
+      const existingAsset = replacementImageUrl
+        ? Object.values(state.document.assets).find((asset) =>
+            asset.source === replacementImageUrl ||
+            asset.previewUrl === replacementImageUrl ||
+            asset.thumbnailUrl === replacementImageUrl,
+          )
+        : null;
+      const imageAsset = story.imageEnabled && replacementImageUrl && !existingAsset
+        ? createNewswireImageAsset(
+            article,
+            state.stories.findIndex((candidate) => candidate.id === storyId),
+            replacementImageUrl,
+          )
+        : null;
+      const assetId = replacementImageUrl
+        ? existingAsset?.id ?? imageAsset?.id ?? previousSelectedStoryObject?.photo ?? null
+        : previousSelectedStoryObject?.photo ?? null;
+      const nextStories = updateStory(state.stories, storyId, (currentStory) =>
+        markStoryDirty(
+          {
+            ...currentStory,
+            name: article.headline || currentStory.name,
+            category: article.category || currentStory.category,
+            status: "edited",
+            contentLanguage: language,
+            articleData,
+          },
+          {
+            textDirty: true,
+            compositionDirty: true,
+            renderDirty: true,
+          },
+        ),
+      );
+      const synced = withSyncedDocument(
+        {
+          ...state.document,
+          assets: imageAsset
+            ? {
+                ...state.document.assets,
+                [imageAsset.id]: imageAsset,
+              }
+            : state.document.assets,
+        },
+        nextStories,
+        state.activePageId,
+      );
+      const nextStoryObject = synced.document.stories[storyId];
+      const restoredStoryObjects = Object.fromEntries(
+        Object.entries(synced.document.stories).map(([currentStoryId, storyObject]) => {
+          const previousStoryObject = previousStoryObjects[currentStoryId];
+
+          if (!previousStoryObject) {
+            return [currentStoryId, storyObject];
+          }
+
+          if (currentStoryId !== storyId) {
+            return [
+              currentStoryId,
+              {
+                ...storyObject,
+                photo: previousStoryObject.photo,
+                imageSettings: previousStoryObject.imageSettings,
+              },
+            ];
+          }
+
+          return [
+            currentStoryId,
+            {
+              ...storyObject,
+              photo: assetId,
+              imageSettings: replacementUsesNewImage
+                ? {
+                    ...storyObject.imageSettings,
+                    imageEnabled: Boolean(assetId) && storyObject.imageSettings.imageEnabled,
+                  }
+                : previousStoryObject.imageSettings,
+            },
+          ];
+        }),
+      );
+      const nextDocument = {
+        ...synced.document,
+        stories: restoredStoryObjects,
+        pages: synced.document.pages.map((page) =>
+          page.id === state.activePageId && assetId
+            ? {
+                ...page,
+                photos: [...new Set([...page.photos, assetId])],
+              }
+            : page,
+        ),
+      };
+      const selectedFrameId = findFrameIdForStory(nextDocument, state.activePageId, storyId);
+
+      return {
+        stories: nextStories,
+        document: nextDocument,
+        selectedStoryId: storyId,
+        selectedFrameId,
+        selectedFrameIds: selectedFrameId ? [selectedFrameId] : [],
+        selectedObjectType: "headline",
+        selectedObjects: [{ storyId, objectType: "headline", bounds: null }],
+        selectedRichTextRange: null,
+        editingMode: "none",
+        caretPosition: null,
+        selectionBounds: null,
+        placementWarning: "Story article replaced",
       };
     }),
 

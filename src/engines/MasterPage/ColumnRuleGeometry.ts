@@ -1,13 +1,11 @@
 /**
  * The hairline rules that run down the gutters between a story's text columns.
  *
- * Indian broadsheets — Dainik Bhaskar, Jagran, and The Cliff News' own page 8 —
- * separate columns with a thin vertical rule rather than white space alone.
- * Without them a page reads as a web layout that happens to be in columns.
- *
- * INSIDE PAGES ONLY for now. The front page and the editorial page are signed
- * off and adding rules would change every column on them, so `resolveColumnRules`
- * returns nothing unless the story carries `insidePageStyle`.
+ * The inside-page layouts used to separate a story's text columns with thin
+ * grey vertical rules. The current Akhand Doot/The Cliff inside-page style does
+ * not use those internal dividers, so the resolver below intentionally returns
+ * no rules while keeping the drawing helper available for any future template
+ * that opts back into this treatment.
  *
  * Drawn from this one module by both renderers — the Konva canvas and the export
  * canvas — so the screen and the printed sheet cannot drift apart.
@@ -99,15 +97,10 @@ export const getColumnRules = (columns: ColumnLike[]): ColumnRule[] => {
 export const resolveColumnRules = (story: {
   compositionSettings?: { insidePageStyle?: unknown; suppressColumnRules?: boolean } | null;
 }, columns: ColumnLike[] | undefined): ColumnRule[] => {
-  if (
-    !story.compositionSettings?.insidePageStyle ||
-    story.compositionSettings.suppressColumnRules ||
-    !columns?.length
-  ) {
-    return [];
-  }
+  void story;
+  void columns;
 
-  return getColumnRules(columns);
+  return [];
 };
 
 /** Paints the rules onto the export canvas. */

@@ -157,6 +157,7 @@ export const PageChromeLayer = memo(function PageChromeLayer({
   resolvedHeader = null,
   masterHeaderEnabled = false,
   headerLogoSource,
+  frontHeaderTeaser = null,
   useYouthUpdateMasthead = false,
   useYouthUpdateInsideHeader = false,
   useYouthUpdateInsideTeaser = false,
@@ -174,6 +175,10 @@ export const PageChromeLayer = memo(function PageChromeLayer({
   resolvedHeader?: ResolvedPageHeader | null;
   masterHeaderEnabled?: boolean;
   headerLogoSource?: string;
+  frontHeaderTeaser?: {
+    headline: string;
+    imageUrl: string;
+  } | null;
   /** Publisher-exclusive: true only for Youth UPDATE's own front page — see YouthUpdateConfig.ts. */
   useYouthUpdateMasthead?: boolean;
   /** Publisher-exclusive: true only for Youth UPDATE's own inside page — see YouthUpdateConfig.ts. */
@@ -222,6 +227,7 @@ export const PageChromeLayer = memo(function PageChromeLayer({
           resolvedHeader={resolvedHeader}
           masterHeaderEnabled={masterHeaderEnabled}
           logoSource={headerLogoSource}
+          frontHeaderTeaser={frontHeaderTeaser}
         />
       )}
       {/*
