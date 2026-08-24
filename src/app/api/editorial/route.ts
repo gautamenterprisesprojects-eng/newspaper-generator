@@ -93,20 +93,21 @@ type NewswireHealthStory = {
   place?: string;
 };
 
-/**
- * Raw `https.request`-based fetch, not the global `fetch()` -- confirmed
- * live that this route's three upstream calls (two to the same host, fired
- * concurrently via Promise.all below) reliably fail with a low-level
- * "wrong version number" TLS error ONLY when run through Next.js's own
- * patched `fetch()` inside a real request (a bare `node -e` script issuing
- * the identical concurrent requests never reproduced it, dozens of tries).
- * `/api/newswire`'s `fetchGautamJson` hit the same class of issue against
- * this same upstream host and was fixed the same way -- bypassing whatever
- * Next.js's fetch patching does differently under real request load.
- */
-const fetchJson = (url: string, headers: Record<string, string>): Promise<{ status: number; ok: boolean; body: unknown }> =>
+// A fresh agent per call, keep-alive off: confirmed live that this route's
+// concurrent requests to the same upstream host intermittently fail with a
+// low-level "wrong version number" TLS error under real production traffic
+// (other publishers' own concurrent /api/newswire calls hitting the same
+// host at the same time) even after switching off the global fetch() --
+// classic symptom of a REUSED keep-alive socket getting desynced when the
+// server multiplexes/closes connections uncleanly under concurrent load. A
+// dedicated non-keep-alive agent forces a brand new TCP+TLS handshake per
+// request instead of pulling a possibly-corrupted socket out of a shared
+// pool.
+const freshAgent = new https.Agent({ keepAlive: false });
+
+const requestJsonOnce = (url: string, headers: Record<string, string>): Promise<{ status: number; ok: boolean; body: unknown }> =>
   new Promise((resolve, reject) => {
-    const request = https.request(url, { method: "GET", headers }, (response) => {
+    const request = https.request(url, { method: "GET", headers, agent: freshAgent }, (response) => {
       const chunks: Buffer[] = [];
       response.on("data", (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
       response.on("end", () => {
@@ -126,6 +127,15 @@ const fetchJson = (url: string, headers: Record<string, string>): Promise<{ stat
     request.on("error", reject);
     request.end();
   });
+
+/** One retry on top of the fresh-agent fix above -- a second layer against whatever residual flakiness this upstream has under concurrent load, matching /api/newswire's own established retry pattern for the same host. */
+const fetchJson = async (url: string, headers: Record<string, string>): Promise<{ status: number; ok: boolean; body: unknown }> => {
+  try {
+    return await requestJsonOnce(url, headers);
+  } catch {
+    return requestJsonOnce(url, headers);
+  }
+};
 
 const fetchApiJson = async (url: string) => {
   const response = await fetchJson(url, {
