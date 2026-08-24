@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import https from "node:https";
 
 /**
  * Editorial-page feed.
@@ -92,20 +93,51 @@ type NewswireHealthStory = {
   place?: string;
 };
 
+/**
+ * Raw `https.request`-based fetch, not the global `fetch()` -- confirmed
+ * live that this route's three upstream calls (two to the same host, fired
+ * concurrently via Promise.all below) reliably fail with a low-level
+ * "wrong version number" TLS error ONLY when run through Next.js's own
+ * patched `fetch()` inside a real request (a bare `node -e` script issuing
+ * the identical concurrent requests never reproduced it, dozens of tries).
+ * `/api/newswire`'s `fetchGautamJson` hit the same class of issue against
+ * this same upstream host and was fixed the same way -- bypassing whatever
+ * Next.js's fetch patching does differently under real request load.
+ */
+const fetchJson = (url: string, headers: Record<string, string>): Promise<{ status: number; ok: boolean; body: unknown }> =>
+  new Promise((resolve, reject) => {
+    const request = https.request(url, { method: "GET", headers }, (response) => {
+      const chunks: Buffer[] = [];
+      response.on("data", (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+      response.on("end", () => {
+        const text = Buffer.concat(chunks).toString("utf8");
+        try {
+          resolve({
+            status: response.statusCode ?? 0,
+            ok: Boolean(response.statusCode && response.statusCode >= 200 && response.statusCode < 300),
+            body: text ? JSON.parse(text) : null,
+          });
+        } catch (error) {
+          reject(error);
+        }
+      });
+    });
+    request.setTimeout(20000, () => request.destroy(new Error(`Request to ${url} timed out.`)));
+    request.on("error", reject);
+    request.end();
+  });
+
 const fetchApiJson = async (url: string) => {
-  const response = await fetch(url, {
-    headers: {
-      accept: "application/json",
-      "x-api-key": EDITORIAL_API_KEY,
-    },
-    cache: "no-store",
+  const response = await fetchJson(url, {
+    accept: "application/json",
+    "x-api-key": EDITORIAL_API_KEY,
   });
 
   if (!response.ok) {
     throw new Error(`Upstream API responded ${response.status}`);
   }
 
-  return response.json();
+  return response.body;
 };
 
 const fetchEditorialArticles = async (limit: string): Promise<UpstreamEditorialRecord[]> => {
@@ -134,7 +166,10 @@ const shuffleRecords = <Record,>(records: Record[]) => {
 const fetchGroupedApi = async <Record,>(endpoint: string, limit: string): Promise<Record[]> => {
   const url = new URL(`/api/v1/${endpoint}/grouped`, EDITORIAL_API_BASE_URL);
   url.searchParams.set("limit", limit);
-  const payload = await fetchApiJson(url.toString());
+  // Loosely typed on purpose, matching this endpoint's actual (not the
+  // UpstreamGrouped<Record> type's documented) response shape -- unchanged
+  // from before this route's fetch() calls were swapped for fetchJson().
+  const payload = (await fetchApiJson(url.toString())) as { success?: boolean; data?: Array<{ records?: Record[] }> };
 
   if (payload?.success && Array.isArray(payload?.data)) {
     const allRecords: Record[] = [];
@@ -206,16 +241,15 @@ const toHindiColor = (color: string) => {
 };
 
 const fetchCliffHoroscope = async (): Promise<UpstreamRashifalRecord[]> => {
-  const response = await fetch("https://api.thecliffnews.in/api/horoscope?language=HINDI", {
-    headers: { accept: "application/json" },
-    cache: "no-store",
+  const response = await fetchJson("https://api.thecliffnews.in/api/horoscope?language=HINDI", {
+    accept: "application/json",
   });
 
   if (!response.ok) {
     throw new Error(`Horoscope API responded ${response.status}`);
   }
 
-  const payload = (await response.json()) as CliffHoroscopeList;
+  const payload = response.body as CliffHoroscopeList;
 
   if (!payload?.success || !Array.isArray(payload.data)) {
     return [];
@@ -321,7 +355,6 @@ export const GET = async (request: Request) => {
       {
         success: false,
         error: error instanceof Error ? error.message : "Failed to load the editorial feed.",
-        debugCause: error instanceof Error ? String((error as { cause?: unknown }).cause) : undefined,
         articles: [],
         rashifal: [],
       },
