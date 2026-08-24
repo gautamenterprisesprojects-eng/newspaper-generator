@@ -159,6 +159,13 @@ const buildHindiDayDate = (values: FrontHeaderDynamicValues): string => {
 export const isAkhandDootHeaderUrl = (url: string): boolean =>
   /akhand(?:%20|\+|\s|-)*doot/i.test(url);
 
+// The Adage Times' inside header, hosted at /adage/... (see
+// PageHeader.tsx/HeaderPrintModel.ts's `isLiveHeaderSvgUrl` handling) --
+// per explicit publisher decision, only the page-number badge on this file
+// updates live for now; category and the date/day line stay exactly as
+// printed in the artwork (see applyPageNumberOnlyInsideHeaderDynamicValues).
+export const isAdageInsideHeaderUrl = (url: string): boolean => /\/adage\//i.test(url);
+
 // The teaser image box's bounds (x=796.8 y=9.36 width=112.08 height=83.28),
 // as fractions of the raw SVG's own viewBox ("0 0 920.4 169.7") -- shared
 // with the editor's click-to-replace overlay (PageHeader.tsx) so the
@@ -589,9 +596,11 @@ export const resolveInsideHeaderSvgSource = async (
   const rawSvg = await fetchSvgText(templateUrl);
   const patchedSvg = isAkhandDootHeaderUrl(templateUrl)
     ? applyAkhandInsideHeaderDynamicValues(rawSvg, values)
-    : templateUrl === INSIDE_HEADER_BANNER_SOURCE
-      ? applyInsideHeaderDynamicValues(rawSvg, values)
-      : applyGenericInsideHeaderDynamicValues(rawSvg, values);
+    : isAdageInsideHeaderUrl(templateUrl)
+      ? applyPageNumberOnlyInsideHeaderDynamicValues(rawSvg, values)
+      : templateUrl === INSIDE_HEADER_BANNER_SOURCE
+        ? applyInsideHeaderDynamicValues(rawSvg, values)
+        : applyGenericInsideHeaderDynamicValues(rawSvg, values);
   return `data:image/svg+xml;base64,${utf8ToBase64(patchedSvg)}`;
 };
 
@@ -771,6 +780,37 @@ export const applyGenericFrontHeaderDynamicValues = (
     }
     if (namedOrNumericDateContextPattern.test(original)) {
       return `${open}${escapeXmlText(substituteDateWords(original, dateParts))}${close}`;
+    }
+    return match;
+  });
+};
+
+/**
+ * Per explicit publisher decision, only the page-number badge on The Adage
+ * Times' inside header updates live for now -- category and the date/day
+ * line stay exactly as printed in the artwork. Only the first lone
+ * digit-only <text> node found is touched (there's exactly one such badge
+ * on this file); everything else is left untouched, unlike the fuller
+ * generic matcher below.
+ */
+export const applyPageNumberOnlyInsideHeaderDynamicValues = (
+  svgText: string,
+  values: InsideHeaderDynamicValues,
+): string => {
+  const pageNumberDigits = firstAsciiNumber(values.pageNumber);
+  if (!pageNumberDigits) {
+    return svgText;
+  }
+
+  let replaced = false;
+  return svgText.replace(textContentPattern, (match, open: string, body: string, close: string) => {
+    if (replaced) {
+      return match;
+    }
+    const original = stripXmlTags(body);
+    if (pureDigitsPattern.test(original)) {
+      replaced = true;
+      return `${open}${escapeXmlText(pageNumberDigits)}${close}`;
     }
     return match;
   });
