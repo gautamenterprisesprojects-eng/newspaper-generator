@@ -167,7 +167,7 @@ export const buildHeaderPrintModel = async (
   // content width past that aligned edge on each side (per explicit
   // publisher request, after alignment itself was confirmed correct) --
   // same HEADER_STRETCH_FRACTION as the Konva preview.
-  const HEADER_STRETCH_FRACTION = 0.01;
+  const HEADER_STRETCH_FRACTION = 0.005;
   const contentX = page.masterPage.contentX * 72;
   const contentWidth = page.masterPage.contentWidth * 72;
   const headerStretch = contentWidth * HEADER_STRETCH_FRACTION;

@@ -290,7 +290,7 @@ export function PageHeader({
   // (per explicit publisher request, after the edge-to-edge bleed above was
   // fixed to align exactly) -- a deliberate slight overhang rather than a
   // flush match, still nowhere near the old full-page bleed.
-  const HEADER_STRETCH_FRACTION = 0.01;
+  const HEADER_STRETCH_FRACTION = 0.005;
   const contentX = toPoints(pageMaster.contentX);
   const contentWidth = toPoints(pageMaster.contentWidth);
   const headerStretch = contentWidth * HEADER_STRETCH_FRACTION;
