@@ -377,7 +377,16 @@ const getPortalReturnUrl = () => {
 
   try {
     const returnUrl = new URL(rawReturnUrl, window.location.origin);
-    const allowedHosts = new Set(["localhost:3001", "127.0.0.1:3001"]);
+    // localhost:3001 covers local dev against the portal's own dev server;
+    // pagemint1.gautamenterprises.org is the real production portal this
+    // allowlist was silently missing -- returnUrl always points there, so
+    // every return-to-portal navigation (the Home button, the post-PDF-export
+    // redirect) fell through to the dead localhost fallback in production.
+    const allowedHosts = new Set([
+      "localhost:3001",
+      "127.0.0.1:3001",
+      "pagemint1.gautamenterprises.org",
+    ]);
 
     if ((returnUrl.protocol === "http:" || returnUrl.protocol === "https:") && allowedHosts.has(returnUrl.host)) {
       return returnUrl.toString();
