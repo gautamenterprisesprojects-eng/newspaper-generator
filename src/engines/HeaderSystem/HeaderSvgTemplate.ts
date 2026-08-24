@@ -644,6 +644,28 @@ const pureDigitsPattern = /^\d{1,4}$/;
 
 type LiveDateParts = { weekday: string; dayOfMonth: string; monthName: string; year: string };
 
+const firstTspanOpenTagPattern = /<tspan\b[^>]*>/;
+
+/**
+ * A `<text>` element's own styling sometimes lives on its `<tspan>` children
+ * instead of the `<text>` tag itself (confirmed live: Sach Express's own
+ * category text is two `<tspan class="...">` runs under a bare, class-less
+ * `<text>`) -- replacing the whole body with a plain escaped string in that
+ * case silently drops the styling (bold, colour, ...) the publisher's own
+ * design gave that field. Reuses the first tspan's own opening tag (its
+ * class/style/fill attributes) for the single replacement run instead,
+ * dropping only its x/y positioning (sized for the original multi-run
+ * layout, not a single new string).
+ */
+const wrapReplacementPreservingTspanStyle = (body: string, replacement: string): string => {
+  const tspanMatch = body.match(firstTspanOpenTagPattern);
+  if (!tspanMatch) {
+    return escapeXmlText(replacement);
+  }
+  const openTag = tspanMatch[0].replace(/\s+(x|y)="[^"]*"/g, "");
+  return `${openTag}${escapeXmlText(replacement)}</tspan>`;
+};
+
 const liveWeekdayForMatch = (matchedWord: string, live: LiveDateParts): string =>
   HINDI_DAY_WORDS.includes(matchedWord)
     ? HINDI_DAYS[live.weekday.toLowerCase()] ?? live.weekday
@@ -776,10 +798,10 @@ export const applyGenericFrontHeaderDynamicValues = (
     }
     if (pureDigitsPattern.test(original)) {
       const next = substitutePureDigitField(original, dateParts.year, volumeDigits);
-      return next ? `${open}${escapeXmlText(next)}${close}` : match;
+      return next ? `${open}${wrapReplacementPreservingTspanStyle(body, next)}${close}` : match;
     }
     if (namedOrNumericDateContextPattern.test(original)) {
-      return `${open}${escapeXmlText(substituteDateWords(original, dateParts))}${close}`;
+      return `${open}${wrapReplacementPreservingTspanStyle(body, substituteDateWords(original, dateParts))}${close}`;
     }
     return match;
   });
@@ -821,12 +843,12 @@ export const applyPageNumberOnlyInsideHeaderDynamicValues = (
         return match;
       }
       const centeredOpen = withCenterAnchor(rewriteTransformX(open, ADAGE_PAGE_NUMBER_CENTER_X));
-      return `${centeredOpen}${escapeXmlText(paddedPageNumber)}${close}`;
+      return `${centeredOpen}${wrapReplacementPreservingTspanStyle(body, paddedPageNumber)}${close}`;
     }
     if (original.trim().toLowerCase() === ADAGE_CATEGORY_PLACEHOLDER) {
       // The placeholder itself is all-caps ("NATIONAL") -- matching that
       // styling for whatever live category comes in, same convention.
-      return values.category ? `${open}${escapeXmlText(values.category.toUpperCase())}${close}` : match;
+      return values.category ? `${open}${wrapReplacementPreservingTspanStyle(body, values.category.toUpperCase())}${close}` : match;
     }
     return match;
   });
@@ -847,14 +869,14 @@ export const applyGenericInsideHeaderDynamicValues = (
     }
     if (pureDigitsPattern.test(original)) {
       const next = substitutePureDigitField(original, dateParts.year, pageNumberDigits);
-      return next ? `${open}${escapeXmlText(next)}${close}` : match;
+      return next ? `${open}${wrapReplacementPreservingTspanStyle(body, next)}${close}` : match;
     }
     if (namedOrNumericDateContextPattern.test(original)) {
-      return `${open}${escapeXmlText(substituteDateWords(original, dateParts))}${close}`;
+      return `${open}${wrapReplacementPreservingTspanStyle(body, substituteDateWords(original, dateParts))}${close}`;
     }
     if (publicationName && original.trim().toLowerCase() === publicationName) {
       return match;
     }
-    return values.category ? `${open}${escapeXmlText(values.category)}${close}` : match;
+    return values.category ? `${open}${wrapReplacementPreservingTspanStyle(body, values.category)}${close}` : match;
   });
 };
