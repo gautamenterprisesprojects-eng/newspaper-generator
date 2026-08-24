@@ -166,6 +166,18 @@ export const isAkhandDootHeaderUrl = (url: string): boolean =>
 // printed in the artwork (see applyPageNumberOnlyInsideHeaderDynamicValues).
 export const isAdageInsideHeaderUrl = (url: string): boolean => /\/adage\//i.test(url);
 
+// Hindi Ke Fool's own front/inside headers, hosted at /hindi ke fool/... --
+// a monthly magazine (मासिक), so unlike every daily/weekly publisher so far
+// there's no weekday or day-of-month field anywhere in either file, only a
+// month+year dateline. The front header's lone digit ("08") is genuinely
+// its अंक/issue number (the generic matcher already gets this right), but
+// the inside header's city text ("भोपाल") sits right next to the month+year
+// with no distinguishing shape of its own -- the generic matcher's "anything
+// that isn't a digit/date/masthead-name is the category" rule sweeps it up
+// alongside the real "CATAGORY" placeholder, overwriting the city too.
+export const isHindiKeFoolHeaderUrl = (url: string): boolean =>
+  /hindi(?:%20|\+|\s|-)*ke(?:%20|\+|\s|-)*fool/i.test(url);
+
 // The teaser image box's bounds (x=796.8 y=9.36 width=112.08 height=83.28),
 // as fractions of the raw SVG's own viewBox ("0 0 920.4 169.7") -- shared
 // with the editor's click-to-replace overlay (PageHeader.tsx) so the
@@ -585,7 +597,9 @@ export const resolveFrontHeaderSvgSource = async (
     ? applyAkhandFrontHeaderDynamicValues(rawSvg, resolvedValues)
     : templateUrl === FRONT_HEADER_BANNER_SOURCE
       ? applyFrontHeaderDynamicValues(rawSvg, resolvedValues)
-      : applyGenericFrontHeaderDynamicValues(rawSvg, resolvedValues);
+      : isHindiKeFoolHeaderUrl(templateUrl)
+        ? applyHindiKeFoolFrontHeaderDynamicValues(rawSvg, resolvedValues)
+        : applyGenericFrontHeaderDynamicValues(rawSvg, resolvedValues);
   return `data:image/svg+xml;base64,${utf8ToBase64(patchedSvg)}`;
 };
 
@@ -598,9 +612,11 @@ export const resolveInsideHeaderSvgSource = async (
     ? applyAkhandInsideHeaderDynamicValues(rawSvg, values)
     : isAdageInsideHeaderUrl(templateUrl)
       ? applyPageNumberOnlyInsideHeaderDynamicValues(rawSvg, values)
-      : templateUrl === INSIDE_HEADER_BANNER_SOURCE
-        ? applyInsideHeaderDynamicValues(rawSvg, values)
-        : applyGenericInsideHeaderDynamicValues(rawSvg, values);
+      : isHindiKeFoolHeaderUrl(templateUrl)
+        ? applyHindiKeFoolInsideHeaderDynamicValues(rawSvg, values)
+        : templateUrl === INSIDE_HEADER_BANNER_SOURCE
+          ? applyInsideHeaderDynamicValues(rawSvg, values)
+          : applyGenericInsideHeaderDynamicValues(rawSvg, values);
   return `data:image/svg+xml;base64,${utf8ToBase64(patchedSvg)}`;
 };
 
@@ -782,6 +798,77 @@ const substitutePureDigitField = (original: string, year: string, badgeDigits: s
     return year;
   }
   return badgeDigits || null;
+};
+
+/**
+ * Hindi Ke Fool's front header (मासिक -- monthly, so month+year is the only
+ * date field, no day-of-month or weekday exists at all): the same
+ * date-context handling as the generic matcher, but the lone digit ("08")
+ * is zero-padded to match the original field's own digit width (2 digits)
+ * instead of the generic matcher's bare "9" -- this file's own "08" prints
+ * right next to a baked-in "पृष्ठ:08" using the same 2-digit convention.
+ */
+export const applyHindiKeFoolFrontHeaderDynamicValues = (
+  svgText: string,
+  values: FrontHeaderDynamicValues,
+): string => {
+  const dateParts = frontLiveDateParts(values);
+  const volumeDigits = firstAsciiNumber(values.volume);
+
+  return svgText.replace(textContentPattern, (match, open: string, body: string, close: string) => {
+    const original = stripXmlTags(body);
+    if (!original) {
+      return match;
+    }
+    if (pureDigitsPattern.test(original)) {
+      if (!volumeDigits) {
+        return match;
+      }
+      const padded = volumeDigits.padStart(original.length, "0");
+      return `${open}${wrapReplacementPreservingTspanStyle(body, padded)}${close}`;
+    }
+    if (namedOrNumericDateContextPattern.test(original)) {
+      return `${open}${wrapReplacementPreservingTspanStyle(body, substituteDateWords(original, dateParts))}${close}`;
+    }
+    return match;
+  });
+};
+
+const HINDI_KE_FOOL_CATEGORY_PLACEHOLDER = "catagory";
+
+/**
+ * Hindi Ke Fool's inside header: page number and category update live like
+ * the generic matcher, but its city text ("भोपाल") sits right next to the
+ * month+year dateline with no shape of its own to distinguish it from the
+ * category placeholder -- the generic matcher's "anything else is the
+ * category" catch-all sweeps up both, overwriting the city too. Here the
+ * category placeholder is matched explicitly first, so the real catch-all
+ * (the city) can safely go to the live place name instead.
+ */
+export const applyHindiKeFoolInsideHeaderDynamicValues = (
+  svgText: string,
+  values: InsideHeaderDynamicValues,
+): string => {
+  const dateParts = insideLiveDateParts(values.placeAndDate);
+  const pageNumberDigits = firstAsciiNumber(values.pageNumber);
+  const city = values.placeAndDate.split(",")[0]?.trim() ?? "";
+
+  return svgText.replace(textContentPattern, (match, open: string, body: string, close: string) => {
+    const original = stripXmlTags(body);
+    if (!original) {
+      return match;
+    }
+    if (pureDigitsPattern.test(original)) {
+      return pageNumberDigits ? `${open}${wrapReplacementPreservingTspanStyle(body, pageNumberDigits)}${close}` : match;
+    }
+    if (namedOrNumericDateContextPattern.test(original)) {
+      return `${open}${wrapReplacementPreservingTspanStyle(body, substituteDateWords(original, dateParts))}${close}`;
+    }
+    if (original.trim().toLowerCase() === HINDI_KE_FOOL_CATEGORY_PLACEHOLDER) {
+      return values.category ? `${open}${wrapReplacementPreservingTspanStyle(body, values.category)}${close}` : match;
+    }
+    return city ? `${open}${wrapReplacementPreservingTspanStyle(body, city)}${close}` : match;
+  });
 };
 
 export const applyGenericFrontHeaderDynamicValues = (
