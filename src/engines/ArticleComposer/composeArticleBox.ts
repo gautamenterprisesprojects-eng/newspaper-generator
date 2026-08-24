@@ -2624,8 +2624,17 @@ function composeArticleBoxPass(
   // inferred from geometry alone — every narrow box qualifying on width put
   // several competing badges on the same page. Geometry is still required, so
   // a flagged story that later gets resized out of the narrow range drops it.
+  // The editorial page's Health Desk box (story slot 6) reuses this badge
+  // system's green-bordered look but must read as a full-width section
+  // banner, not a compact pill -- excluded from isNarrowKicker entirely so
+  // it flows through the same dynamic-size/full-width/wrap path every
+  // regular (non-badge) kicker uses below. Patching size/width onto an
+  // already-built badge layout post hoc (an earlier version of this) left
+  // the text's own pre-measured segment widths out of sync with its new
+  // font size, silently dropping words instead of just rendering bigger.
+  const isHealthDeskKicker = Boolean(settings.editorialPageStyle && (articleBox as any).templateStoryNumber === 6);
   const isNarrowKicker =
-    !isLeaderRail && ((articleData.badgeKickerEnabled ?? false) && kickerWidthRatio < 0.45 && articleBox.height < 800);
+    !isLeaderRail && !isHealthDeskKicker && ((articleData.badgeKickerEnabled ?? false) && kickerWidthRatio < 0.45 && articleBox.height < 800);
   // Extra inset on top of ARTICLE_PADDING.left/right for narrow badge boxes.
   // Kept so their total inset stays 12pt (8 + 4) — unchanged from before the
   // base horizontal padding existed, so the badge layout is unaffected.
@@ -3240,10 +3249,14 @@ function composeArticleBoxPass(
     ? kickerPlainText.slice(0, kickerColonSplitIndex).trim()
     : kickerPlainText;
   // A 1-2 column box gets NO kicker at all (not even the bare label) unless
-  // it's the page's one designated badge.
+  // it's the page's one designated badge -- or the Health Desk box, which
+  // is excluded from isNarrowKicker (see its definition above) so it can
+  // use the wide/full-width kicker layout, but still only ever wants its
+  // bare desk label ("हेल्थ डेस्क"), the same simple text the narrow badge
+  // itself would show, not a full "label: content" kicker sentence.
   let trimmedKickerWords = isLeaderRail
     ? [kickerPlainText].filter(Boolean)
-    : isNarrowKicker
+    : isNarrowKicker || isHealthDeskKicker
       ? [kickerLabelWithoutColon].filter(Boolean)
       : kickerAllowedForNonBadge
         ? [kickerLabelWords, ...kickerContentWords].filter(Boolean)
@@ -3252,15 +3265,17 @@ function composeArticleBoxPass(
   // up to the headline's own size (not just 80% of it) so a short kicker can
   // actually reach the target width instead of hitting an artificially low
   // ceiling and leaving white space on the right well before it gets there.
-  const kickerSizeCeiling = isNarrowKicker
-    ? 12
-    : isWideBottomFrontPackage
-      ? Math.min(14, Math.max(8, headlineMetrics.fontSize * 0.7))
-      : isFrontPageThreeColumnBox
-        ? Math.max(8, headlineMetrics.fontSize * 0.7)
-        : Math.max(9, headlineMetrics.fontSize * 0.7);
+  const kickerSizeCeiling = isHealthDeskKicker
+    ? 19
+    : isNarrowKicker
+      ? 12
+      : isWideBottomFrontPackage
+        ? Math.min(14, Math.max(8, headlineMetrics.fontSize * 0.7))
+        : isFrontPageThreeColumnBox
+          ? Math.max(8, headlineMetrics.fontSize * 0.7)
+          : Math.max(9, headlineMetrics.fontSize * 0.7);
   const baseKickerFontSize = Math.min(
-    isNarrowKicker ? 11 : isWideBottomFrontPackage ? 13 : KICKER_BASE_FONT_SIZE,
+    isHealthDeskKicker ? 17 : isNarrowKicker ? 11 : isWideBottomFrontPackage ? 13 : KICKER_BASE_FONT_SIZE,
     kickerSizeCeiling,
   );
   // Only the badge pill carries its own padding — a non-badge kicker has no
@@ -3464,7 +3479,7 @@ function composeArticleBoxPass(
       // and spans out toward the same right edge, instead of sitting
       // centred with dead space on both sides.
       // Leader rail: full-width centered red box.
-      alignment: isLeaderRail || isNarrowKicker || isWideBottomFrontPackage ? ("center" as const) : ("left" as const),
+      alignment: isLeaderRail || isNarrowKicker || isWideBottomFrontPackage || isHealthDeskKicker ? ("center" as const) : ("left" as const),
       padding: isLeaderRail ? 5 : (isNarrowKicker ? 4 : isWideBottomFrontPackage ? kickerPadding : 0),
     },
   };
@@ -3491,49 +3506,74 @@ function composeArticleBoxPass(
   if (kicker && isNarrowKicker) {
     kicker.height += 2;
   }
-  if (
-    kicker &&
-    settings.editorialPageStyle &&
-    (articleBox as any).templateStoryNumber === 6
-  ) {
-    const healthDeskYShift = 8;
-    const healthDeskFill = "#F6FBF3";
+  if (kicker && isHealthDeskKicker) {
+    // Colour/weight only -- width, centring, vertical position and font
+    // size all now come for free from the regular (non-badge) kicker path
+    // below, since isHealthDeskKicker excludes this box from isNarrowKicker
+    // entirely (see its definition above). An earlier version patched size
+    // and position onto an already-built badge layout instead, which left
+    // the text's pre-measured segment widths out of sync with the new
+    // (bigger) font size and silently dropped words instead of just
+    // rendering bigger -- and left this box straddling its own top border
+    // the way the narrow badge pill is designed to, which is what read as
+    // two overlapping lines once it was widened.
+    const healthDeskFill = "#8FCB93"; // medium green (was #F6FBF3, near-white)
     const healthDeskStroke = "#2F6F3A";
-    const healthDeskText = "#1F5E2B";
+    const healthDeskText = "#000000";
 
     kicker.fill = healthDeskFill;
     kicker.stroke = healthDeskStroke;
     kicker.strokeWidth = 1.1;
     kicker.cornerRadius = 0;
-    kicker.y += healthDeskYShift;
+    // A comfortable fixed height (generous padding around the fitted font
+    // size), text vertically re-centred within it -- position only, so the
+    // already-correctly-measured glyph sizes/segments from construction are
+    // untouched. The full-width/x/width/horizontal-centring block right
+    // below this one doesn't touch y or height, so both survive into the
+    // final layout.
+    const healthDeskBoxHeight = Math.max(kicker.height, kickerFontSize + 16);
+    kicker.height = healthDeskBoxHeight;
     kicker.textBlock = {
       ...kicker.textBlock,
-      y: kicker.textBlock.y + healthDeskYShift,
+      y: kicker.y,
+      height: healthDeskBoxHeight,
       style: {
         ...kicker.textBlock.style,
         fill: healthDeskText,
         fontFamily: getNewspaperFontStack("serif"),
         fontStyle: "700",
       },
-      lineBoxes: kicker.textBlock.lineBoxes.map((line) => ({
-        ...line,
-        y: line.y + healthDeskYShift,
-        style: {
-          ...line.style,
-          fill: healthDeskText,
-          fontFamily: getNewspaperFontStack("serif"),
-          fontStyle: "700",
-        },
-        segments: line.segments?.map((segment) => ({
-          ...segment,
+      lineBoxes: kicker.textBlock.lineBoxes.map((line) => {
+        // Segments render at (segment.y - line.y) *inside* a Group already
+        // positioned at line.y (see ArticleBox.tsx's renderTextBlock) -- that
+        // pre-measured relative offset is what actually places the glyphs on
+        // their baseline within the line. Moving line.y without moving each
+        // segment.y by the same amount changes that relative offset instead
+        // of the line's absolute position, which is what silently cancelled
+        // an earlier version of this centring out.
+        const targetLineY = kicker.y + Math.max(0, (healthDeskBoxHeight - line.height) / 2);
+        const deltaY = targetLineY - line.y;
+        return {
+          ...line,
+          y: targetLineY,
           style: {
-            ...segment.style,
+            ...line.style,
             fill: healthDeskText,
             fontFamily: getNewspaperFontStack("serif"),
             fontStyle: "700",
           },
-        })),
-      })),
+          segments: line.segments?.map((segment) => ({
+            ...segment,
+            y: segment.y + deltaY,
+            style: {
+              ...segment.style,
+              fill: healthDeskText,
+              fontFamily: getNewspaperFontStack("serif"),
+              fontStyle: "700",
+            },
+          })),
+        };
+      }),
     };
   }
   if (kicker && !isNarrowKicker) {

@@ -70,6 +70,8 @@ export type FrontHeaderTemplate = {
   headerImageUrl?: string;
   /** Overlay mask-band fill colours, sampled from headerImageUrl's own pixels at upload time (see sampleImageColorsAt) — one per HeaderSlotGeometry mask band, in order. Falls back to the built-in reference colours when absent. */
   maskColors?: string[];
+  /** A publisher-picked replacement for the front masthead's own promo teaser photo (Akhand Doot's live SVG template only — see isAkhandDootHeaderUrl), set by clicking that teaser image in the editor. Takes priority over the auto-picked "first front-page story with both an image and a headline" default in both the live preview and PDF export (see frontHeaderTeaser in EditorCanvas.tsx and resolveFrontHeaderTeaser in HeaderPrintModel.ts). */
+  teaserImageOverrideUrl?: string;
   masthead: HeaderTextSlot;
   eyebrowLeft: HeaderTextSlot;
   eyebrowCenter: HeaderTextSlot;

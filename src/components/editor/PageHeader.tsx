@@ -13,6 +13,8 @@ import {
   getInsideHeaderOverlayGeometry,
 } from "@/engines/HeaderSystem/HeaderSlotGeometry";
 import {
+  AKHAND_TEASER_IMAGE_BOX_FRACTION,
+  isAkhandDootHeaderUrl,
   isLiveHeaderSvgUrl,
   resolveFrontHeaderSvgSource,
   resolveInsideHeaderSvgSource,
@@ -38,6 +40,8 @@ type PageHeaderProps = {
     headline: string;
     imageUrl: string;
   } | null;
+  /** Akhand Doot's live front SVG template only -- opens the same replace-image popup other images use, scoped to its masthead promo teaser photo (see setFrontTeaserImageOverride). */
+  onRequestFrontTeaserReplace?: (clientX: number, clientY: number) => void;
 };
 
 const toPoints = (inches: number) => inches * POINTS_PER_INCH;
@@ -273,6 +277,7 @@ export function PageHeader({
   masterHeaderEnabled = false,
   logoSource,
   frontHeaderTeaser = null,
+  onRequestFrontTeaserReplace,
 }: PageHeaderProps) {
   const width = toPoints(pageMaster.width);
 
@@ -328,7 +333,21 @@ export function PageHeader({
     return null;
   }
 
+  // Akhand Doot's own live SVG template bakes a promo teaser photo into the
+  // masthead art at a fixed spot -- everything else in this header is
+  // flattened into one banner image (see HeaderBannerImage below), so
+  // there's no individual Konva node for just that photo to attach a click
+  // handler to. This draws an invisible hit-target Rect over that exact box
+  // instead (geometry shared with the SVG patcher itself, see
+  // AKHAND_TEASER_IMAGE_BOX_FRACTION), giving it the same click-to-replace
+  // popup every other image already has.
+  const showFrontTeaserClickTarget =
+    Boolean(onRequestFrontTeaserReplace) &&
+    resolvedHeader?.header.kind === "front" &&
+    isAkhandDootHeaderUrl(headerBannerSource);
+
   return (
+    <>
     <Group listening={false} name="protected-master-header">
       <HeaderBannerImage
         source={liveHeaderBannerSource}
@@ -390,5 +409,17 @@ export function PageHeader({
           })()
         : null}
     </Group>
+    {showFrontTeaserClickTarget ? (
+      <Rect
+        x={width * AKHAND_TEASER_IMAGE_BOX_FRACTION.x}
+        y={resolvedHeight * AKHAND_TEASER_IMAGE_BOX_FRACTION.y}
+        width={width * AKHAND_TEASER_IMAGE_BOX_FRACTION.width}
+        height={resolvedHeight * AKHAND_TEASER_IMAGE_BOX_FRACTION.height}
+        fill="transparent"
+        onClick={(evt) => onRequestFrontTeaserReplace?.(evt.evt.clientX, evt.evt.clientY)}
+        onContextMenu={(evt) => onRequestFrontTeaserReplace?.(evt.evt.clientX, evt.evt.clientY)}
+      />
+    ) : null}
+    </>
   );
 }

@@ -263,6 +263,22 @@ export type NewswireStory = {
    * always have.
    */
   manualTargetSlotIndex?: number;
+  /**
+   * The template slot's own `storyNumber` (the "बॉक्स N" label the wizard's
+   * manual seeder actually showed the publisher) rather than a raw array
+   * index. The seeder computes its box preview against a fixed reference
+   * content area (approximate header height, fixed margins — see
+   * getManualSeederContentBounds), while the real page's content area can
+   * differ (a taller custom header, different margins); when it does,
+   * generateTemplateLayout can legitimately return its slots in a different
+   * array order between the two calls, so a manualTargetSlotIndex captured
+   * at seed time can point at the wrong slot by the time this placement
+   * actually runs. storyNumber is the template's own stable per-slot label
+   * and survives that. Preferred over manualTargetSlotIndex when both are
+   * present; kept alongside it only for other callers (e.g.
+   * FrameManagerPanel.tsx) that never set this field.
+   */
+  manualTargetStoryNumber?: number;
 };
 
 export type LocalizedNewswireContent = {

@@ -2022,6 +2022,8 @@ type EditorActions = {
   }) => void;
   updatePublicationProfile: (profileId: string, patch: Partial<PublicationProfile>) => void;
   setHeaderBannerImage: (kind: "front" | "inside", url: string, maskColors?: string[]) => void;
+  setHeaderAccentColor: (color: string) => void;
+  setFrontTeaserImageOverride: (url: string) => void;
   setFrontHeaderLayout: (layout: HeaderLayoutKind) => void;
   setInsideHeaderLayout: (layout: InsideHeaderLayoutKind) => void;
   saveActiveHeaderSetAs: (name: string) => void;
@@ -3313,10 +3315,29 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         // ranking gave it and freeing this article from whichever OTHER slot
         // ranking may have also matched it to, so the mapping stays 1:1
         // regardless of iteration order below.
+        //
+        // Matched by storyNumber (the "बॉक्स N" label the seeder actually
+        // showed the publisher), not the raw array index it was captured
+        // with: the seeder computes its box preview against a fixed
+        // reference content area, while this real layoutSlots array comes
+        // from the page's own real content bounds. When those bounds
+        // differ (a taller custom header, different margins), the template
+        // layout engine can legitimately return slots in a different array
+        // order between the two calls, silently sending a manual entry to
+        // the wrong box (the one at the same array position, not the one
+        // with the same storyNumber the publisher actually filled in for)
+        // even though the code "successfully" forced *some* slot. storyNumber
+        // is stable across both calls; falls back to the old array-index
+        // field for callers that never set it (e.g. FrameManagerPanel.tsx).
         articles.forEach((article, articleIndex) => {
-          const targetSlotIndex = article.manualTargetSlotIndex;
+          if (!article.manualPinned) {
+            return;
+          }
+          const targetStoryNumber = article.manualTargetStoryNumber;
+          const targetSlotIndex = typeof targetStoryNumber === "number"
+            ? layoutSlots.findIndex((slot: any) => slot.storyNumber === targetStoryNumber)
+            : article.manualTargetSlotIndex;
           if (
-            article.manualPinned &&
             typeof targetSlotIndex === "number" &&
             targetSlotIndex >= 0 &&
             targetSlotIndex < layoutSlots.length
@@ -3354,10 +3375,26 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           const estimated = estimateStoryWordCapacity(dummyFrame);
           capacity = selectOptimisticNewswireWordTier(estimated);
           const matchedArticleIndex = slotToPreferredArticleIndex.get(slotIndex);
-          preferred = (matchedArticleIndex !== undefined ? articles[matchedArticleIndex] : undefined) ?? articles[slotIndex];
+          // A manual-pinned article must only ever land via its own explicit
+          // force-target slot (slotToPreferredArticleIndex, set above) --
+          // never by coincidentally sharing an array index with a slot it
+          // wasn't written for. Manual entries always occupy the first few
+          // array indices (see articles = [...manualResult.stories, ...
+          // liveStories]), so an earlier, otherwise-unmapped slot could
+          // "steal" one meant for a later slot purely by array position --
+          // marking it used before its real target's turn came, so that
+          // slot found it already used and silently fell back to a wire
+          // article instead. Two manual boxes with distinct targets could
+          // therefore each correctly compute the right slot and still not
+          // end up there.
+          const positionalFallback = articles[slotIndex];
+          const safePositionalFallback = positionalFallback?.manualPinned ? undefined : positionalFallback;
+          preferred = (matchedArticleIndex !== undefined ? articles[matchedArticleIndex] : undefined) ?? safePositionalFallback;
         } else {
           const matchedArticleIndex = slotToPreferredArticleIndex.get(slotIndex);
-          const classifiedItem = (matchedArticleIndex !== undefined ? classified[matchedArticleIndex] : undefined) ?? classified[slotIndex];
+          const positionalFallback = classified[slotIndex];
+          const safePositionalFallback = positionalFallback?.article?.manualPinned ? undefined : positionalFallback;
+          const classifiedItem = (matchedArticleIndex !== undefined ? classified[matchedArticleIndex] : undefined) ?? safePositionalFallback;
           sizeClass = classifiedItem?.sizeClass ?? "M";
           capacity = getClassWordCapacity(sizeClass);
           preferred = classifiedItem?.article;
@@ -5927,6 +5964,83 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         state.document,
         nextDocument,
       );
+    }),
+
+  // Seeds the inside header's accent colour from the publisher's one-time
+  // theme_color setting (see PortalLaunchBootstrap.tsx) -- a starting point
+  // only, same as setHeaderBannerImage above. Fully editable afterward
+  // through HeaderManagerPanel's own accent colour picker.
+  setHeaderAccentColor: (color) =>
+    set((state) => {
+      const headerSystem = normalizeHeaderSystemState(state.document.headerSystem, state.document.metadata, {
+        enableDefaultHeader: true,
+      });
+      const activeHeaderSetId = headerSystem.activeHeaderSetId;
+
+      if (!activeHeaderSetId) {
+        return state;
+      }
+
+      const headerSet = headerSystem.headerSets[activeHeaderSetId];
+
+      const nextDocument = {
+        ...state.document,
+        headerSystem: {
+          ...headerSystem,
+          headerSets: {
+            ...headerSystem.headerSets,
+            [activeHeaderSetId]: {
+              ...headerSet,
+              inside: {
+                ...headerSet.inside,
+                accentColor: color,
+              },
+              updatedAt: new Date().toISOString(),
+            },
+          },
+        },
+      };
+
+      return commitHeaderDocumentChange("Header accent colour updated", state.document, nextDocument);
+    }),
+
+  // Publisher-picked replacement for the front masthead's own promo teaser
+  // photo (Akhand Doot's live SVG template only) -- overrides the "first
+  // front-page story with both an image and a headline" auto-pick in both
+  // the live preview (EditorCanvas.tsx's frontHeaderTeaser) and PDF export
+  // (HeaderPrintModel.ts's resolveFrontHeaderTeaser).
+  setFrontTeaserImageOverride: (url) =>
+    set((state) => {
+      const headerSystem = normalizeHeaderSystemState(state.document.headerSystem, state.document.metadata, {
+        enableDefaultHeader: true,
+      });
+      const activeHeaderSetId = headerSystem.activeHeaderSetId;
+
+      if (!activeHeaderSetId) {
+        return state;
+      }
+
+      const headerSet = headerSystem.headerSets[activeHeaderSetId];
+
+      const nextDocument = {
+        ...state.document,
+        headerSystem: {
+          ...headerSystem,
+          headerSets: {
+            ...headerSystem.headerSets,
+            [activeHeaderSetId]: {
+              ...headerSet,
+              front: {
+                ...headerSet.front,
+                teaserImageOverrideUrl: url,
+              },
+              updatedAt: new Date().toISOString(),
+            },
+          },
+        },
+      };
+
+      return commitHeaderDocumentChange("Front teaser image replaced", state.document, nextDocument);
     }),
 
   setFrontHeaderLayout: (layout) =>

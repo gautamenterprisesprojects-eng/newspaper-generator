@@ -164,6 +164,7 @@ export const PageChromeLayer = memo(function PageChromeLayer({
   pageCount = 1,
   onRequestMastheadTeaserReplace,
   onRequestInsideTeaserReplace,
+  onRequestFrontTeaserReplace,
 }: {
   pageMaster: PageMaster;
   pageType: PageType;
@@ -187,6 +188,7 @@ export const PageChromeLayer = memo(function PageChromeLayer({
   pageCount?: number;
   onRequestMastheadTeaserReplace?: (slotIndex: number, clientX: number, clientY: number) => void;
   onRequestInsideTeaserReplace?: (slotIndex: number, clientX: number, clientY: number) => void;
+  onRequestFrontTeaserReplace?: (clientX: number, clientY: number) => void;
 }) {
   return (
     <>
@@ -228,6 +230,7 @@ export const PageChromeLayer = memo(function PageChromeLayer({
           masterHeaderEnabled={masterHeaderEnabled}
           logoSource={headerLogoSource}
           frontHeaderTeaser={frontHeaderTeaser}
+          onRequestFrontTeaserReplace={onRequestFrontTeaserReplace}
         />
       )}
       {/*

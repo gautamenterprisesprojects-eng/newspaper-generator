@@ -150,8 +150,20 @@ const buildHindiDayDate = (values: FrontHeaderDynamicValues): string => {
   return localizeHindiDateWords(combined);
 };
 
-const isAkhandDootHeaderUrl = (url: string): boolean =>
+export const isAkhandDootHeaderUrl = (url: string): boolean =>
   /akhand(?:%20|\+|\s|-)*doot/i.test(url);
+
+// The teaser image box's bounds (x=796.8 y=9.36 width=112.08 height=83.28),
+// as fractions of the raw SVG's own viewBox ("0 0 920.4 169.7") -- shared
+// with the editor's click-to-replace overlay (PageHeader.tsx) so the
+// clickable hit target and the box this file actually draws the photo into
+// can never drift apart, whatever size the header is rendered at on screen.
+export const AKHAND_TEASER_IMAGE_BOX_FRACTION = {
+  x: 796.8 / 920.4,
+  y: 9.36 / 169.7,
+  width: 112.08 / 920.4,
+  height: 83.28 / 169.7,
+};
 
 /** Rewrites `transform="matrix(1 0 0 1 X Y)"`'s X (5th value) to `newX`, keeping Y untouched. Leaves the tag as-is if it doesn't match that exact shape. */
 const rewriteTransformX = (openTag: string, newX: number): string =>
@@ -206,41 +218,101 @@ const resolveSvgImageHref = (source: string): string => {
   return source;
 };
 
-const AKHAND_TEASER_TEXT_CENTER_X = 852.85;
-const AKHAND_TEASER_TEXT_TOP_Y = 99.8;
-const AKHAND_TEASER_TEXT_MAX_HEIGHT = 37.5;
+// The caption box, in the SVG's own absolute coordinate space -- matches
+// the "_x0D_टीज़र_टेक्स्ट" group's own <rect x="796.8" y="92.6" width="112.1"
+// height="45.1"/> bounding box exactly (see the raw SVG), not re-derived.
+const AKHAND_TEASER_BOX_X = 796.8;
+const AKHAND_TEASER_BOX_WIDTH = 112.1;
+const AKHAND_TEASER_BOX_Y = 92.6;
+const AKHAND_TEASER_BOX_HEIGHT = 45.1;
+const AKHAND_TEASER_TEXT_CENTER_X = AKHAND_TEASER_BOX_X + AKHAND_TEASER_BOX_WIDTH / 2;
+const AKHAND_TEASER_TEXT_PADDING_X = 4;
+const AKHAND_TEASER_TEXT_PADDING_Y = 3;
 
-const splitAkhandTeaserHeadline = (headline: string): string[] => {
+// No real font-metrics/canvas measurement is available where this SVG text
+// gets built (a plain string patch, not a rendered DOM) -- this is an
+// empirical average glyph-advance width for the caption's Devanagari/Latin
+// mix, as a multiple of font-size. Wrapping and the fit search below are
+// therefore estimates, not exact, so a small safety margin keeps them
+// erring toward wrapping/shrinking a touch early rather than overflowing.
+const AKHAND_TEASER_AVG_CHAR_WIDTH_FACTOR = 0.58;
+
+const estimateAkhandTeaserTextWidth = (text: string, fontSize: number) =>
+  text.length * fontSize * AKHAND_TEASER_AVG_CHAR_WIDTH_FACTOR;
+
+const wrapAkhandTeaserHeadline = (headline: string, fontSize: number, maxWidth: number): string[] => {
   const words = headline.replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
   const lines: string[] = [];
-  let current = "";
+  let current: string[] = [];
 
   for (const word of words) {
-    const next = current ? `${current} ${word}` : word;
-    if (next.length > 19 && current) {
-      lines.push(current);
-      current = word;
+    const candidate = [...current, word];
+    if (current.length > 0 && estimateAkhandTeaserTextWidth(candidate.join(" "), fontSize) > maxWidth) {
+      lines.push(current.join(" "));
+      current = [word];
     } else {
-      current = next;
+      current = candidate;
     }
   }
-
-  if (current) {
-    lines.push(current);
+  if (current.length > 0) {
+    lines.push(current.join(" "));
   }
 
   return lines;
 };
 
+const AKHAND_TEASER_MAX_FONT_SIZE = 9;
+const AKHAND_TEASER_MIN_FONT_SIZE = 4.2;
+
+/**
+ * Picks the largest font size (searched top-down, in 0.2pt steps) whose
+ * word-wrapped headline still fits the box's available height -- a short
+ * headline naturally lands on a bigger size (filling leftover white space),
+ * a long one wraps into more lines and lands on a smaller size (shrinking
+ * to fit) from the very same search, rather than two separate grow/shrink
+ * branches that could disagree with each other.
+ */
+const fitAkhandTeaserHeadline = (headline: string): { lines: string[]; fontSize: number; lineHeight: number } => {
+  const maxWidth = AKHAND_TEASER_BOX_WIDTH - AKHAND_TEASER_TEXT_PADDING_X * 2;
+  const maxHeight = AKHAND_TEASER_BOX_HEIGHT - AKHAND_TEASER_TEXT_PADDING_Y * 2;
+
+  for (let fontSize = AKHAND_TEASER_MAX_FONT_SIZE; fontSize >= AKHAND_TEASER_MIN_FONT_SIZE; fontSize -= 0.2) {
+    const lines = wrapAkhandTeaserHeadline(headline, fontSize, maxWidth);
+    const lineHeight = fontSize * 1.18;
+    if (lines.length * lineHeight <= maxHeight) {
+      return { lines, fontSize: Number(fontSize.toFixed(1)), lineHeight };
+    }
+  }
+
+  // Even the minimum size doesn't fit the height -- still render it (a
+  // slightly overflowing caption beats one that silently disappears), same
+  // "render what actually fits, don't pad or fail" philosophy the batch
+  // import loop elsewhere in this codebase already follows.
+  const lines = wrapAkhandTeaserHeadline(headline, AKHAND_TEASER_MIN_FONT_SIZE, maxWidth);
+  return { lines, fontSize: AKHAND_TEASER_MIN_FONT_SIZE, lineHeight: AKHAND_TEASER_MIN_FONT_SIZE * 1.18 };
+};
+
+// A justified line (stretched word-gaps to reach both edges) reads too
+// sparse at this box's width -- 2-3 short words per line, so the resulting
+// gaps were huge. Centered instead, same as before, but now on top of the
+// dynamic font-fit search below (fitAkhandTeaserHeadline) rather than the
+// old fixed-range sizing.
+const buildAkhandTeaserLine = (line: string, fontSize: number, y: number): string =>
+  `<text x="${AKHAND_TEASER_TEXT_CENTER_X}" y="${y}" class="st1" font-size="${fontSize.toFixed(1)}" font-weight="400" fill="#111111" text-anchor="middle">${escapeXmlText(line)}</text>`;
+
 const buildAkhandTeaserHeadlineText = (headline: string): string => {
-  const lines = splitAkhandTeaserHeadline(headline);
-  const lineHeight = Math.min(8.6, Math.max(5.8, AKHAND_TEASER_TEXT_MAX_HEIGHT / Math.max(lines.length, 1)));
-  const fontSize = Math.min(8, Math.max(5.2, lineHeight - 1.1));
-  const firstLineY = AKHAND_TEASER_TEXT_TOP_Y + fontSize;
+  const { lines, fontSize, lineHeight } = fitAkhandTeaserHeadline(headline);
+  const availableHeight = AKHAND_TEASER_BOX_HEIGHT - AKHAND_TEASER_TEXT_PADDING_Y * 2;
+  const blockHeight = lines.length * lineHeight;
+  // Center the text block vertically in the box -- leftover space (a short
+  // headline rendered below the box's max font size) splits evenly top and
+  // bottom instead of pooling at the bottom.
+  const startY = AKHAND_TEASER_BOX_Y + AKHAND_TEASER_TEXT_PADDING_Y + Math.max(0, (availableHeight - blockHeight) / 2) + fontSize;
+
   const renderedLines = lines
     .map((line, index) => {
-      const y = Number((firstLineY + index * lineHeight).toFixed(2));
-      return `<text x="${AKHAND_TEASER_TEXT_CENTER_X}" y="${y}" class="st1" font-size="${fontSize.toFixed(1)}" font-weight="400" fill="#111111" text-anchor="middle">${escapeXmlText(line)}</text>`;
+      const y = Number((startY + index * lineHeight).toFixed(2));
+      return buildAkhandTeaserLine(line, fontSize, y);
     })
     .join("");
 
@@ -248,7 +320,12 @@ const buildAkhandTeaserHeadlineText = (headline: string): string => {
 };
 
 const replaceAkhandTeaserHeadline = (svgText: string, headline: string | undefined): string => {
-  const normalized = headline?.replace(/\s+/g, " ").trim();
+  // Newswire headlines carry a trailing full stop (either the Hindi danda
+  // "।" or an ASCII ".") that reads fine at sentence length but looks like
+  // stray punctuation on this short, centered, multi-line caption -- so it's
+  // dropped here rather than at the source, where full sentences elsewhere
+  // (story bodies, etc.) still want it.
+  const normalized = headline?.replace(/\s+/g, " ").trim().replace(/[।.]+\s*$/, "").trim();
   if (!normalized) {
     return svgText;
   }
@@ -266,8 +343,21 @@ const replaceAkhandTeaserImage = (svgText: string, imageUrl: string | undefined)
   }
 
   return svgText.replace(
-    /(<image\b(?=[^>]*\bid="teaser_image_xA0_Image")[^>]*\bxlink:href=")[^"]*(")/,
-    `$1${escapeXmlAttribute(resolved)}$2`,
+    /<image\b[^>]*\bid="teaser_image_xA0_Image"[^>]*>/,
+    (tag) => {
+      const transformMatch = tag.match(/\btransform="[^"]*"/);
+      const transform = transformMatch ? ` ${transformMatch[0]}` : "";
+      // A live news photo's own aspect ratio almost never matches this
+      // fixed 467x347 box exactly. The default SVG fit ("meet") shrinks the
+      // photo to fit inside the box and letterboxes the leftover space --
+      // which here isn't blank, it's the masthead's own background artwork
+      // (a marigold/decorative texture) showing through the gap, reading as
+      // something "hiding" part of the photo. "slice" + overflow:hidden
+      // crops the photo to fully cover the box instead, same as CSS
+      // object-fit: cover, with the crop itself clipped back to the box so
+      // it can't spill into the surrounding header art either.
+      return `<image style="overflow:hidden;" width="467" height="347" id="teaser_image_xA0_Image" preserveAspectRatio="xMidYMid slice" xlink:href="${escapeXmlAttribute(resolved)}"${transform}>`;
+    },
   );
 };
 
@@ -397,6 +487,53 @@ const fetchSvgText = (url: string): Promise<string> => {
   return request;
 };
 
+const bytesToBase64 = (bytes: Uint8Array): string => {
+  if (typeof window === "undefined") {
+    return Buffer.from(bytes).toString("base64");
+  }
+
+  // window.btoa chokes on very large args passed via spread -- chunk the
+  // conversion so a normal-sized news photo (tens to low hundreds of KB)
+  // doesn't risk a call-stack overflow.
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return window.btoa(binary);
+};
+
+/**
+ * A browser that loads an SVG purely as an image (`new Image()`, a Konva
+ * `Image` node, a canvas `drawImage` source, ...) will NOT let that SVG
+ * fetch its own external sub-resources -- any `<image xlink:href="https://...">`
+ * inside it silently fails to load, leaving whatever pixels were already
+ * embedded in the template (the designer's own placeholder art) showing
+ * instead. The only way a live-fetched photo actually paints is to inline
+ * its bytes as a `data:` URI before the substitution, exactly like the
+ * template's own baked-in placeholder already is. Routed through the same
+ * `/api/print-image` proxy the PDF-export path uses, since a direct
+ * cross-origin fetch() of the news photo would otherwise be blocked by the
+ * source server's own missing CORS headers (a plain `<img>` tag tolerates
+ * that; `fetch()` does not).
+ */
+const inlineRemoteImage = async (url: string): Promise<string | undefined> => {
+  try {
+    const proxied = url.startsWith("http")
+      ? `${typeof window !== "undefined" ? window.location.origin : ""}/api/print-image?url=${encodeURIComponent(url)}`
+      : url;
+    const response = await fetch(proxied);
+    if (!response.ok) {
+      return undefined;
+    }
+    const contentType = response.headers.get("content-type") || "image/jpeg";
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    return `data:${contentType};base64,${bytesToBase64(bytes)}`;
+  } catch {
+    return undefined;
+  }
+};
+
 /**
  * Given a live SVG template URL and today's real values, returns a
  * `data:image/svg+xml;base64,...` URL with the fields substituted — usable
@@ -409,9 +546,25 @@ export const resolveFrontHeaderSvgSource = async (
   values: FrontHeaderDynamicValues,
 ): Promise<string> => {
   const rawSvg = await fetchSvgText(templateUrl);
-  const patchedSvg = isAkhandDootHeaderUrl(templateUrl)
-    ? applyAkhandFrontHeaderDynamicValues(rawSvg, values)
-    : applyFrontHeaderDynamicValues(rawSvg, values);
+  const isAkhand = isAkhandDootHeaderUrl(templateUrl);
+
+  let resolvedValues = values;
+  if (isAkhand && values.teaserImageUrl?.startsWith("http")) {
+    const inlined = await inlineRemoteImage(values.teaserImageUrl);
+    // Falling back to the original (un-loadable-from-inside-SVG) URL rather
+    // than dropping it isn't useful here -- replaceAkhandTeaserImage would
+    // just wire in a dead reference and the template's own placeholder art
+    // would still be what actually shows. Skipping the swap entirely (by
+    // leaving values as-is only when inlining failed) keeps that placeholder
+    // visible, same as today, instead of a broken one.
+    if (inlined) {
+      resolvedValues = { ...values, teaserImageUrl: inlined };
+    }
+  }
+
+  const patchedSvg = isAkhand
+    ? applyAkhandFrontHeaderDynamicValues(rawSvg, resolvedValues)
+    : applyFrontHeaderDynamicValues(rawSvg, resolvedValues);
   return `data:image/svg+xml;base64,${utf8ToBase64(patchedSvg)}`;
 };
 

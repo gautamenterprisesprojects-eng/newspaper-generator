@@ -168,7 +168,10 @@ export const buildHeaderPrintModel = async (
   // HeaderSvgTemplate.ts).
   const isLiveFrontSvg = header.header.kind === "front" && isLiveHeaderSvgUrl(headerBannerSource);
   const isLiveInsideSvg = header.header.kind === "inside" && isLiveHeaderSvgUrl(headerBannerSource);
-  const frontHeaderTeaser = isLiveFrontSvg ? resolveFrontHeaderTeaser(document, pageId) : null;
+  const frontHeaderTeaser =
+    isLiveFrontSvg && header.header.kind === "front"
+      ? resolveFrontHeaderTeaser(document, pageId, header.header.teaserImageOverrideUrl)
+      : null;
   const resolvedBannerSource = isLiveFrontSvg && header.header.kind === "front"
     ? await resolveFrontHeaderSvgSource(headerBannerSource, {
         place: header.header.eyebrowLeft.text,
@@ -290,12 +293,13 @@ const getPrintableImageSource = (source: string) =>
     ? `/api/print-image?url=${encodeURIComponent(source)}`
     : source;
 
-const resolveFrontHeaderTeaser = (document: NewspaperDocument, pageId: string) => {
+const resolveFrontHeaderTeaser = (document: NewspaperDocument, pageId: string, imageOverrideUrl?: string) => {
   const page = document.pages.find((candidate) => candidate.id === pageId);
   if (!page) {
     return null;
   }
 
+  const candidates: Array<{ headline: string; imageUrl: string }> = [];
   for (const frameId of page.frameIds) {
     const frame = document.frames[frameId];
     const storyId = frame?.storyId;
@@ -304,14 +308,26 @@ const resolveFrontHeaderTeaser = (document: NewspaperDocument, pageId: string) =
     const asset = assetId ? document.assets[assetId] : null;
     const imageUrl = asset?.previewUrl || asset?.thumbnailUrl || asset?.source || "";
     const headline = story ? richTextToPlainText(story.headline).replace(/\s+/g, " ").trim() : "";
-
     if (headline && imageUrl) {
-      return {
-        headline,
-        imageUrl: getPrintableImageSource(imageUrl),
-      };
+      candidates.push({ headline, imageUrl });
     }
   }
 
-  return null;
+  // Same rule as EditorCanvas.tsx's frontHeaderTeaser: the first candidate
+  // is the page's own lead story, already printed as the big splash
+  // elsewhere on this same front page -- reusing it here duplicated the
+  // headline. The second candidate reads as a genuinely separate item;
+  // only fall back to the first/only one when there's nothing else.
+  const picked = candidates[1] ?? candidates[0];
+  if (!picked) {
+    return null;
+  }
+
+  // A publisher-picked replacement (see setFrontTeaserImageOverride) wins
+  // over the auto-picked photo, but the headline is still the picked
+  // story's own -- only the image is ever manually swapped.
+  return {
+    headline: picked.headline,
+    imageUrl: getPrintableImageSource(imageOverrideUrl || picked.imageUrl),
+  };
 };

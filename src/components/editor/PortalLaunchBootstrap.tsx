@@ -23,6 +23,7 @@ type PortalPageSection = {
   header_type: string;
   notes?: string;
   category?: string;
+  categories?: string[];
 };
 
 function clampPageCount(value: string | null): number | null {
@@ -50,6 +51,9 @@ function parsePageSections(value: string | null): PortalPageSection[] {
         header_type: String(item?.header_type || ""),
         notes: String(item?.notes || ""),
         category: item?.category ? String(item.category) : undefined,
+        categories: Array.isArray(item?.categories)
+          ? item.categories.map((c: unknown) => String(c)).filter(Boolean)
+          : undefined,
       }))
       .filter((item) => Number.isFinite(item.page_number) && item.page_number > 0);
   } catch {
@@ -66,6 +70,8 @@ type PublisherProfileResponse = {
   editorial_author_name?: string;
   editorial_author_image_url?: string;
   editorial_authors?: Array<{ name?: string; image_url?: string; imageUrl?: string }>;
+  theme_color?: string;
+  editions?: Array<{ name?: string; front_header_url?: string; inside_header_url?: string }>;
   youth_update_inside_author_image_url?: string;
   youth_update_inside_author_name?: string;
   youth_update_inside_author_designation?: string;
@@ -255,22 +261,39 @@ export function PortalLaunchBootstrap() {
         if (Object.keys(patch).length > 0) {
           state.updatePublicationProfile(profileId, patch);
         }
+
+        // A publisher with multiple editions (e.g. Bhopal, Jabalpur) has its
+        // own front/inside header per edition, set once on the Settings page
+        // and picked here by the small editionIndex param the dashboard adds
+        // to the launch URL. Publishers who never set up editions (or whose
+        // edition has no header of its own) fall back to the legacy
+        // single-header fields.
+        const editionIndexRaw = Number(searchParams.get("editionIndex"));
+        const editionIndex = Number.isFinite(editionIndexRaw) && editionIndexRaw >= 0 ? editionIndexRaw : 0;
+        const selectedEdition = Array.isArray(profile.editions) ? profile.editions[editionIndex] : undefined;
+        const frontHeaderUrl = selectedEdition?.front_header_url || profile.front_page_header_url;
+        const insideHeaderUrl = selectedEdition?.inside_header_url || profile.remaining_page_header_url;
+
         // Each publisher's own artwork uses its own accent colour for the
         // same date-block/issue-bar zones Cliff News's is white/red for —
         // sample their actual pixels there rather than assuming ours.
-        if (profile.front_page_header_url) {
-          const url = profile.front_page_header_url;
-          const maskColors = await sampleImageColorsAt(url, getHeaderMaskSamplePoints("front"));
+        if (frontHeaderUrl) {
+          const maskColors = await sampleImageColorsAt(frontHeaderUrl, getHeaderMaskSamplePoints("front"));
           if (!cancelled) {
-            state.setHeaderBannerImage("front", url, maskColors ?? undefined);
+            state.setHeaderBannerImage("front", frontHeaderUrl, maskColors ?? undefined);
           }
         }
-        if (profile.remaining_page_header_url) {
-          const url = profile.remaining_page_header_url;
-          const maskColors = await sampleImageColorsAt(url, getHeaderMaskSamplePoints("inside"));
+        if (insideHeaderUrl) {
+          const maskColors = await sampleImageColorsAt(insideHeaderUrl, getHeaderMaskSamplePoints("inside"));
           if (!cancelled) {
-            state.setHeaderBannerImage("inside", url, maskColors ?? undefined);
+            state.setHeaderBannerImage("inside", insideHeaderUrl, maskColors ?? undefined);
           }
+        }
+        // One-time theme colour, seeded as the inside header's starting
+        // accent colour -- fully editable afterward in HeaderManagerPanel,
+        // same as the header images just above.
+        if (profile.theme_color && !cancelled) {
+          state.setHeaderAccentColor(profile.theme_color);
         }
       } catch {
         // No publisher profile reachable — the default/current header keeps

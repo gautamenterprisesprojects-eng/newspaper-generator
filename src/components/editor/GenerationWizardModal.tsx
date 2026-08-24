@@ -30,6 +30,7 @@ import {
   getPaletteInlineAccent,
   getPaletteSubheadingStyle,
   getPaletteTintColor,
+  isNewswireCategory,
   type NewswireCategory,
   type NewswireStory,
   type NewswireSubheadingPreset,
@@ -405,8 +406,46 @@ const isClassifiedLocalMixPage = (): boolean => {
   return /classified|classifed|आस|पास|aas|ass\s*pass|aas\s*paas/i.test(value);
 };
 
-const getInsideFetchCategories = (selectedCategory: NewswireCategory): NewswireCategory[] =>
-  isClassifiedLocalMixPage() ? ["Madhya Pradesh", "National"] : [selectedCategory];
+/**
+ * The publisher's own multi-category choice for the page being generated,
+ * set once on the portal's Settings page and carried through in the
+ * pageSections launch param (the same JSON PortalLaunchBootstrap.tsx parses
+ * elsewhere) — read directly here so a portal-launched single page skips the
+ * manual category picker below and generates from what was already
+ * configured, same as the batch/"generate all pages" flow already does in
+ * EditorCanvas.tsx.
+ */
+// pageNumber must be the wizard's *live* active page (the activePageNumber
+// prop, i.e. document.pages[...].pageNumber) rather than re-read from the
+// selectedPageNumber launch param: that param is frozen at whatever page
+// the URL was first opened with, but "अगला पेज बनाएं" (openWizardForPortalPage
+// in EditorCanvas.tsx) advances to page 2, 3, ... inside the same session
+// without ever changing the URL -- reading the stale param here silently
+// looked up the ORIGINAL page's category (often none, since page 1 is
+// usually the front page) for every later page instead, so the manual
+// picker fell back to its hardcoded default rather than the page actually
+// being generated.
+const getPortalPlannedCategoriesForSelectedPage = (pageNumber: number): NewswireCategory[] => {
+  try {
+    const raw = getPortalLaunchParamFromWindow("pageSections");
+    if (!raw || !Number.isFinite(pageNumber)) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    const entry = parsed.find((item) => Number((item as { page_number?: unknown })?.page_number) === pageNumber) as
+      | { categories?: unknown }
+      | undefined;
+    const categories = Array.isArray(entry?.categories) ? entry.categories : [];
+    return categories.map((c) => String(c)).filter(isNewswireCategory);
+  } catch {
+    return [];
+  }
+};
+
+const getInsideFetchCategories = (selectedCategory: NewswireCategory, pageNumber: number): NewswireCategory[] => {
+  if (isClassifiedLocalMixPage()) return ["Madhya Pradesh", "National"];
+  const planned = getPortalPlannedCategoriesForSelectedPage(pageNumber);
+  return planned.length > 0 ? planned : [selectedCategory];
+};
 
 const getPortalLaunchWizardTab = (): WizardTab => {
   const pageKind = getPortalLaunchParamFromWindow("pageKind").toLowerCase();
@@ -421,9 +460,18 @@ const getPortalLaunchWizardTab = (): WizardTab => {
   return "inside";
 };
 
-const getInsideImportCategory = (selectedCategory: NewswireCategory, languageMode: PageLanguageMode): string => {
-  if (!isClassifiedLocalMixPage()) return selectedCategory;
-  return languageMode === "hindi" ? "आस-पास" : "Classifieds";
+const getInsideImportCategory = (selectedCategory: NewswireCategory, languageMode: PageLanguageMode, pageNumber: number): string => {
+  if (isClassifiedLocalMixPage()) return languageMode === "hindi" ? "आस-पास" : "Classifieds";
+  const planned = getPortalPlannedCategoriesForSelectedPage(pageNumber);
+  // A single Settings-configured category wins over the wizard's own
+  // internal category state too -- that state only gets synced from the
+  // portal plan on the very first page a session opens (see the one-time
+  // portalLaunchTabSyncedRef effect above), so by the second or third
+  // "अगला पेज बनाएं" page it can still be sitting on an earlier page's
+  // category (or the hardcoded "Sports" default) even though the correct
+  // fetch itself (getInsideFetchCategories) already reads it fresh here.
+  if (planned.length > 0) return planned.join(" + ");
+  return selectedCategory;
 };
 
 const selectFreshFallbackStories = (
@@ -1582,6 +1630,7 @@ function manualBoxEntryToStory(entry: ManualBoxEntry, box: ManualBoxGeometry): N
     publishedAt: null,
     manualPinned: true,
     manualTargetSlotIndex: box.slotIndex,
+    manualTargetStoryNumber: box.storyNumber,
     localized: {
       hindi: { ...localized, language: "hindi" },
       english: { ...localized, language: "english" },
@@ -1869,6 +1918,7 @@ function CategoryScreen({
   onEditLayout,
   onLoadPreloaded,
   onLoadLive,
+  activePageNumber,
 }: {
   state: WizardState;
   dispatch: React.Dispatch<WizardAction>;
@@ -1876,7 +1926,13 @@ function CategoryScreen({
   onEditLayout: () => void;
   onLoadPreloaded: () => void;
   onLoadLive: () => void;
+  activePageNumber: number;
 }) {
+  // Set once on the portal's Settings page — when present, this page's
+  // category is already decided and the manual picker below is replaced
+  // with a read-only note instead (see getPortalPlannedCategoriesForSelectedPage).
+  const plannedCategories = useMemo(() => getPortalPlannedCategoriesForSelectedPage(activePageNumber), [activePageNumber]);
+
   // How many boxes are still open for the API to fill, once the manual boxes
   // written on the left are subtracted out — recomputed from the same
   // geometry/completeness rules the seeder itself uses, so this number is
@@ -1930,7 +1986,11 @@ function CategoryScreen({
           </button>
         ))}
       </div>
-      {state.tab === "front" ? null : (
+      {state.tab === "front" ? null : plannedCategories.length > 0 ? (
+        <p className="generation-category-planned-note" style={{ fontSize: 12, color: "#555", fontStyle: "italic", marginBottom: 14 }}>
+          Category: {plannedCategories.join(", ")} (सेटिंग्स में सेट — यहां बदलने के लिए admin से settings unlock करवाएं)
+        </p>
+      ) : (
         <div className="generation-category-grid">
           {NEWSWIRE_CATEGORIES.map((category) => (
             <button
@@ -2030,8 +2090,18 @@ export const GenerationWizardModal = memo(function GenerationWizardModal({
     }
 
     portalLaunchTabSyncedRef.current = true;
-    dispatch({ type: "SET_TAB", tab: getPortalLaunchWizardTab() });
-  }, [open, preferredTab]);
+    const launchTab = getPortalLaunchWizardTab();
+    dispatch({ type: "SET_TAB", tab: launchTab });
+    // Pre-select the publisher's own Settings-configured category so the
+    // category step (below) can skip the manual picker entirely for this
+    // page, same as the portal's batch/"generate all pages" flow.
+    if (launchTab !== "front" && launchTab !== "editorial" && launchTab !== "advertisement") {
+      const planned = getPortalPlannedCategoriesForSelectedPage(activePageNumber);
+      if (planned[0]) {
+        dispatch({ type: "SET_CATEGORY", category: planned[0] });
+      }
+    }
+  }, [open, preferredTab, activePageNumber]);
 
   // Sync language mode from document settings (only once)
   useEffect(() => {
@@ -2138,7 +2208,7 @@ export const GenerationWizardModal = memo(function GenerationWizardModal({
       const needed = Math.max(0, requiredArticleCount - manualResult.stories.length);
       const issueSession = readPortalIssueArticleSession();
       const exclusions = await loadIssueArticleExclusions(issueSession);
-      const fetchCategories = getInsideFetchCategories(state.category);
+      const fetchCategories = getInsideFetchCategories(state.category, activePageNumber);
       const livePool: NewswireStory[] = [];
 
       for (const category of fetchCategories) {
@@ -2178,11 +2248,17 @@ export const GenerationWizardModal = memo(function GenerationWizardModal({
 
       const liveStories = collectFreshStories(shuffleNewswireStories(livePool), needed, exclusions);
       if (liveStories.length < needed) {
+        // fetchCategories (what was actually queried, e.g. the Settings-
+        // configured category) rather than state.category -- the wizard's
+        // own internal picker state can still be sitting on an earlier
+        // page's category or the hardcoded default (see getInsideFetchCategories),
+        // which made this message report the wrong category even though the
+        // fetch itself used the right one.
         throw new Error(
-          `Only ${liveStories.length} live ${state.category} articles are available for ${needed} empty boxes. No preloaded articles were used.`,
+          `Only ${liveStories.length} live ${fetchCategories.join(", ")} articles are available for ${needed} empty boxes. No preloaded articles were used.`,
         );
       }
-      onImportNewswireStories(getInsideImportCategory(state.category, state.languageMode), [...manualResult.stories, ...liveStories], buildImportOptions());
+      onImportNewswireStories(getInsideImportCategory(state.category, state.languageMode, activePageNumber), [...manualResult.stories, ...liveStories], buildImportOptions());
       onClose();
     } catch (error) {
       dispatch({
@@ -2192,7 +2268,7 @@ export const GenerationWizardModal = memo(function GenerationWizardModal({
     } finally {
       dispatch({ type: "SET_LOADING", loading: false });
     }
-  }, [state.category, state.languageMode, state.articleCount, state.layoutDesign, state.tab, buildImportOptions, onImportNewswireStories, onClose, getManualBoxStories]);
+  }, [state.category, state.languageMode, state.articleCount, state.layoutDesign, state.tab, activePageNumber, buildImportOptions, onImportNewswireStories, onClose, getManualBoxStories]);
 
   const handleLoadPreloaded = useCallback(async () => {
     dispatch({ type: "RESET_ERROR" });
@@ -2208,10 +2284,10 @@ export const GenerationWizardModal = memo(function GenerationWizardModal({
       const needed = Math.max(0, requiredArticleCount - manualResult.stories.length);
       const issueSession = readPortalIssueArticleSession();
       const exclusions = await loadIssueArticleExclusions(issueSession);
-      const fallback = getInsideFetchCategories(state.category)
+      const fallback = getInsideFetchCategories(state.category, activePageNumber)
         .flatMap((category) => selectFreshFallbackStories(category, needed, exclusions))
         .slice(0, needed);
-      onImportNewswireStories(getInsideImportCategory(state.category, state.languageMode), [...manualResult.stories, ...fallback], buildImportOptions());
+      onImportNewswireStories(getInsideImportCategory(state.category, state.languageMode, activePageNumber), [...manualResult.stories, ...fallback], buildImportOptions());
       onClose();
     } catch (error) {
       dispatch({
@@ -2219,7 +2295,7 @@ export const GenerationWizardModal = memo(function GenerationWizardModal({
         error: error instanceof Error ? error.message : "तैयार खबरें लोड नहीं हो सकीं।",
       });
     }
-  }, [state.category, state.articleCount, state.languageMode, state.layoutDesign, state.tab, buildImportOptions, onImportNewswireStories, onClose, getManualBoxStories]);
+  }, [state.category, state.articleCount, state.languageMode, state.layoutDesign, state.tab, activePageNumber, buildImportOptions, onImportNewswireStories, onClose, getManualBoxStories]);
 
   /**
    * Front page only: a real front page mixes categories (a national lead,
@@ -2452,6 +2528,7 @@ export const GenerationWizardModal = memo(function GenerationWizardModal({
                   onEditLayout={() => dispatch({ type: "SET_STEP", step: "layout" })}
                   onLoadPreloaded={state.tab === "front" ? handleLoadPreloadedMixed : handleLoadPreloaded}
                   onLoadLive={() => void (state.tab === "front" ? handleLoadLiveMixed() : handleLoadLive())}
+                  activePageNumber={activePageNumber}
                 />
               </div>
             ) : null}

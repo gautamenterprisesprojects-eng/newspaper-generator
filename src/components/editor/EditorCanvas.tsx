@@ -125,7 +125,15 @@ import {
   type NewswireTintPreset,
 } from "@/lib/newswire";
 import { computeEvenCategoryTargets, computeWeightedCategoryTargets, shuffleNewswireStories } from "@/lib/newswireCategoryMix";
-import { readPortalIssueArticleSession, saveIssueUsedArticles } from "@/lib/portalIssueArticleUsage";
+import {
+  buildPortalIssueArticleSession,
+  isIssueArticleExcluded,
+  loadFullIssueUsedArticles,
+  loadIssueArticleExclusions,
+  normalizeIssueArticleHeadline,
+  readPortalIssueArticleSession,
+  saveIssueUsedArticles,
+} from "@/lib/portalIssueArticleUsage";
 import { WIZARD_LAYOUT_DESIGNS, type NewswireImportOptions } from "./GenerationWizardModal";
 import { loadStoriesForPage, useEditorStore } from "@/store/editorStore";
 import type { WorkspaceCommand, WorkspacePanelId } from "@/engines/WorkspaceManager/WorkspaceManagerTypes";
@@ -418,7 +426,7 @@ const shouldChargeSinglePageOnExport = () => getPortalLaunchParam("chargeOnExpor
 // the manual wizard/export flow already uses, one page at a time, reporting
 // progress to the parent window via postMessage.
 
-type BatchPlannedPage = { page_number: number; category: string; section: string };
+type BatchPlannedPage = { page_number: number; category: string; categories: string[]; section: string; header_type: string };
 type PortalPagePlan = {
   page_number: number;
   section: string;
@@ -435,7 +443,11 @@ const parseBatchPlannedPages = (value: string): BatchPlannedPage[] => {
       .map((item) => ({
         page_number: Number(item?.page_number),
         category: String(item?.category || "").trim(),
+        categories: Array.isArray(item?.categories)
+          ? item.categories.map((c: unknown) => String(c).trim()).filter(Boolean)
+          : [],
         section: String(item?.section || "").trim(),
+        header_type: String(item?.header_type || "").trim(),
       }))
       .filter((item) => Number.isFinite(item.page_number) && item.page_number > 0);
   } catch {
@@ -443,7 +455,15 @@ const parseBatchPlannedPages = (value: string): BatchPlannedPage[] => {
   }
 };
 
+// The portal's Settings page now has an explicit "Editorial page" dropdown
+// option (header_type === "editorial") -- the authoritative, language-
+// independent signal a publisher sets once. The literal-text match stays as
+// a fallback for older page plans saved before that option existed (or a
+// publisher who just typed "Editorial" as the section name), but a page
+// named in Hindi (e.g. "अभिव्यक्ति") or anything else relies on header_type.
 const isEditorialPlannedSection = (section: string) => section.trim().toLowerCase() === "editorial";
+const isEditorialPlannedPage = (planned: BatchPlannedPage | undefined) =>
+  isEditorialPlannedSection(planned?.section ?? "") || planned?.header_type === "editorial";
 
 const parsePortalPagePlan = (value: string): PortalPagePlan[] => {
   if (!value) return [];
@@ -1430,7 +1450,7 @@ export function EditorCanvas() {
   const [inlineEditSession, setInlineEditSession] = useState<InlineEditSession | null>(null);
   const [copiedObjectStyle, setCopiedObjectStyle] = useState<CopiedObjectStyle | null>(null);
   const [frameContextMenu, setFrameContextMenu] = useState<{ storyId: string; x: number; y: number } | null>(null);
-  const [imageReplacePopup, setImageReplacePopup] = useState<{ storyId: string; target: "photo" | "portrait" | "masthead-teaser" | "inside-teaser"; x: number; y: number } | null>(null);
+  const [imageReplacePopup, setImageReplacePopup] = useState<{ storyId: string; target: "photo" | "portrait" | "masthead-teaser" | "inside-teaser" | "akhand-front-teaser"; x: number; y: number } | null>(null);
   const imageReplaceFileInputRef = useRef<HTMLInputElement | null>(null);
   const [pagePreview, setPagePreview] = useState<PagePreviewState | null>(null);
   const [pdfExporting, setPdfExporting] = useState(false);
@@ -1625,10 +1645,32 @@ export function EditorCanvas() {
 
       importNewswireStories(category, articles, resolvedOptions);
       void saveIssueUsedArticles(readPortalIssueArticleSession(), articles);
-      if (resolvedOptions?.pageKind === "inside") {
-        updateActivePageProperties({ sectionName: category });
-      } else if (resolvedOptions?.pageKind === "editorial") {
-        updateActivePageProperties({ sectionName: "Editorial" });
+
+      // A portal-configured page (the publisher's own Settings page plan)
+      // already carries its deliberate name -- e.g. "राष्ट्रीय समाचार" --
+      // set the moment the page was opened (see openWizardForPortalPage).
+      // Overwriting it here with the fetched category label was clobbering
+      // that real name with the raw category value instead -- worse, the
+      // wizard's own manual-picker state ("category" passed in here isn't
+      // always this page's actual planned category; see getInsideImportCategory
+      // in GenerationWizardModal.tsx), so a page like "राष्ट्रीय समाचार"
+      // could end up relabeled with a completely unrelated category's name.
+      // Only a page with no portal plan at all (the manual/non-portal
+      // editor flow, which starts genuinely unnamed) still wants this
+      // auto-naming.
+      const currentPageNumber = useEditorStore.getState().document.pages.find(
+        (page) => page.id === useEditorStore.getState().activePageId,
+      )?.pageNumber;
+      const hasPortalPagePlan = parsePortalPagePlan(getPortalLaunchParam("pageSections")).some(
+        (plan) => plan.page_number === currentPageNumber,
+      );
+
+      if (!hasPortalPagePlan) {
+        if (resolvedOptions?.pageKind === "inside") {
+          updateActivePageProperties({ sectionName: category });
+        } else if (resolvedOptions?.pageKind === "editorial") {
+          updateActivePageProperties({ sectionName: "Editorial" });
+        }
       }
     },
     [importNewswireStories, updateActivePageProperties],
@@ -1637,6 +1679,7 @@ export function EditorCanvas() {
   const deleteAsset = useEditorStore((state) => state.deleteAsset);
   const relinkAsset = useEditorStore((state) => state.relinkAsset);
   const replaceStoryImage = useEditorStore((state) => state.replaceStoryImage);
+  const setFrontTeaserImageOverride = useEditorStore((state) => state.setFrontTeaserImageOverride);
   const setAssetStatus = useEditorStore((state) => state.setAssetStatus);
   const createAdvertisementBooking = useEditorStore((state) => state.createAdvertisementBooking);
   const updateAdvertisementLifecycle = useEditorStore((state) => state.updateAdvertisementLifecycle);
@@ -2220,21 +2263,130 @@ export function EditorCanvas() {
     imageSourcesByStoryIdRef.current = next;
     return next;
   }, [document.assets, document.stories, stories]);
+  const frontTeaserImageOverrideUrl = useMemo(() => {
+    const activeHeaderSetId = document.headerSystem.activeHeaderSetId;
+    const headerSet = activeHeaderSetId ? document.headerSystem.headerSets[activeHeaderSetId] : null;
+    return headerSet?.front.teaserImageOverrideUrl || "";
+  }, [document.headerSystem]);
+  // Picking the teaser from the front page's OWN placed stories (the
+  // earlier approach) can't reliably avoid duplicating whichever one of
+  // them is also prominently shown elsewhere on the page -- "skip the
+  // first story" assumed index 0 was always the big lead box, but any
+  // story with an image can end up as the teaser's only other candidate,
+  // including the very one used in another visible box (confirmed live:
+  // the teaser repeated the same headline as a regular front-page story).
+  // Fetching the teaser its own dedicated live article instead -- excluded
+  // against both the portal's per-issue "already used" ledger and this
+  // page's own current headlines -- guarantees it's never the same story
+  // as anything else on the page or issue, and is a real live photo rather
+  // than whatever a page story's own (possibly still-loading/fallback)
+  // image happens to be.
+  const frontTeaserFetchKeyRef = useRef<string | null>(null);
+  const [frontTeaserFetchedArticle, setFrontTeaserFetchedArticle] = useState<{ headline: string; imageUrl: string } | null>(null);
+  useEffect(() => {
+    if (pageType !== "front") {
+      return;
+    }
+    const storyIdsKey = visibleStoryLayouts.map(({ story }) => story.id).join(",");
+    if (!storyIdsKey || frontTeaserFetchKeyRef.current === storyIdsKey) {
+      return;
+    }
+    frontTeaserFetchKeyRef.current = storyIdsKey;
+    let cancelled = false;
+    (async () => {
+      try {
+        const issueSession = readPortalIssueArticleSession();
+        const targets = computeWeightedCategoryTargets(6).filter((entry) => entry.target > 0);
+        // Exclusions and the category pool are independent network calls --
+        // run them together instead of sequentially so the effect resolves
+        // in roughly the slower of the two rather than their sum.
+        const [exclusions, perCategoryResults] = await Promise.all([
+          loadIssueArticleExclusions(issueSession),
+          Promise.all(
+            targets.map(async ({ category }) => {
+              try {
+                const response = await fetch(`/api/newswire?category=${encodeURIComponent(category)}&language=hindi&limit=6`);
+                const payload = (await response.json().catch(() => null)) as { success?: boolean; data?: NewswireStory[] } | null;
+                return payload?.success !== false && Array.isArray(payload?.data) ? payload.data : [];
+              } catch {
+                return [];
+              }
+            }),
+          ),
+        ]);
+        if (cancelled) return;
+
+        for (const { story } of visibleStoryLayouts) {
+          const headline = richTextToPlainText(story.articleData?.headline ?? "").replace(/\s+/g, " ").trim();
+          if (headline) {
+            exclusions.normalizedHeadlines.add(normalizeIssueArticleHeadline(headline));
+          }
+        }
+
+        const picked = shuffleNewswireStories(perCategoryResults.flat()).find(
+          (article) => article.imageUrl && article.headline && !isIssueArticleExcluded(article, exclusions),
+        );
+        if (picked && !cancelled) {
+          setFrontTeaserFetchedArticle({ headline: picked.headline, imageUrl: picked.imageUrl });
+          // Deliberately not persisted to the portal's per-issue ledger:
+          // saveIssueUsedArticles replaces that page's *entire* saved list
+          // rather than appending, and this page's own regular stories
+          // already have their own save call (in
+          // handleImportNewswireStoriesWithSection) -- calling it again
+          // here with just the teaser article would wipe that list out
+          // instead of adding to it. The exclusion check above already
+          // keeps the teaser from repeating anything on this page or
+          // already recorded elsewhere; not recording the teaser itself
+          // only risks a future regeneration picking the same photo again,
+          // which is a far smaller problem than losing this page's own
+          // dedup record.
+        }
+      } catch {
+        // Non-fatal -- frontHeaderTeaser below falls back to picking a
+        // second story already on the page while this fetch is in flight
+        // or if it never resolves, same as before this dedicated fetch.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pageType, visibleStoryLayouts]);
   const frontHeaderTeaser = useMemo(() => {
     if (pageType !== "front") {
       return null;
     }
 
-    for (const { story } of visibleStoryLayouts) {
-      const imageUrl = imageSourcesByStoryId[story.id];
-      const headline = richTextToPlainText(story.articleData?.headline ?? "").replace(/\s+/g, " ").trim();
-      if (imageUrl && headline) {
-        return { headline, imageUrl };
-      }
+    if (frontTeaserFetchedArticle) {
+      return {
+        headline: frontTeaserFetchedArticle.headline,
+        imageUrl: frontTeaserImageOverrideUrl || frontTeaserFetchedArticle.imageUrl,
+      };
     }
 
-    return null;
-  }, [imageSourcesByStoryId, pageType, visibleStoryLayouts]);
+    const candidates = visibleStoryLayouts
+      .map(({ story }) => ({
+        headline: richTextToPlainText(story.articleData?.headline ?? "").replace(/\s+/g, " ").trim(),
+        imageUrl: imageSourcesByStoryId[story.id],
+      }))
+      .filter((candidate) => candidate.headline && candidate.imageUrl);
+
+    // The masthead teaser box duplicated the front page's own lead story
+    // when it just reused the first image+headline story here -- that
+    // story is already the big splash printed elsewhere on the same page
+    // (identical headline in both places). A second candidate reads as a
+    // genuinely separate item instead; only fall back to the first/only
+    // one when the page has nothing else to offer. This whole branch is
+    // now only a stand-in while the dedicated fetch above is in flight (or
+    // if it fails) -- it can still coincidentally repeat a page story, the
+    // fetched article above is the real fix.
+    const picked = candidates[1] ?? candidates[0];
+    if (!picked) {
+      return null;
+    }
+
+    return { headline: picked.headline, imageUrl: frontTeaserImageOverrideUrl || picked.imageUrl };
+  }, [frontTeaserFetchedArticle, frontTeaserImageOverrideUrl, imageSourcesByStoryId, pageType, visibleStoryLayouts]);
   const layoutNodeCounts = useMemo(
     () =>
       new Map(
@@ -3941,6 +4093,23 @@ export function EditorCanvas() {
       // (outside the portal, or an older portal build).
       const frontTemplateIndex = Number(getPortalLaunchParam("frontTemplateIndex")) || 0;
 
+      // Seed this run's in-memory dedup (batchUsedArticleIdsRef/-Headlines)
+      // from the portal's persisted per-issue ledger before any page is
+      // fetched -- without this, batch mode's dedup only ever knew about
+      // articles used earlier in this SAME run, so a page regenerated later
+      // via the single-page wizard (which does read/write this same ledger,
+      // see readPortalIssueArticleSession) could still repeat whatever a
+      // batch run had already used, and vice versa. pageNumber=1 here is
+      // just a placeholder to satisfy buildPortalIssueArticleSession's
+      // validation -- loadFullIssueUsedArticles ignores it and always asks
+      // for the whole issue's ledger (exclude_page_number=0, no real page).
+      const issueSessionBase = buildPortalIssueArticleSession(1, "batch-seed");
+      if (issueSessionBase) {
+        const fullLedger = await loadFullIssueUsedArticles(issueSessionBase);
+        fullLedger.articleIds.forEach((id) => batchUsedArticleIdsRef.current.add(id));
+        fullLedger.normalizedHeadlines.forEach((headline) => batchUsedHeadlinesRef.current.add(headline));
+      }
+
       const buildOptions = (templateId: TemplateId, pageKind: NewswireImportOptions["pageKind"]): NewswireImportOptions => ({
         templateId,
         pageKind,
@@ -3971,7 +4140,7 @@ export function EditorCanvas() {
         const pageModel = useEditorStore.getState().document.pages[index];
         const planned = plannedPages.find((item) => item.page_number === index + 1);
         const isFront = pageModel.pageType === "front";
-        const isEditorial = isEditorialPlannedSection(planned?.section ?? "");
+        const isEditorial = isEditorialPlannedPage(planned);
         // planned.category is an explicit publisher choice, read directly
         // when it's a real NEWSWIRE_CATEGORY value -- this is the direct
         // read path the portal's profile page-plan editor writes into, and
@@ -3995,12 +4164,25 @@ export function EditorCanvas() {
         // future publisher's section label this repo has never seen) gets
         // an even cross-category mix rather than silently defaulting to one
         // category that may have nothing to do with the page.
+        // A publisher can now pick more than one category for a page from
+        // the portal's Settings page (e.g. Sports + Business on one page,
+        // since a longer edition has more pages than the 7 base categories)
+        // — that arrives here as plannedPages[].categories. Two or more
+        // valid entries means "mix just these", handled by its own branch
+        // below rather than falling through to specificCategory (a single
+        // category) or the all-7-category Mixed fallback.
+        const plannedCategoriesRaw = planned?.categories ?? [];
+        const explicitCategories: NewswireCategory[] = isFront
+          ? []
+          : plannedCategoriesRaw.filter(isNewswireCategory);
+
         const plannedCategory = planned?.category;
-        const specificCategory: NewswireCategory | null = isFront
+        const specificCategory: NewswireCategory | null = isFront || explicitCategories.length > 1
           ? null
-          : (plannedCategory && isNewswireCategory(plannedCategory) ? plannedCategory : null)
+          : explicitCategories[0]
+            || (plannedCategory && isNewswireCategory(plannedCategory) ? plannedCategory : null)
             || inferCategoryFromSection(planned?.section ?? "");
-        const categoryLabel = specificCategory ?? "Mixed";
+        const categoryLabel = explicitCategories.length > 1 ? explicitCategories.join(" + ") : specificCategory ?? "Mixed";
 
         useEditorStore.getState().setActivePage(pageModel.id);
 
@@ -4072,7 +4254,33 @@ export function EditorCanvas() {
             let freshLive: NewswireStory[] = [];
 
             if (remaining > 0) {
-              if (specificCategory) {
+              if (explicitCategories.length > 1) {
+                // Publisher chose more than one category for this page
+                // (e.g. Sports + Business) — an even split across exactly
+                // those categories, reusing the same weighted-target/rounding
+                // logic the front page and the "no category match" fallback
+                // already use, just restricted to this page's own set
+                // instead of all seven.
+                const evenWeights = Object.fromEntries(
+                  explicitCategories.map((category) => [category, 1 / explicitCategories.length]),
+                ) as Partial<Record<NewswireCategory, number>>;
+                const targets = computeWeightedCategoryTargets(remaining, evenWeights).filter((entry) => entry.target > 0);
+                const perCategoryResults = await Promise.all(
+                  targets.map(async ({ category: targetCategory, target }): Promise<NewswireStory[]> => {
+                    try {
+                      return (await fetchLiveNewswireOnce(targetCategory, languageMode, target)) ?? [];
+                    } catch {
+                      return [];
+                    }
+                  }),
+                );
+                if (cancelled) {
+                  return;
+                }
+                freshLive = shuffleNewswireStories(perCategoryResults.flat()).filter(
+                  (a) => !isArticleUsed(a, batchUsedArticleIdsRef.current, batchUsedHeadlinesRef.current),
+                );
+              } else if (specificCategory) {
                 // A named category (publisher's own choice, or inferred
                 // from the section label): try it first, over-fetched so
                 // cross-page dedup below has real headroom to filter from.
@@ -4145,6 +4353,15 @@ export function EditorCanvas() {
               batchUsedArticleIdsRef.current.add(article.id);
               batchUsedHeadlinesRef.current.add(normalizeHeadlineKey(article.headline));
             }
+            // Persist this page's articles to the portal's per-issue ledger
+            // too (not just the in-memory refs above), so a page later
+            // regenerated individually via the single-page wizard -- which
+            // reads/writes this same ledger -- knows to avoid them, and vice
+            // versa (see the ledger seed at the top of this batch run).
+            void saveIssueUsedArticles(
+              buildPortalIssueArticleSession(index + 1, planned?.section || pageModel.sectionName || `Page ${index + 1}`),
+              merged,
+            );
           } catch (error) {
             lastError = error;
           }
@@ -5144,6 +5361,10 @@ export function EditorCanvas() {
     [],
   );
 
+  const handleRequestFrontTeaserReplace = useCallback((clientX: number, clientY: number) => {
+    setImageReplacePopup({ storyId: "", target: "akhand-front-teaser", x: clientX, y: clientY });
+  }, []);
+
   const handleImageReplaceFileChange = useCallback(
     async (files: FileList | null) => {
       const file = files?.[0];
@@ -5156,6 +5377,11 @@ export function EditorCanvas() {
       }
 
       const descriptor = await readImageFileAsAssetDescriptor(file);
+
+      if (target.target === "akhand-front-teaser") {
+        setFrontTeaserImageOverride(descriptor.source ?? "");
+        return;
+      }
 
       if (target.target === "masthead-teaser") {
         const slotIndex = parseInt(target.storyId, 10);
@@ -5199,7 +5425,7 @@ export function EditorCanvas() {
 
       replaceStoryImage(target.storyId, descriptor);
     },
-    [imageReplacePopup, replaceStoryImage, selectStory, updateSelectedStoryArticleData],
+    [imageReplacePopup, replaceStoryImage, selectStory, setFrontTeaserImageOverride, updateSelectedStoryArticleData],
   );
 
   useEffect(() => {
@@ -6315,6 +6541,7 @@ export function EditorCanvas() {
                   pageCount={document.pages.length}
                   onRequestMastheadTeaserReplace={handleRequestMastheadTeaserReplace}
                   onRequestInsideTeaserReplace={handleRequestInsideTeaserReplace}
+                  onRequestFrontTeaserReplace={handleRequestFrontTeaserReplace}
                 />
               </Profiler>
 

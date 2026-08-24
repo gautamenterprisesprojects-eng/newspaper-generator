@@ -1,0 +1,16 @@
+services:
+  generator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: newspaper_generator
+    restart: always
+    ports:
+      # Internal-only -- the host's own nginx (fronting the existing site)
+      # reverse-proxies the public domain to this port. Not exposed publicly
+      # here on purpose.
+      - "127.0.0.1:3002:3000"
+    environment:
+      NEWSWIRE_API_BASE_URL: ${NEWSWIRE_API_BASE_URL:-https://api.gautamenterprises.org}
+      NEWSWIRE_API_BASE_URLS: ${NEWSWIRE_API_BASE_URLS:-https://api.gautamenterprises.org}
+      NEWSWIRE_API_KEY: ${NEWSWIRE_API_KEY:?NEWSWIRE_API_KEY must be set}

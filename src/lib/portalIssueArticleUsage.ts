@@ -33,14 +33,24 @@ export const getPortalLaunchParamFromWindow = (name: string): string => {
   return new URLSearchParams(window.location.search).get(name)?.trim() ?? "";
 };
 
-export const readPortalIssueArticleSession = (): PortalIssueArticleSession | null => {
+/**
+ * The apiBase/authToken/publisherId/issueNumber/publicationDate quintet is
+ * shared by every page of one launch (single-page or batch) — only the page
+ * number/label differ per page. Split out so batch mode (EditorCanvas.tsx's
+ * "generate all pages" loop, which has no single selectedPageNumber URL
+ * param to read since it produces every page in one run) can build one
+ * session per page it's currently generating, instead of only the one
+ * single-page mode's own launch URL names.
+ */
+export const buildPortalIssueArticleSession = (
+  pageNumber: number,
+  pageLabel: string,
+): PortalIssueArticleSession | null => {
   const apiBase = getPortalLaunchParamFromWindow("apiBase") || "http://localhost:8080/api/v1";
   const authToken = getPortalLaunchParamFromWindow("authToken");
   const publisherId = getPortalLaunchParamFromWindow("publisherId");
   const issueNumber = getPortalLaunchParamFromWindow("issueNumber");
   const publicationDate = getPortalLaunchParamFromWindow("publicationDate");
-  const pageNumber = Number(getPortalLaunchParamFromWindow("selectedPageNumber")) || 0;
-  const pageLabel = getPortalLaunchParamFromWindow("selectedPageName") || `Page ${pageNumber}`;
 
   if (!apiBase || !authToken || !publisherId || !issueNumber || !publicationDate || pageNumber <= 0) {
     return null;
@@ -57,16 +67,35 @@ export const readPortalIssueArticleSession = (): PortalIssueArticleSession | nul
   };
 };
 
-export const loadIssueArticleExclusions = async (
-  session: PortalIssueArticleSession | null,
+export const readPortalIssueArticleSession = (): PortalIssueArticleSession | null => {
+  const pageNumber = Number(getPortalLaunchParamFromWindow("selectedPageNumber")) || 0;
+  const pageLabel = getPortalLaunchParamFromWindow("selectedPageName") || `Page ${pageNumber}`;
+  return buildPortalIssueArticleSession(pageNumber, pageLabel);
+};
+
+/**
+ * The full issue-wide ledger, unscoped to any one page -- used to seed batch
+ * mode's in-memory dedup at the start of a run (page_number=0 matches no
+ * real page, so nothing gets excluded from the "already used" set itself).
+ * Single-page mode doesn't need this: it only ever excludes OTHER pages'
+ * articles from its own one fetch, via loadIssueArticleExclusions below.
+ */
+export const loadFullIssueUsedArticles = async (
+  session: Pick<PortalIssueArticleSession, "apiBase" | "authToken" | "publisherId" | "issueNumber" | "publicationDate"> | null,
 ): Promise<IssueArticleExclusions> => {
   if (!session) return emptyExclusions();
+  return loadIssueArticleExclusionsInternal(session, 0);
+};
 
+const loadIssueArticleExclusionsInternal = async (
+  session: Pick<PortalIssueArticleSession, "apiBase" | "authToken" | "publisherId" | "issueNumber" | "publicationDate">,
+  excludePageNumber: number,
+): Promise<IssueArticleExclusions> => {
   try {
     const params = new URLSearchParams({
       issue_number_ank: session.issueNumber,
       publication_date: session.publicationDate,
-      exclude_page_number: String(session.pageNumber),
+      exclude_page_number: String(excludePageNumber),
     });
     const response = await fetch(
       `${session.apiBase}/publisher/issue-used-articles/${session.publisherId}?${params.toString()}`,
@@ -88,6 +117,13 @@ export const loadIssueArticleExclusions = async (
   } catch {
     return emptyExclusions();
   }
+};
+
+export const loadIssueArticleExclusions = async (
+  session: PortalIssueArticleSession | null,
+): Promise<IssueArticleExclusions> => {
+  if (!session) return emptyExclusions();
+  return loadIssueArticleExclusionsInternal(session, session.pageNumber);
 };
 
 export const isIssueArticleExcluded = (
