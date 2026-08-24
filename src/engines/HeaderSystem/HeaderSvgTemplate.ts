@@ -785,32 +785,48 @@ export const applyGenericFrontHeaderDynamicValues = (
   });
 };
 
+// The page-number badge's own dark-green box, measured directly off this
+// file's rendered pixels (viewBox "0 0 936 56.6"): solid fill spans roughly
+// x=0-50, so its centre sits at x=25. The source file's own text sits
+// left-anchored at x=10.56, sized for its original 2-digit example ("12") --
+// re-centred here (same rewriteTransformX/withCenterAnchor technique the
+// pinned Cliff News templates already use for their own date-number/
+// page-number boxes) so a live value doesn't read off-centre regardless of
+// digit count.
+const ADAGE_PAGE_NUMBER_CENTER_X = 25;
+// This file's own placeholder text for the category strip -- matched
+// explicitly (not "anything that isn't the masthead name", like the fuller
+// generic matcher does) so the date/day line and masthead name are never at
+// risk of being mistaken for it.
+const ADAGE_CATEGORY_PLACEHOLDER = "national";
+
 /**
- * Per explicit publisher decision, only the page-number badge on The Adage
- * Times' inside header updates live for now -- category and the date/day
- * line stay exactly as printed in the artwork. Only the first lone
- * digit-only <text> node found is touched (there's exactly one such badge
- * on this file); everything else is left untouched, unlike the fuller
- * generic matcher below.
+ * The Adage Times' inside header: page number and category update live,
+ * the date/day line stays exactly as printed in the artwork (per explicit
+ * publisher decision -- date support can be added later the same way if
+ * ever wanted). Page number is zero-padded to 2 digits ("02".."08", ...)
+ * and re-centred in its box rather than left-anchored.
  */
 export const applyPageNumberOnlyInsideHeaderDynamicValues = (
   svgText: string,
   values: InsideHeaderDynamicValues,
 ): string => {
   const pageNumberDigits = firstAsciiNumber(values.pageNumber);
-  if (!pageNumberDigits) {
-    return svgText;
-  }
+  const paddedPageNumber = pageNumberDigits ? pageNumberDigits.padStart(2, "0") : "";
 
-  let replaced = false;
   return svgText.replace(textContentPattern, (match, open: string, body: string, close: string) => {
-    if (replaced) {
-      return match;
-    }
     const original = stripXmlTags(body);
     if (pureDigitsPattern.test(original)) {
-      replaced = true;
-      return `${open}${escapeXmlText(pageNumberDigits)}${close}`;
+      if (!paddedPageNumber) {
+        return match;
+      }
+      const centeredOpen = withCenterAnchor(rewriteTransformX(open, ADAGE_PAGE_NUMBER_CENTER_X));
+      return `${centeredOpen}${escapeXmlText(paddedPageNumber)}${close}`;
+    }
+    if (original.trim().toLowerCase() === ADAGE_CATEGORY_PLACEHOLDER) {
+      // The placeholder itself is all-caps ("NATIONAL") -- matching that
+      // styling for whatever live category comes in, same convention.
+      return values.category ? `${open}${escapeXmlText(values.category.toUpperCase())}${close}` : match;
     }
     return match;
   });
