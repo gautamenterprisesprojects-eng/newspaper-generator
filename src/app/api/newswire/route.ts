@@ -553,7 +553,8 @@ const normalizeDeliveryRecord = (
   };
 };
 
-const FRESHNESS_WINDOW_MS = 24 * 60 * 60 * 1000;
+const HINDI_FRESHNESS_WINDOW_MS = 24 * 60 * 60 * 1000;
+const ENGLISH_FRESHNESS_WINDOW_MS = 96 * 60 * 60 * 1000;
 
 /**
  * The upstream delivery API has no pagination — the same category + limit
@@ -584,8 +585,9 @@ const FRESHNESS_WINDOW_MS = 24 * 60 * 60 * 1000;
 const selectFreshUnusedRandom = async (
   records: NewswireStory[],
   limit: number,
+  freshnessWindowMs = HINDI_FRESHNESS_WINDOW_MS,
 ): Promise<NewswireStory[]> => {
-  const cutoff = Date.now() - FRESHNESS_WINDOW_MS;
+  const cutoff = Date.now() - freshnessWindowMs;
   const fresh = records.filter((record) => {
     if (!record.publishedAt) return false;
     const publishedAt = new Date(record.publishedAt).getTime();
@@ -687,6 +689,7 @@ export async function GET(request: Request) {
             .filter((record) => recordPassesCategoryContentGuard(record, category))
             .map((record) => normalizeDeliveryRecord(record, category, requestedLanguage)),
           limit,
+          ENGLISH_FRESHNESS_WINDOW_MS,
         );
 
         return NextResponse.json({
@@ -787,6 +790,7 @@ export async function GET(request: Request) {
                 .map((record) => normalizeDeliveryRecord(record, category, requestedLanguage))
             : [],
           limit,
+          HINDI_FRESHNESS_WINDOW_MS,
         );
 
         return NextResponse.json({
