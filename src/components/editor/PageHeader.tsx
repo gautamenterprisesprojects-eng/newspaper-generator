@@ -363,21 +363,28 @@ export function PageHeader({
     resolvedHeader?.header.kind === "front" &&
     isAkhandDootHeaderUrl(headerBannerSource);
 
+  // The front masthead gets the same gap above it that the alignment fix
+  // gave it on the left/right (contentX, not the extra 0.5% stretch) --
+  // per explicit publisher request. Scoped to front only: the inside folio
+  // strip is much shorter and wasn't asked for this.
+  const frontTopGap = headerKind === "front" ? contentX : 0;
+  const bannerHeight = resolvedHeight - frontTopGap;
+
   return (
     <>
-    <Group listening={false} name="protected-master-header" x={headerX}>
+    <Group listening={false} name="protected-master-header" x={headerX} y={frontTopGap}>
       <HeaderBannerImage
         source={liveHeaderBannerSource}
         x={0}
         y={0}
         width={headerWidth}
-        height={resolvedHeight}
+        height={bannerHeight}
         opacity={0.95}
       />
       {resolvedHeader?.header.kind === "front" && !isLiveHeaderSvgUrl(resolvedHeader.header.headerImageUrl)
         ? (() => {
             const front = resolvedHeader.header;
-            const geometry = getFrontHeaderOverlayGeometry(headerWidth, resolvedHeight, front.maskColors);
+            const geometry = getFrontHeaderOverlayGeometry(headerWidth, bannerHeight, front.maskColors);
 
             return (
               <>
@@ -405,7 +412,7 @@ export function PageHeader({
       {resolvedHeader?.header.kind === "inside" && !isLiveHeaderSvgUrl(resolvedHeader.header.headerImageUrl)
         ? (() => {
             const inside = resolvedHeader.header;
-            const geometry = getInsideHeaderOverlayGeometry(headerWidth, resolvedHeight, inside.maskColors);
+            const geometry = getInsideHeaderOverlayGeometry(headerWidth, bannerHeight, inside.maskColors);
 
             return (
               <>
@@ -429,9 +436,9 @@ export function PageHeader({
     {showFrontTeaserClickTarget ? (
       <Rect
         x={headerX + headerWidth * AKHAND_TEASER_IMAGE_BOX_FRACTION.x}
-        y={resolvedHeight * AKHAND_TEASER_IMAGE_BOX_FRACTION.y}
+        y={frontTopGap + bannerHeight * AKHAND_TEASER_IMAGE_BOX_FRACTION.y}
         width={headerWidth * AKHAND_TEASER_IMAGE_BOX_FRACTION.width}
-        height={resolvedHeight * AKHAND_TEASER_IMAGE_BOX_FRACTION.height}
+        height={bannerHeight * AKHAND_TEASER_IMAGE_BOX_FRACTION.height}
         fill="transparent"
         onClick={(evt) => onRequestFrontTeaserReplace?.(evt.evt.clientX, evt.evt.clientY)}
         onContextMenu={(evt) => onRequestFrontTeaserReplace?.(evt.evt.clientX, evt.evt.clientY)}

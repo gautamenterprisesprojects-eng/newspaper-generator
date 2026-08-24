@@ -173,6 +173,12 @@ export const buildHeaderPrintModel = async (
   const headerStretch = contentWidth * HEADER_STRETCH_FRACTION;
   const headerX = contentX - headerStretch;
   const headerWidth = contentWidth + headerStretch * 2;
+  // Same gap above the front masthead as the left/right alignment gap
+  // (contentX, not the extra stretch) -- per explicit publisher request,
+  // scoped to front only. The banner's own height shrinks by the same
+  // amount so its bottom edge (and the body's start position) don't move.
+  const frontTopGap = header.header.kind === "front" ? contentX : 0;
+  const bannerHeight = headerHeight - frontTopGap;
   const headerBannerSource =
     header.header.headerImageUrl ?? getHeaderBannerSource(header.header.kind);
   // A live SVG template's own <text> elements already carry the correct
@@ -207,7 +213,7 @@ export const buildHeaderPrintModel = async (
       : headerBannerSource;
 
   const operations: HeaderPrintOperation[] = [];
-  const headerBannerOp = imageOp("header-banner", resolvedBannerSource, headerX, 0, headerWidth, headerHeight);
+  const headerBannerOp = imageOp("header-banner", resolvedBannerSource, headerX, frontTopGap, headerWidth, bannerHeight);
   if (headerBannerOp) {
     operations.push(headerBannerOp);
   }
@@ -217,17 +223,17 @@ export const buildHeaderPrintModel = async (
   // re-uploading their header image. The masthead nameplate itself is never
   // drawn here — it's part of whichever banner image is showing.
   if (header.header.kind === "front" && !isLiveFrontSvg) {
-    const geometry = getFrontHeaderOverlayGeometry(headerWidth, headerHeight, header.header.maskColors);
+    const geometry = getFrontHeaderOverlayGeometry(headerWidth, bannerHeight, header.header.maskColors);
 
     geometry.maskBands.forEach((band, index) => {
-      operations.push(rectOp(`header-mask-${index}`, headerX + band.x, band.y, band.width, band.height, band.fill));
+      operations.push(rectOp(`header-mask-${index}`, headerX + band.x, frontTopGap + band.y, band.width, band.height, band.fill));
     });
 
     const eyebrowLeftOp = textOp(
       "header-eyebrow-left",
       header.header.eyebrowLeft,
       headerX + geometry.eyebrowLeft.x,
-      geometry.eyebrowLeft.y,
+      frontTopGap + geometry.eyebrowLeft.y,
       geometry.eyebrowLeft.width,
     );
     if (eyebrowLeftOp) operations.push(eyebrowLeftOp);
@@ -236,7 +242,7 @@ export const buildHeaderPrintModel = async (
       "header-eyebrow-right",
       header.header.eyebrowRight,
       headerX + geometry.eyebrowRight.x,
-      geometry.eyebrowRight.y,
+      frontTopGap + geometry.eyebrowRight.y,
       geometry.eyebrowRight.width,
     );
     if (eyebrowRightOp) operations.push(eyebrowRightOp);
@@ -245,7 +251,7 @@ export const buildHeaderPrintModel = async (
       "header-date-number",
       header.header.skyline,
       headerX + geometry.dateNumber.x,
-      geometry.dateNumber.y,
+      frontTopGap + geometry.dateNumber.y,
       geometry.dateNumber.width,
     );
     if (dateNumberOp) operations.push(dateNumberOp);
@@ -254,7 +260,7 @@ export const buildHeaderPrintModel = async (
       "header-month-year",
       header.header.footerLine,
       headerX + geometry.monthYear.x,
-      geometry.monthYear.y,
+      frontTopGap + geometry.monthYear.y,
       geometry.monthYear.width,
     );
     if (monthYearOp) operations.push(monthYearOp);
@@ -263,7 +269,7 @@ export const buildHeaderPrintModel = async (
       "header-year-block",
       header.header.leftEar,
       headerX + geometry.yearBlock.x,
-      geometry.yearBlock.y,
+      frontTopGap + geometry.yearBlock.y,
       geometry.yearBlock.width,
     );
     if (yearOp) operations.push(yearOp);
@@ -272,12 +278,12 @@ export const buildHeaderPrintModel = async (
       "header-volume-block",
       header.header.rightEar,
       headerX + geometry.volumeBlock.x,
-      geometry.volumeBlock.y,
+      frontTopGap + geometry.volumeBlock.y,
       geometry.volumeBlock.width,
     );
     if (volumeOp) operations.push(volumeOp);
   } else if (header.header.kind === "inside" && !isLiveInsideSvg) {
-    const geometry = getInsideHeaderOverlayGeometry(headerWidth, headerHeight, header.header.maskColors);
+    const geometry = getInsideHeaderOverlayGeometry(headerWidth, bannerHeight, header.header.maskColors);
 
     geometry.maskBands.forEach((band, index) => {
       operations.push(rectOp(`header-mask-${index}`, headerX + band.x, band.y, band.width, band.height, band.fill));
