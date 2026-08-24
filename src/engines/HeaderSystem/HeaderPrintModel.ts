@@ -288,11 +288,6 @@ export const buildHeaderPrintModel = async (
   };
 };
 
-const getPrintableImageSource = (source: string) =>
-  source.startsWith("http")
-    ? `/api/print-image?url=${encodeURIComponent(source)}`
-    : source;
-
 const resolveFrontHeaderTeaser = (document: NewspaperDocument, pageId: string, imageOverrideUrl?: string) => {
   const page = document.pages.find((candidate) => candidate.id === pageId);
   if (!page) {
@@ -326,8 +321,20 @@ const resolveFrontHeaderTeaser = (document: NewspaperDocument, pageId: string, i
   // A publisher-picked replacement (see setFrontTeaserImageOverride) wins
   // over the auto-picked photo, but the headline is still the picked
   // story's own -- only the image is ever manually swapped.
+  //
+  // The raw (un-proxied) URL is passed straight through here -- resolving
+  // this SVG's teaserImageUrl (see resolveFrontHeaderSvgSource) already
+  // routes it through /api/print-image and inlines the bytes as a data:
+  // URI, but only when it sees a real "http..." URL to fetch. Pre-wrapping
+  // it here first turned it into a relative /api/print-image?... path,
+  // which fails that check silently -- inlining never ran, so the SVG kept
+  // an un-loadable external reference (a browser will not let an SVG used
+  // as an Image() source fetch its own external sub-resources) and fell
+  // back to the template's blurry placeholder art in the exported PDF,
+  // even though the live preview -- which never pre-wraps the URL --
+  // showed the real photo correctly.
   return {
     headline: picked.headline,
-    imageUrl: getPrintableImageSource(imageOverrideUrl || picked.imageUrl),
+    imageUrl: imageOverrideUrl || picked.imageUrl,
   };
 };
