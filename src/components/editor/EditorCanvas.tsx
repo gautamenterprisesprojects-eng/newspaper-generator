@@ -408,6 +408,71 @@ const redirectToPortalAfterPdfExport = () => {
   }, 4000);
 };
 
+// ─── Small inline icons for the publisher action rail ─────────────────────────
+// Plain inline SVG rather than an icon library dependency -- five glyphs
+// don't justify pulling one in, and this matches how the rest of this file
+// already hand-draws its small UI icons.
+const PublisherHomeIcon = () => (
+  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true">
+    <path
+      d="M4 11.5 12 4l8 7.5M6 10v9a1 1 0 0 0 1 1h3.5v-5.5a1.5 1.5 0 0 1 1.5-1.5v0a1.5 1.5 0 0 1 1.5 1.5V20H17a1 1 0 0 0 1-1v-9"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+const PublisherPreviewIcon = () => (
+  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true">
+    <path
+      d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinejoin="round"
+    />
+    <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.8" />
+  </svg>
+);
+
+const PublisherDownloadIcon = () => (
+  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true">
+    <path
+      d="M12 3v12m0 0 4.5-4.5M12 15 7.5 10.5M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+const PublisherRegenerateIcon = () => (
+  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true">
+    <path
+      d="M4 12a8 8 0 0 1 13.66-5.66M20 12a8 8 0 0 1-13.66 5.66M17 3v4h-4M7 21v-4h4"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+const PublisherNextPageIcon = () => (
+  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true">
+    <path
+      d="M6 4h8l4 4v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinejoin="round"
+    />
+    <path d="M13 4v4h4" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+    <path d="M9.5 14.5h5m0 0-2-2m2 2-2 2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
 const getPortalLaunchParam = (name: string) => {
   if (typeof window === "undefined") {
     return "";
@@ -6453,11 +6518,23 @@ export function EditorCanvas() {
         <section className="publisher-focused-actions" aria-label="Page actions">
           <button
             type="button"
+            className="publisher-action-button home"
+            onClick={() => {
+              const url = getPortalReturnUrl();
+              if (url) window.location.href = url;
+            }}
+          >
+            <PublisherHomeIcon />
+            <span>होम</span>
+          </button>
+          <button
+            type="button"
             className="publisher-action-button"
             onClick={() => void openPagePreview()}
             disabled={pagePreview?.status === "loading"}
           >
-            प्रीव्यू
+            <PublisherPreviewIcon />
+            <span>प्रीव्यू</span>
           </button>
           <button
             type="button"
@@ -6468,10 +6545,13 @@ export function EditorCanvas() {
             {pdfExporting ? (
               <>
                 <span className="publisher-button-loader" aria-hidden="true" />
-                PDF बन रहा है
+                <span>PDF बन रहा है</span>
               </>
             ) : (
-              "PDF डाउनलोड"
+              <>
+                <PublisherDownloadIcon />
+                <span>PDF डाउनलोड</span>
+              </>
             )}
           </button>
           <button
@@ -6479,14 +6559,16 @@ export function EditorCanvas() {
             className="publisher-action-button"
             onClick={openGenerationWizard}
           >
-            रीजनरेट पेज
+            <PublisherRegenerateIcon />
+            <span>रीजनरेट पेज</span>
           </button>
           <button
             type="button"
             className="publisher-action-button primary"
             onClick={openNextPagePicker}
           >
-            अगला पेज बनाएं
+            <PublisherNextPageIcon />
+            <span>अगला पेज बनाएं</span>
           </button>
         </section>
       </div>
