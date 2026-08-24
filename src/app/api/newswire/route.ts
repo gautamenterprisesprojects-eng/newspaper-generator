@@ -655,52 +655,61 @@ export async function GET(request: Request) {
     // unused, last-24h subset from, not just the top N by recency.
     upstreamUrl.searchParams.set("limit", "50");
 
-    try {
-      const response = await fetchGautamJson(upstreamUrl, getGautamEnglishApiKey());
-      const payload = response.payload as {
-        success?: boolean;
-        data?: DeliveryRecord[];
-        error?: unknown;
-      } | null;
+    // The upstream has genuine latency spikes into the high-teens/30s range
+    // on an otherwise-healthy endpoint -- confirmed live, the "National"
+    // category alone timing out at exactly the 30s per-attempt budget while
+    // every other English category returned in a couple of seconds. The
+    // Hindi/default path already gives a jittery upstream a second attempt
+    // for the same reason (see UPSTREAM_MAX_ATTEMPTS above); this English
+    // path had none, so a single slow response failed the request outright.
+    const GAUTAM_ENGLISH_MAX_ATTEMPTS = 2;
+    let lastErrorMessage = "English news API request failed.";
+    let lastErrorStatus = 502;
 
-      if (!response.ok || payload?.success === false || !Array.isArray(payload?.data)) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: getString(payload?.error) || `English news API failed with ${response.status}`,
-          },
-          { status: response.ok ? 502 : response.status || 502 },
+    for (let attempt = 1; attempt <= GAUTAM_ENGLISH_MAX_ATTEMPTS; attempt += 1) {
+      try {
+        const response = await fetchGautamJson(upstreamUrl, getGautamEnglishApiKey());
+        const payload = response.payload as {
+          success?: boolean;
+          data?: DeliveryRecord[];
+          error?: unknown;
+        } | null;
+
+        if (!response.ok || payload?.success === false || !Array.isArray(payload?.data)) {
+          lastErrorMessage = getString(payload?.error) || `English news API failed with ${response.status}`;
+          lastErrorStatus = response.ok ? 502 : response.status || 502;
+          continue;
+        }
+
+        const records = await selectFreshUnusedRandom(
+          payload.data
+            .filter((record) => recordMatchesRequestedCategory(record, category))
+            .filter((record) => recordPassesCategoryContentGuard(record, category))
+            .map((record) => normalizeDeliveryRecord(record, category, requestedLanguage)),
+          limit,
         );
+
+        return NextResponse.json({
+          success: true,
+          data: records,
+          meta: {
+            category,
+            upstreamCategory,
+            language: "english",
+            count: records.length,
+            baseUrl: GAUTAM_ENGLISH_API_BASE_URL,
+          },
+        });
+      } catch (error) {
+        lastErrorMessage = error instanceof Error ? error.message : "English news API request failed.";
+        lastErrorStatus = 502;
       }
-
-      const records = await selectFreshUnusedRandom(
-        payload.data
-          .filter((record) => recordMatchesRequestedCategory(record, category))
-          .filter((record) => recordPassesCategoryContentGuard(record, category))
-          .map((record) => normalizeDeliveryRecord(record, category, requestedLanguage)),
-        limit,
-      );
-
-      return NextResponse.json({
-        success: true,
-        data: records,
-        meta: {
-          category,
-          upstreamCategory,
-          language: "english",
-          count: records.length,
-          baseUrl: GAUTAM_ENGLISH_API_BASE_URL,
-        },
-      });
-    } catch (error) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: error instanceof Error ? error.message : "English news API request failed.",
-        },
-        { status: 502 },
-      );
     }
+
+    return NextResponse.json(
+      { success: false, error: lastErrorMessage },
+      { status: lastErrorStatus },
+    );
   }
 
   if (!apiKey) {
