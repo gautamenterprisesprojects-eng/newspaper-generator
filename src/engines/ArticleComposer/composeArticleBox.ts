@@ -4141,6 +4141,13 @@ function composeArticleBoxPass(
           sourceHeight,
           frameWidth: imageRect?.width ?? 1,
           frameHeight: imageRect?.height ?? 1,
+          // A dead-centre vertical crop (the default 0.5) cuts evenly off
+          // the top and bottom -- for a typical news photo, where the
+          // subject's head/face sits in the upper half, that reads as the
+          // top of the subject being cut off. Biasing the focal point
+          // upward keeps more of the top and crops more from the bottom
+          // instead.
+          focalPointY: 0.3,
         })
       : null;
 

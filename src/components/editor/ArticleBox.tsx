@@ -185,6 +185,10 @@ const RemoteStoryImage = memo(function RemoteStoryImage({
           sourceHeight: image.height,
           frameWidth: width,
           frameHeight: height,
+          // Matches composeArticleBox.ts's own bias -- a dead-centre crop
+          // cuts evenly off top and bottom, which reads as the subject's
+          // head being cut off for a typical news photo.
+          focalPointY: 0.3,
         });
   const containScale = fit === "contain" ? Math.min(width / image.width, height / image.height) : 1;
   const renderWidth = fit === "contain" ? image.width * containScale : width;

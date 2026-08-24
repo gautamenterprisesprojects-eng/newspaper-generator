@@ -3173,6 +3173,9 @@ export function EditorCanvas() {
                 sourceHeight: imgNaturalH,
                 frameWidth: layout.image.width,
                 frameHeight: layout.image.height,
+                // Matches composeArticleBox.ts's own bias -- keeps the top
+                // of the subject from being cut off by a dead-centre crop.
+                focalPointY: 0.3,
               });
 
           context.drawImage(
@@ -3612,6 +3615,9 @@ export function EditorCanvas() {
               sourceHeight: floatImage.naturalHeight || floatImage.height,
               frameWidth: frame.width,
               frameHeight: frame.height,
+              // Matches composeArticleBox.ts's own bias -- keeps the top of
+              // the subject from being cut off by a dead-centre crop.
+              focalPointY: 0.3,
             });
 
             context.save();

@@ -1128,6 +1128,9 @@ const drawArticle = ({
             sourceHeight: sourceH,
             frameWidth: frameW,
             frameHeight: frameH,
+            // Matches composeArticleBox.ts's own bias -- keeps the top of
+            // the subject from being cut off by a dead-centre crop.
+            focalPointY: 0.3,
           });
 
       const scaledW = sourceW * crop.scale;
