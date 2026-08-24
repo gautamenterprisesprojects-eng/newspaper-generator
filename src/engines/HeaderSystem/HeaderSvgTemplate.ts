@@ -560,6 +560,166 @@ const inlineRemoteImage = async (url: string): Promise<string | undefined> => {
 };
 
 /**
+ * Named-layer lookup -- the long-term replacement for guessing a field from
+ * its content shape. A publisher's own SVG export preserves each text
+ * layer's *name* as the id of the `<g>` wrapping it (Illustrator/Figma both
+ * do this for a plain-ASCII, no-space layer name), so a designer who names
+ * their layers from the fixed vocabulary below (see the publisher-facing
+ * naming guide) gets deterministic matching -- no ambiguity between two
+ * numbers, no risk of a differently-positioned field (date on the right in
+ * one publisher's design, the left or centre in another's) being
+ * misread, since position and content shape never enter into it.
+ *
+ * Only ever the FIRST check for a brand-new file: every existing publisher
+ * template (the two pinned Cliff News files, Akhand Doot, Sach Express,
+ * Hindi Ke Fool, The Adage Times) was inspected and none of their actual
+ * layer ids collide with this vocabulary, so this can't change anything
+ * already working -- and resolveFrontHeaderSvgSource/
+ * resolveInsideHeaderSvgSource only take this path at all when the file has
+ * at least one recognised name, falling through to today's per-file/generic
+ * logic otherwise.
+ */
+const FRONT_NAMED_FIELDS = ["place", "day", "date", "ank"] as const;
+const INSIDE_NAMED_FIELDS = ["place", "day", "date", "pagenumber", "category"] as const;
+
+type NamedTextElement = {
+  fullMatch: string;
+  openTag: string;
+  body: string;
+  closeTag: string;
+  layerName: string | null;
+};
+
+/** Strips a duplicate-name suffix a design tool adds when two layers share a name (Illustrator: "place_2_", "place2", ...) so both still match the same known field. */
+const normalizeLayerName = (rawId: string): string => rawId.trim().toLowerCase().replace(/[_\d]+$/, "");
+
+/**
+ * Walks the SVG linearly, tracking which `<g id="...">` each `<text>`
+ * element sits inside (its innermost NAMED ancestor group), without a full
+ * XML parser -- safe here because the only structural facts this needs are
+ * "which g's are currently open" and "what was the nearest one's id",
+ * both of which a simple open/close stack over a tag-boundary scan gives
+ * for free, same trust level the rest of this file already places in
+ * regex-over-raw-SVG-text (see the module's own doc comment above).
+ */
+const scanNamedTextElements = (svgText: string): NamedTextElement[] => {
+  const tagPattern = /<g\b[^>]*>|<\/g>|<text\b[^>]*>[\s\S]*?<\/text>/g;
+  const gIdPattern = /\bid="([^"]*)"/;
+  const textSplitPattern = /^(<text\b[^>]*>)([\s\S]*?)(<\/text>)$/;
+  const stack: Array<string | null> = [];
+  const results: NamedTextElement[] = [];
+  let match: RegExpExecArray | null;
+
+  while ((match = tagPattern.exec(svgText))) {
+    const token = match[0];
+    if (token === "</g>") {
+      stack.pop();
+      continue;
+    }
+    if (token.startsWith("<g")) {
+      const idMatch = token.match(gIdPattern);
+      stack.push(idMatch ? normalizeLayerName(idMatch[1]) : null);
+      continue;
+    }
+    const parts = token.match(textSplitPattern);
+    if (!parts) {
+      continue;
+    }
+    let layerName: string | null = null;
+    for (let i = stack.length - 1; i >= 0; i -= 1) {
+      if (stack[i]) {
+        layerName = stack[i];
+        break;
+      }
+    }
+    results.push({ fullMatch: token, openTag: parts[1], body: parts[2], closeTag: parts[3], layerName });
+  }
+
+  return results;
+};
+
+const applyNamedTextSubstitution = (
+  svgText: string,
+  elements: NamedTextElement[],
+  resolve: (fieldName: string, element: NamedTextElement) => string | null,
+): string => {
+  let result = svgText;
+  for (const element of elements) {
+    if (!element.layerName) {
+      continue;
+    }
+    const replacementBody = resolve(element.layerName, element);
+    if (replacementBody === null) {
+      continue;
+    }
+    const replacement = `${element.openTag}${replacementBody}${element.closeTag}`;
+    result = result.replace(element.fullMatch, replacement);
+  }
+  return result;
+};
+
+/** Zero-pads a live digit string to match the original field's own digit width (a "08"-style field shouldn't suddenly read as a bare "8"). */
+const padToOriginalWidth = (original: string, digits: string): string => {
+  const originalDigits = original.replace(/\D/g, "");
+  return originalDigits.length > digits.length ? digits.padStart(originalDigits.length, "0") : digits;
+};
+
+export const applyNamedFrontHeaderDynamicValues = (svgText: string, values: FrontHeaderDynamicValues): string | null => {
+  const elements = scanNamedTextElements(svgText);
+  const hasAnyKnownName = elements.some((el) => el.layerName && (FRONT_NAMED_FIELDS as readonly string[]).includes(el.layerName));
+  if (!hasAnyKnownName) {
+    return null;
+  }
+
+  const dateParts = frontLiveDateParts(values);
+  const ankDigits = firstAsciiNumber(values.volume);
+
+  return applyNamedTextSubstitution(svgText, elements, (fieldName, element) => {
+    const original = stripXmlTags(element.body);
+    switch (fieldName) {
+      case "place":
+        return values.place ? wrapReplacementPreservingTspanStyle(element.body, values.place) : null;
+      case "day":
+      case "date":
+        return original ? wrapReplacementPreservingTspanStyle(element.body, substituteDateWords(original, dateParts)) : null;
+      case "ank":
+        return ankDigits ? wrapReplacementPreservingTspanStyle(element.body, padToOriginalWidth(original, ankDigits)) : null;
+      default:
+        return null;
+    }
+  });
+};
+
+export const applyNamedInsideHeaderDynamicValues = (svgText: string, values: InsideHeaderDynamicValues): string | null => {
+  const elements = scanNamedTextElements(svgText);
+  const hasAnyKnownName = elements.some((el) => el.layerName && (INSIDE_NAMED_FIELDS as readonly string[]).includes(el.layerName));
+  if (!hasAnyKnownName) {
+    return null;
+  }
+
+  const dateParts = insideLiveDateParts(values.placeAndDate);
+  const city = values.placeAndDate.split(",")[0]?.trim() ?? "";
+  const pageNumberDigits = firstAsciiNumber(values.pageNumber);
+
+  return applyNamedTextSubstitution(svgText, elements, (fieldName, element) => {
+    const original = stripXmlTags(element.body);
+    switch (fieldName) {
+      case "place":
+        return city ? wrapReplacementPreservingTspanStyle(element.body, city) : null;
+      case "day":
+      case "date":
+        return original ? wrapReplacementPreservingTspanStyle(element.body, substituteDateWords(original, dateParts)) : null;
+      case "pagenumber":
+        return pageNumberDigits ? wrapReplacementPreservingTspanStyle(element.body, padToOriginalWidth(original, pageNumberDigits)) : null;
+      case "category":
+        return values.category ? wrapReplacementPreservingTspanStyle(element.body, values.category) : null;
+      default:
+        return null;
+    }
+  });
+};
+
+/**
  * Given a live SVG template URL and today's real values, returns a
  * `data:image/svg+xml;base64,...` URL with the fields substituted — usable
  * anywhere a plain image URL is (Konva `Image`, canvas `drawImage`, `<img>`),
@@ -587,19 +747,27 @@ export const resolveFrontHeaderSvgSource = async (
     }
   }
 
+  // A file whose own layer names match the publisher-facing naming guide
+  // (place/day/date/ank) wins over every other path, named or positional --
+  // deterministic beats guessed, always. Every existing template was
+  // checked and none collide with this vocabulary, so this can only ever
+  // activate for a new file actually built to the convention.
+  const namedResult = applyNamedFrontHeaderDynamicValues(rawSvg, resolvedValues);
+
   // Only the two pinned Cliff News template files have a known, hand-measured
   // <text> document order (see the module doc comment above) -- any other
   // publisher's own upload (including a `.svg`-suffixed file hosted the way
   // Akhand Doot's is, not just a data: URL) goes through the generic,
   // content-based matcher instead of guessing at a position that was never
   // confirmed for that file.
-  const patchedSvg = isAkhand
-    ? applyAkhandFrontHeaderDynamicValues(rawSvg, resolvedValues)
-    : templateUrl === FRONT_HEADER_BANNER_SOURCE
-      ? applyFrontHeaderDynamicValues(rawSvg, resolvedValues)
-      : isHindiKeFoolHeaderUrl(templateUrl)
-        ? applyHindiKeFoolFrontHeaderDynamicValues(rawSvg, resolvedValues)
-        : applyGenericFrontHeaderDynamicValues(rawSvg, resolvedValues);
+  const patchedSvg = namedResult
+    ?? (isAkhand
+      ? applyAkhandFrontHeaderDynamicValues(rawSvg, resolvedValues)
+      : templateUrl === FRONT_HEADER_BANNER_SOURCE
+        ? applyFrontHeaderDynamicValues(rawSvg, resolvedValues)
+        : isHindiKeFoolHeaderUrl(templateUrl)
+          ? applyHindiKeFoolFrontHeaderDynamicValues(rawSvg, resolvedValues)
+          : applyGenericFrontHeaderDynamicValues(rawSvg, resolvedValues));
   return `data:image/svg+xml;base64,${utf8ToBase64(patchedSvg)}`;
 };
 
@@ -608,15 +776,19 @@ export const resolveInsideHeaderSvgSource = async (
   values: InsideHeaderDynamicValues,
 ): Promise<string> => {
   const rawSvg = await fetchSvgText(templateUrl);
-  const patchedSvg = isAkhandDootHeaderUrl(templateUrl)
-    ? applyAkhandInsideHeaderDynamicValues(rawSvg, values)
-    : isAdageInsideHeaderUrl(templateUrl)
-      ? applyPageNumberOnlyInsideHeaderDynamicValues(rawSvg, values)
-      : isHindiKeFoolHeaderUrl(templateUrl)
-        ? applyHindiKeFoolInsideHeaderDynamicValues(rawSvg, values)
-        : templateUrl === INSIDE_HEADER_BANNER_SOURCE
-          ? applyInsideHeaderDynamicValues(rawSvg, values)
-          : applyGenericInsideHeaderDynamicValues(rawSvg, values);
+  // Same named-layer priority as the front header -- see
+  // applyNamedFrontHeaderDynamicValues's own comment.
+  const namedResult = applyNamedInsideHeaderDynamicValues(rawSvg, values);
+  const patchedSvg = namedResult
+    ?? (isAkhandDootHeaderUrl(templateUrl)
+      ? applyAkhandInsideHeaderDynamicValues(rawSvg, values)
+      : isAdageInsideHeaderUrl(templateUrl)
+        ? applyPageNumberOnlyInsideHeaderDynamicValues(rawSvg, values)
+        : isHindiKeFoolHeaderUrl(templateUrl)
+          ? applyHindiKeFoolInsideHeaderDynamicValues(rawSvg, values)
+          : templateUrl === INSIDE_HEADER_BANNER_SOURCE
+            ? applyInsideHeaderDynamicValues(rawSvg, values)
+            : applyGenericInsideHeaderDynamicValues(rawSvg, values));
   return `data:image/svg+xml;base64,${utf8ToBase64(patchedSvg)}`;
 };
 
