@@ -279,7 +279,15 @@ export function PageHeader({
   frontHeaderTeaser = null,
   onRequestFrontTeaserReplace,
 }: PageHeaderProps) {
-  const width = toPoints(pageMaster.width);
+  // The masthead/folio banner used to bleed edge-to-edge (x=0, full page
+  // width) while every body column below it sits inset by the page's own
+  // content margins -- confirmed live, that left/right mismatch reads as a
+  // visible gap between the header's own edge text and the columns below.
+  // Aligning the header to the same content box the body already uses
+  // fixes it for every publisher at once, not just whichever one's own
+  // artwork made the gap obvious.
+  const headerX = toPoints(pageMaster.contentX);
+  const headerWidth = toPoints(pageMaster.contentWidth);
 
   // A managed header set wins when one is active; otherwise the band comes from
   // the page kind — the ~6.1cm masthead on a front page, the ~1.9cm folio strip
@@ -349,19 +357,19 @@ export function PageHeader({
 
   return (
     <>
-    <Group listening={false} name="protected-master-header">
+    <Group listening={false} name="protected-master-header" x={headerX}>
       <HeaderBannerImage
         source={liveHeaderBannerSource}
         x={0}
         y={0}
-        width={width}
+        width={headerWidth}
         height={resolvedHeight}
         opacity={0.95}
       />
       {resolvedHeader?.header.kind === "front" && !isLiveHeaderSvgUrl(resolvedHeader.header.headerImageUrl)
         ? (() => {
             const front = resolvedHeader.header;
-            const geometry = getFrontHeaderOverlayGeometry(width, resolvedHeight, front.maskColors);
+            const geometry = getFrontHeaderOverlayGeometry(headerWidth, resolvedHeight, front.maskColors);
 
             return (
               <>
@@ -389,7 +397,7 @@ export function PageHeader({
       {resolvedHeader?.header.kind === "inside" && !isLiveHeaderSvgUrl(resolvedHeader.header.headerImageUrl)
         ? (() => {
             const inside = resolvedHeader.header;
-            const geometry = getInsideHeaderOverlayGeometry(width, resolvedHeight, inside.maskColors);
+            const geometry = getInsideHeaderOverlayGeometry(headerWidth, resolvedHeight, inside.maskColors);
 
             return (
               <>
@@ -412,9 +420,9 @@ export function PageHeader({
     </Group>
     {showFrontTeaserClickTarget ? (
       <Rect
-        x={width * AKHAND_TEASER_IMAGE_BOX_FRACTION.x}
+        x={headerX + headerWidth * AKHAND_TEASER_IMAGE_BOX_FRACTION.x}
         y={resolvedHeight * AKHAND_TEASER_IMAGE_BOX_FRACTION.y}
-        width={width * AKHAND_TEASER_IMAGE_BOX_FRACTION.width}
+        width={headerWidth * AKHAND_TEASER_IMAGE_BOX_FRACTION.width}
         height={resolvedHeight * AKHAND_TEASER_IMAGE_BOX_FRACTION.height}
         fill="transparent"
         onClick={(evt) => onRequestFrontTeaserReplace?.(evt.evt.clientX, evt.evt.clientY)}

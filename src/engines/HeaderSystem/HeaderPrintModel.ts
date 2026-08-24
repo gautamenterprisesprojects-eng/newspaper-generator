@@ -160,6 +160,12 @@ export const buildHeaderPrintModel = async (
 
   const pageWidth = page.masterPage.width * 72;
   const headerHeight = header.reservedHeight;
+  // Matches PageHeader.tsx's own fix: the banner used to bleed edge-to-edge
+  // while the body below sits inset by the page's own content margins,
+  // producing a visible left/right gap between the header's own edge text
+  // and the columns below it in the exported PDF too.
+  const headerX = page.masterPage.contentX * 72;
+  const headerWidth = page.masterPage.contentWidth * 72;
   const headerBannerSource =
     header.header.headerImageUrl ?? getHeaderBannerSource(header.header.kind);
   // A live SVG template's own <text> elements already carry the correct
@@ -194,7 +200,7 @@ export const buildHeaderPrintModel = async (
       : headerBannerSource;
 
   const operations: HeaderPrintOperation[] = [];
-  const headerBannerOp = imageOp("header-banner", resolvedBannerSource, 0, 0, pageWidth, headerHeight);
+  const headerBannerOp = imageOp("header-banner", resolvedBannerSource, headerX, 0, headerWidth, headerHeight);
   if (headerBannerOp) {
     operations.push(headerBannerOp);
   }
@@ -204,16 +210,16 @@ export const buildHeaderPrintModel = async (
   // re-uploading their header image. The masthead nameplate itself is never
   // drawn here — it's part of whichever banner image is showing.
   if (header.header.kind === "front" && !isLiveFrontSvg) {
-    const geometry = getFrontHeaderOverlayGeometry(pageWidth, headerHeight, header.header.maskColors);
+    const geometry = getFrontHeaderOverlayGeometry(headerWidth, headerHeight, header.header.maskColors);
 
     geometry.maskBands.forEach((band, index) => {
-      operations.push(rectOp(`header-mask-${index}`, band.x, band.y, band.width, band.height, band.fill));
+      operations.push(rectOp(`header-mask-${index}`, headerX + band.x, band.y, band.width, band.height, band.fill));
     });
 
     const eyebrowLeftOp = textOp(
       "header-eyebrow-left",
       header.header.eyebrowLeft,
-      geometry.eyebrowLeft.x,
+      headerX + geometry.eyebrowLeft.x,
       geometry.eyebrowLeft.y,
       geometry.eyebrowLeft.width,
     );
@@ -222,7 +228,7 @@ export const buildHeaderPrintModel = async (
     const eyebrowRightOp = textOp(
       "header-eyebrow-right",
       header.header.eyebrowRight,
-      geometry.eyebrowRight.x,
+      headerX + geometry.eyebrowRight.x,
       geometry.eyebrowRight.y,
       geometry.eyebrowRight.width,
     );
@@ -231,7 +237,7 @@ export const buildHeaderPrintModel = async (
     const dateNumberOp = textOp(
       "header-date-number",
       header.header.skyline,
-      geometry.dateNumber.x,
+      headerX + geometry.dateNumber.x,
       geometry.dateNumber.y,
       geometry.dateNumber.width,
     );
@@ -240,7 +246,7 @@ export const buildHeaderPrintModel = async (
     const monthYearOp = textOp(
       "header-month-year",
       header.header.footerLine,
-      geometry.monthYear.x,
+      headerX + geometry.monthYear.x,
       geometry.monthYear.y,
       geometry.monthYear.width,
     );
@@ -249,7 +255,7 @@ export const buildHeaderPrintModel = async (
     const yearOp = textOp(
       "header-year-block",
       header.header.leftEar,
-      geometry.yearBlock.x,
+      headerX + geometry.yearBlock.x,
       geometry.yearBlock.y,
       geometry.yearBlock.width,
     );
@@ -258,22 +264,22 @@ export const buildHeaderPrintModel = async (
     const volumeOp = textOp(
       "header-volume-block",
       header.header.rightEar,
-      geometry.volumeBlock.x,
+      headerX + geometry.volumeBlock.x,
       geometry.volumeBlock.y,
       geometry.volumeBlock.width,
     );
     if (volumeOp) operations.push(volumeOp);
   } else if (header.header.kind === "inside" && !isLiveInsideSvg) {
-    const geometry = getInsideHeaderOverlayGeometry(pageWidth, headerHeight, header.header.maskColors);
+    const geometry = getInsideHeaderOverlayGeometry(headerWidth, headerHeight, header.header.maskColors);
 
     geometry.maskBands.forEach((band, index) => {
-      operations.push(rectOp(`header-mask-${index}`, band.x, band.y, band.width, band.height, band.fill));
+      operations.push(rectOp(`header-mask-${index}`, headerX + band.x, band.y, band.width, band.height, band.fill));
     });
 
     const datelineOp = textOp(
       "header-dateline",
       header.header.right,
-      geometry.dateline.x,
+      headerX + geometry.dateline.x,
       geometry.dateline.y,
       geometry.dateline.width,
     );
