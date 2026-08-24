@@ -321,6 +321,7 @@ export const GET = async (request: Request) => {
       {
         success: false,
         error: error instanceof Error ? error.message : "Failed to load the editorial feed.",
+        debugCause: error instanceof Error ? String((error as { cause?: unknown }).cause) : undefined,
         articles: [],
         rashifal: [],
       },
