@@ -1221,8 +1221,18 @@ function LayoutPickerScreen({
   const selectAndContinue = (layout: (typeof visibleLayouts)[number]) => {
     const requiredCount = getRequiredNewswireStoryCount(state.tab, layout.id, layout.storyCount);
     dispatch({ type: "SET_LAYOUT", layout: layout.id, storyCount: requiredCount });
-    onGenerateStoryLayout(requiredCount);
+    // onGenerateStoryLayout populates real prototype story frames, which the
+    // canvas underneath then recomposes synchronously (real Devanagari text
+    // measurement/wrapping across every box) -- calling it before onContinue
+    // meant the browser couldn't paint the wizard's own screen transition
+    // until that whole recomposition finished, several seconds later, so the
+    // click looked frozen. The front-page picker never hits this because it
+    // doesn't populate story frames at this step at all. Deferring to the
+    // next tick lets onContinue's transition paint first, same snappy feel,
+    // while the (still just as slow) canvas work happens a beat later
+    // instead of blocking it.
     onContinue();
+    setTimeout(() => onGenerateStoryLayout(requiredCount), 0);
   };
 
   return (
