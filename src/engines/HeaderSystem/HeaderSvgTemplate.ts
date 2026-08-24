@@ -836,6 +836,15 @@ export const applyHindiKeFoolFrontHeaderDynamicValues = (
 
 const HINDI_KE_FOOL_CATEGORY_PLACEHOLDER = "catagory";
 
+// The page-number badge's own pennant/ribbon shape, measured directly off
+// this file's rendered pixels (viewBox "0 0 936 56.6"): its fill spans
+// roughly x=867-900, centre x=883. The source file's own "2" sits at a
+// fixed x sized for that one glyph -- a live value with a different digit
+// count (a single "2" vs a two-digit "12") reads off-centre unless
+// re-anchored to the badge's own true centre every time, the same
+// technique already used for The Adage Times' page-number badge.
+const HINDI_KE_FOOL_PAGE_NUMBER_CENTER_X = 883;
+
 /**
  * Hindi Ke Fool's inside header: page number and category update live like
  * the generic matcher, but its city text ("भोपाल") sits right next to the
@@ -859,7 +868,11 @@ export const applyHindiKeFoolInsideHeaderDynamicValues = (
       return match;
     }
     if (pureDigitsPattern.test(original)) {
-      return pageNumberDigits ? `${open}${wrapReplacementPreservingTspanStyle(body, pageNumberDigits)}${close}` : match;
+      if (!pageNumberDigits) {
+        return match;
+      }
+      const centeredOpen = withCenterAnchor(rewriteTransformX(open, HINDI_KE_FOOL_PAGE_NUMBER_CENTER_X));
+      return `${centeredOpen}${wrapReplacementPreservingTspanStyle(body, pageNumberDigits)}${close}`;
     }
     if (namedOrNumericDateContextPattern.test(original)) {
       return `${open}${wrapReplacementPreservingTspanStyle(body, substituteDateWords(original, dateParts))}${close}`;
