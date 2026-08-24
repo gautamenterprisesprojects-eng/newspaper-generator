@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import https from "node:https";
+import http from "node:http";
 
 /**
  * Editorial-page feed.
@@ -105,9 +106,14 @@ type NewswireHealthStory = {
 // pool.
 const freshAgent = new https.Agent({ keepAlive: false });
 
+// fetchHealthFromNewswire below calls this app's own /api/newswire route,
+// which is plain http:// in local dev (no TLS involved, and no reason to
+// force one) -- only https URLs go through the fresh-agent fix.
 const requestJsonOnce = (url: string, headers: Record<string, string>): Promise<{ status: number; ok: boolean; body: unknown }> =>
   new Promise((resolve, reject) => {
-    const request = https.request(url, { method: "GET", headers, agent: freshAgent }, (response) => {
+    const isHttps = url.startsWith("https:");
+    const transport = isHttps ? https : http;
+    const request = transport.request(url, { method: "GET", headers, ...(isHttps ? { agent: freshAgent } : {}) }, (response) => {
       const chunks: Buffer[] = [];
       response.on("data", (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
       response.on("end", () => {
@@ -301,8 +307,14 @@ const fetchHealthFromNewswire = async (request: Request): Promise<UpstreamEditor
   url.searchParams.set("language", "hindi");
   url.searchParams.set("limit", "1");
 
-  const response = await fetch(url, { cache: "no-store" });
-  const payload = await response.json().catch(() => null) as {
+  // A same-origin self-call, but still routed out through the public domain
+  // and back in -- confirmed live it's just as exposed to the same
+  // concurrent-load TLS failure as the two genuinely-external upstream
+  // calls above (this was the actual remaining source of "fetch failed"
+  // after those two were already fixed), so it goes through the same
+  // fresh-agent fetchJson rather than the global fetch().
+  const response = await fetchJson(url.toString(), { accept: "application/json" }).catch(() => ({ ok: false, status: 0, body: null }));
+  const payload = response.body as {
     success?: boolean;
     data?: NewswireHealthStory[];
   } | null;
