@@ -192,16 +192,6 @@ export const buildHeaderPrintModel = async (
         }).catch(() => headerBannerSource)
       : headerBannerSource;
 
-  // TEMP DEBUG
-  if (typeof window !== "undefined") {
-    (window as unknown as { __pdfHeaderDebug?: unknown }).__pdfHeaderDebug = {
-      teaserHeadline: frontHeaderTeaser?.headline,
-      teaserImageUrl: frontHeaderTeaser?.imageUrl,
-      resolvedBannerSourceLength: resolvedBannerSource.length,
-      resolvedBannerSourcePrefix: resolvedBannerSource.slice(0, 60),
-    };
-  }
-
   const operations: HeaderPrintOperation[] = [];
   const headerBannerOp = imageOp("header-banner", resolvedBannerSource, 0, 0, pageWidth, headerHeight);
   if (headerBannerOp) {
