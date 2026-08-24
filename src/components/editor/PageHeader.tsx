@@ -316,6 +316,7 @@ export function PageHeader({
           category: resolvedHeader.header.left.text,
           placeAndDate: resolvedHeader.header.right.text,
           pageNumber: String(resolvedHeader.pageNumber),
+          publicationName: resolvedHeader.header.center.text,
         }
       : null;
   // Both hooks must run every render regardless of the early return below

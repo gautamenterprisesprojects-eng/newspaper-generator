@@ -11,14 +11,18 @@
  * HeaderPrintModel.ts skipping the overlay/mask draw whenever
  * `headerImageUrl` ends in `.svg`).
  *
- * Field identification is positional (document order of `<text>` elements),
- * not by id — these Illustrator exports carry no ids, but do preserve the
- * source PSD's own layer order exactly. Confirmed by direct inspection of
- * front-header-live.svg (six `<text>` elements) and inside-header-live.svg
- * (three). A publisher whose export uses a different tool/order would need
- * this order re-confirmed — this is not a universal, self-describing
- * contract, it's Cliff News's own two files.
+ * Field identification is positional (document order of `<text>` elements)
+ * ONLY for the two pinned Cliff News template files (front-header-live.svg,
+ * six elements; inside-header-live.svg, three) and for Akhand Doot's own
+ * hand-confirmed order — position is not a universal, self-describing
+ * contract, so any OTHER publisher's own upload goes through
+ * applyGenericFrontHeaderDynamicValues/applyGenericInsideHeaderDynamicValues
+ * near the bottom of this file instead, which identify fields by what their
+ * existing content looks like (a date, a weekday, a lone number) rather than
+ * by position.
  */
+
+import { FRONT_HEADER_BANNER_SOURCE, INSIDE_HEADER_BANNER_SOURCE } from "./HeaderGeometry";
 
 export type FrontHeaderDynamicValues = {
   place: string;
@@ -38,6 +42,8 @@ export type InsideHeaderDynamicValues = {
   /** "Bhopal,Monday 10 August 2026" — city (set once by the publisher, never changes here) + the day's live day/date/month/year, built by the caller as one string because the source file carries them as a single text layer. */
   placeAndDate: string;
   pageNumber: string;
+  /** Only read by the generic (non-pinned-template) matcher, to avoid overwriting a masthead-name text layer that happens to contain no digits or date -- see applyGenericInsideHeaderDynamicValues. */
+  publicationName?: string;
 };
 
 /** Document order of the six `<text>` elements in front-header-live.svg. */
@@ -51,7 +57,7 @@ const FRONT_FIELD_ORDER: FrontHeaderTemplateField[] = [
 ];
 
 /** Document order of the three `<text>` elements in inside-header-live.svg. */
-const INSIDE_FIELD_ORDER: Array<keyof InsideHeaderDynamicValues> = [
+const INSIDE_FIELD_ORDER: Array<Exclude<keyof InsideHeaderDynamicValues, "publicationName">> = [
   "category",
   "placeAndDate",
   "pageNumber",
@@ -562,9 +568,17 @@ export const resolveFrontHeaderSvgSource = async (
     }
   }
 
+  // Only the two pinned Cliff News template files have a known, hand-measured
+  // <text> document order (see the module doc comment above) -- any other
+  // publisher's own upload (including a `.svg`-suffixed file hosted the way
+  // Akhand Doot's is, not just a data: URL) goes through the generic,
+  // content-based matcher instead of guessing at a position that was never
+  // confirmed for that file.
   const patchedSvg = isAkhand
     ? applyAkhandFrontHeaderDynamicValues(rawSvg, resolvedValues)
-    : applyFrontHeaderDynamicValues(rawSvg, resolvedValues);
+    : templateUrl === FRONT_HEADER_BANNER_SOURCE
+      ? applyFrontHeaderDynamicValues(rawSvg, resolvedValues)
+      : applyGenericFrontHeaderDynamicValues(rawSvg, resolvedValues);
   return `data:image/svg+xml;base64,${utf8ToBase64(patchedSvg)}`;
 };
 
@@ -575,9 +589,137 @@ export const resolveInsideHeaderSvgSource = async (
   const rawSvg = await fetchSvgText(templateUrl);
   const patchedSvg = isAkhandDootHeaderUrl(templateUrl)
     ? applyAkhandInsideHeaderDynamicValues(rawSvg, values)
-    : applyInsideHeaderDynamicValues(rawSvg, values);
+    : templateUrl === INSIDE_HEADER_BANNER_SOURCE
+      ? applyInsideHeaderDynamicValues(rawSvg, values)
+      : applyGenericInsideHeaderDynamicValues(rawSvg, values);
   return `data:image/svg+xml;base64,${utf8ToBase64(patchedSvg)}`;
 };
 
+// A publisher who uploads through the standard profile picker (not the
+// multi-edition file-hosting path Akhand Doot uses) gets their image stored
+// as a base64 `data:` URL, never a `.svg`-suffixed file path -- the suffix
+// check alone silently excluded every such publisher from ever getting the
+// live-template treatment, even when their own export (Illustrator, Figma,
+// ...) is exactly this kind of file with real substitutable <text> layers.
+// A `data:image/svg+xml` URL is unambiguously an SVG regardless of how it's
+// hosted, so it counts too.
 export const isLiveHeaderSvgUrl = (url: string | undefined | null): boolean =>
-  Boolean(url && url.toLowerCase().endsWith(".svg"));
+  Boolean(url && (url.toLowerCase().endsWith(".svg") || url.startsWith("data:image/svg+xml")));
+
+const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+const weekdayPattern = new RegExp(`\\b(${WEEKDAY_NAMES.join("|")})\\b`, "i");
+const namedDatePattern = new RegExp(`\\b(\\d{1,2})[\\s\\-]+(${MONTH_NAMES.join("|")})[\\s\\-]*(\\d{4})\\b`, "i");
+const numericDatePattern = /\b(\d{1,2})([/\-.])(\d{1,2})\2(\d{2,4})\b/;
+const pureDigitsPattern = /^\d{1,4}$/;
+
+type LiveDateParts = { weekday: string; dayOfMonth: string; monthName: string; year: string };
+
+/** Rewrites the date/weekday words found INSIDE an existing text run, leaving every other character (separators, city name, ...) exactly as the publisher's own design has them -- no assumption about overall format. */
+const substituteDateWords = (text: string, live: LiveDateParts): string => {
+  let result = text;
+  if (live.dayOfMonth && live.monthName && live.year) {
+    result = result.replace(namedDatePattern, `${live.dayOfMonth} ${live.monthName} ${live.year}`);
+    result = result.replace(numericDatePattern, (_match, d: string, sep: string, m: string, y: string) => {
+      const monthIndex = MONTH_NAMES.findIndex((name) => name.toLowerCase() === live.monthName.toLowerCase());
+      const monthNum = monthIndex >= 0 ? String(monthIndex + 1) : m;
+      const day = d.length >= 2 ? live.dayOfMonth.padStart(2, "0") : live.dayOfMonth;
+      const month = m.length >= 2 ? monthNum.padStart(2, "0") : monthNum;
+      const year = y.length <= 2 ? live.year.slice(-2) : live.year;
+      return `${day}${sep}${month}${sep}${year}`;
+    });
+  }
+  if (live.weekday) {
+    result = result.replace(weekdayPattern, live.weekday);
+  }
+  return result;
+};
+
+/** Front's own dynamic values already carry day/dateNumber/monthYear as separate fields (see FrontHeaderDynamicValues) -- no parsing needed. */
+const frontLiveDateParts = (values: FrontHeaderDynamicValues): LiveDateParts => {
+  const lastSpace = values.monthYear.lastIndexOf(" ");
+  return {
+    weekday: values.day,
+    dayOfMonth: values.dateNumber,
+    monthName: lastSpace >= 0 ? values.monthYear.slice(0, lastSpace).trim() : values.monthYear,
+    year: lastSpace >= 0 ? values.monthYear.slice(lastSpace + 1).trim() : "",
+  };
+};
+
+/** Inside's `placeAndDate` is already one combined "{{city}},{{day}} {{dayOfMonth}} {{monthYear}}"-shaped string (see HeaderDefaults.ts) -- the same date/weekday patterns used to find date text in a publisher's own SVG also find the live values inside this string, so no separate fields need to be threaded through the resolver just for this. */
+const insideLiveDateParts = (placeAndDate: string): LiveDateParts => {
+  const weekdayMatch = placeAndDate.match(weekdayPattern);
+  const namedMatch = placeAndDate.match(namedDatePattern);
+  if (namedMatch) {
+    return { weekday: weekdayMatch?.[1] ?? "", dayOfMonth: namedMatch[1], monthName: namedMatch[2], year: namedMatch[3] };
+  }
+  const numericMatch = placeAndDate.match(numericDatePattern);
+  if (numericMatch) {
+    const monthIndex = Number(numericMatch[3]) - 1;
+    return { weekday: weekdayMatch?.[1] ?? "", dayOfMonth: numericMatch[1], monthName: MONTH_NAMES[monthIndex] ?? "", year: numericMatch[4] };
+  }
+  return { weekday: weekdayMatch?.[1] ?? "", dayOfMonth: "", monthName: "", year: "" };
+};
+
+/**
+ * The non-Akhand, non-default-template fallback for any OTHER publisher's
+ * own live SVG export -- used precisely because such a file's own <text>
+ * document order and count is unknown ahead of time (unlike the two pinned,
+ * hand-measured templates the position-based functions above assume), so
+ * fields are identified by what their EXISTING content looks like instead:
+ * a lone 1-4 digit run is a volume/page-number badge, any text containing a
+ * weekday name and/or a recognisable date is the dateline, and (inside only)
+ * anything else that isn't the masthead name itself is the section/category
+ * strip. Confirmed against a real publisher upload (a 2-text-element front:
+ * a combined "Bhopal,24/08/2026,Monday" dateline + a lone "45" volume badge;
+ * a 4-text-element inside: masthead name + "NATIONAL" category + a combined
+ * "Bhopal,Monday 10 August 2026" dateline + a lone "12" page number).
+ */
+export const applyGenericFrontHeaderDynamicValues = (
+  svgText: string,
+  values: FrontHeaderDynamicValues,
+): string => {
+  const dateParts = frontLiveDateParts(values);
+
+  return svgText.replace(textContentPattern, (match, open: string, body: string, close: string) => {
+    const original = stripXmlTags(body);
+    if (!original) {
+      return match;
+    }
+    if (pureDigitsPattern.test(original)) {
+      return values.volume ? `${open}${escapeXmlText(values.volume)}${close}` : match;
+    }
+    if (weekdayPattern.test(original) || namedDatePattern.test(original) || numericDatePattern.test(original)) {
+      return `${open}${escapeXmlText(substituteDateWords(original, dateParts))}${close}`;
+    }
+    return match;
+  });
+};
+
+export const applyGenericInsideHeaderDynamicValues = (
+  svgText: string,
+  values: InsideHeaderDynamicValues,
+): string => {
+  const dateParts = insideLiveDateParts(values.placeAndDate);
+  const publicationName = values.publicationName?.trim().toLowerCase();
+
+  return svgText.replace(textContentPattern, (match, open: string, body: string, close: string) => {
+    const original = stripXmlTags(body);
+    if (!original) {
+      return match;
+    }
+    if (pureDigitsPattern.test(original)) {
+      return values.pageNumber ? `${open}${escapeXmlText(values.pageNumber)}${close}` : match;
+    }
+    if (weekdayPattern.test(original) || namedDatePattern.test(original) || numericDatePattern.test(original)) {
+      return `${open}${escapeXmlText(substituteDateWords(original, dateParts))}${close}`;
+    }
+    if (publicationName && original.trim().toLowerCase() === publicationName) {
+      return match;
+    }
+    return values.category ? `${open}${escapeXmlText(values.category)}${close}` : match;
+  });
+};

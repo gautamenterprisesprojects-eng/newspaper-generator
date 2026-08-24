@@ -189,6 +189,7 @@ export const buildHeaderPrintModel = async (
           category: header.header.left.text,
           placeAndDate: header.header.right.text,
           pageNumber: String(header.pageNumber),
+          publicationName: header.header.center.text,
         }).catch(() => headerBannerSource)
       : headerBannerSource;
 
