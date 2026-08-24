@@ -163,9 +163,16 @@ export const buildHeaderPrintModel = async (
   // Matches PageHeader.tsx's own fix: the banner used to bleed edge-to-edge
   // while the body below sits inset by the page's own content margins,
   // producing a visible left/right gap between the header's own edge text
-  // and the columns below it in the exported PDF too.
-  const headerX = page.masterPage.contentX * 72;
-  const headerWidth = page.masterPage.contentWidth * 72;
+  // and the columns below it in the exported PDF too. Stretched 1% of the
+  // content width past that aligned edge on each side (per explicit
+  // publisher request, after alignment itself was confirmed correct) --
+  // same HEADER_STRETCH_FRACTION as the Konva preview.
+  const HEADER_STRETCH_FRACTION = 0.01;
+  const contentX = page.masterPage.contentX * 72;
+  const contentWidth = page.masterPage.contentWidth * 72;
+  const headerStretch = contentWidth * HEADER_STRETCH_FRACTION;
+  const headerX = contentX - headerStretch;
+  const headerWidth = contentWidth + headerStretch * 2;
   const headerBannerSource =
     header.header.headerImageUrl ?? getHeaderBannerSource(header.header.kind);
   // A live SVG template's own <text> elements already carry the correct

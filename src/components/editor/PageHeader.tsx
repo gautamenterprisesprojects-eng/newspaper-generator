@@ -286,8 +286,16 @@ export function PageHeader({
   // Aligning the header to the same content box the body already uses
   // fixes it for every publisher at once, not just whichever one's own
   // artwork made the gap obvious.
-  const headerX = toPoints(pageMaster.contentX);
-  const headerWidth = toPoints(pageMaster.contentWidth);
+  // Stretched 1% of the content width past the aligned edge on each side
+  // (per explicit publisher request, after the edge-to-edge bleed above was
+  // fixed to align exactly) -- a deliberate slight overhang rather than a
+  // flush match, still nowhere near the old full-page bleed.
+  const HEADER_STRETCH_FRACTION = 0.01;
+  const contentX = toPoints(pageMaster.contentX);
+  const contentWidth = toPoints(pageMaster.contentWidth);
+  const headerStretch = contentWidth * HEADER_STRETCH_FRACTION;
+  const headerX = contentX - headerStretch;
+  const headerWidth = contentWidth + headerStretch * 2;
 
   // A managed header set wins when one is active; otherwise the band comes from
   // the page kind — the ~6.1cm masthead on a front page, the ~1.9cm folio strip
