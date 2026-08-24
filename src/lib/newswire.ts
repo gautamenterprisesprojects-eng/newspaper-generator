@@ -568,6 +568,14 @@ export const normalizeArticleBodyText = (
     .replace(/\s{2,}/g, " ")
     .trim();
 
+  // 6. Drop a stray leading punctuation mark -- some wire articles arrive
+  // with a leftover separator (a danda, pipe, dash, ...) as the literal
+  // first character, presumably from the source's own dateline/prefix
+  // stripping leaving its trailing punctuation behind. A real sentence
+  // never legitimately starts on bare punctuation, so trimming any
+  // non-letter/non-number run off the front is safe.
+  cleaned = cleaned.replace(/^[^\p{L}\p{N}]+/u, "").trim();
+
   return ensureEndsWithFullStop(cleaned);
 };
 
