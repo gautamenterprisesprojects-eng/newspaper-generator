@@ -1219,33 +1219,20 @@ function LayoutPickerScreen({
   );
 
   const selectAndContinue = (layout: (typeof visibleLayouts)[number]) => {
-    // TEMP DEBUG -- window global instead of console.log since removeConsole
-    // strips console.* from the production bundle at build time.
-    const w = window as unknown as { __wizDebug?: string[] };
-    w.__wizDebug = w.__wizDebug ?? [];
-    const t0 = performance.now();
-    w.__wizDebug.push(`click start ${t0}`);
     const requiredCount = getRequiredNewswireStoryCount(state.tab, layout.id, layout.storyCount);
-    w.__wizDebug.push(`getRequiredNewswireStoryCount done ${performance.now() - t0}`);
     dispatch({ type: "SET_LAYOUT", layout: layout.id, storyCount: requiredCount });
-    w.__wizDebug.push(`dispatch SET_LAYOUT returned (sync) ${performance.now() - t0}`);
     // onGenerateStoryLayout populates real prototype story frames, which the
     // canvas underneath then recomposes synchronously (real Devanagari text
     // measurement/wrapping across every box) -- calling it before onContinue
     // meant the browser couldn't paint the wizard's own screen transition
-    // until that whole recomposition finished, several seconds later, so the
-    // click looked frozen. The front-page picker never hits this because it
-    // doesn't populate story frames at this step at all. Deferring to the
-    // next tick lets onContinue's transition paint first, same snappy feel,
-    // while the (still just as slow) canvas work happens a beat later
-    // instead of blocking it.
+    // until that recomposition finished, so the click looked frozen. The
+    // front-page picker never hits this because it doesn't populate story
+    // frames at this step at all. Deferring to the next tick lets
+    // onContinue's transition paint first, same snappy feel as the front
+    // page, while the canvas work happens a beat later instead of blocking
+    // it. Confirmed live: transition is now instant (0ms) with this order.
     onContinue();
-    w.__wizDebug.push(`onContinue returned (sync) ${performance.now() - t0}`);
-    setTimeout(() => {
-      w.__wizDebug!.push(`deferred onGenerateStoryLayout starting ${performance.now() - t0}`);
-      onGenerateStoryLayout(requiredCount);
-      w.__wizDebug!.push(`deferred onGenerateStoryLayout returned (sync) ${performance.now() - t0}`);
-    }, 0);
+    setTimeout(() => onGenerateStoryLayout(requiredCount), 0);
   };
 
   return (
