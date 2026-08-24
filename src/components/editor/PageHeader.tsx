@@ -368,7 +368,12 @@ export function PageHeader({
   // per explicit publisher request. Scoped to front only: the inside folio
   // strip is much shorter and wasn't asked for this.
   const frontTopGap = headerKind === "front" ? contentX : 0;
-  const bannerHeight = resolvedHeight - frontTopGap;
+  // A separate, smaller gap below the masthead before body content starts
+  // -- also front-only, also per explicit request. Reserved height (where
+  // the body actually begins) is unchanged; only the banner artwork's own
+  // bottom edge pulls up to leave this blank strip.
+  const frontBottomGap = headerKind === "front" ? toPoints(0.05) : 0;
+  const bannerHeight = resolvedHeight - frontTopGap - frontBottomGap;
 
   return (
     <>

@@ -178,7 +178,11 @@ export const buildHeaderPrintModel = async (
   // scoped to front only. The banner's own height shrinks by the same
   // amount so its bottom edge (and the body's start position) don't move.
   const frontTopGap = header.header.kind === "front" ? contentX : 0;
-  const bannerHeight = headerHeight - frontTopGap;
+  // A separate, smaller gap below the masthead before body content starts
+  // -- also front-only, also per explicit request. Reserved height stays
+  // the same; only the banner artwork's own bottom edge pulls up.
+  const frontBottomGap = header.header.kind === "front" ? 0.05 * 72 : 0;
+  const bannerHeight = headerHeight - frontTopGap - frontBottomGap;
   const headerBannerSource =
     header.header.headerImageUrl ?? getHeaderBannerSource(header.header.kind);
   // A live SVG template's own <text> elements already carry the correct
