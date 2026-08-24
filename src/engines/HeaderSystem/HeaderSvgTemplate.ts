@@ -611,29 +611,76 @@ const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
 ];
-const weekdayPattern = new RegExp(`\\b(${WEEKDAY_NAMES.join("|")})\\b`, "i");
-const namedDatePattern = new RegExp(`\\b(\\d{1,2})[\\s\\-]+(${MONTH_NAMES.join("|")})[\\s\\-]*(\\d{4})\\b`, "i");
+// Most publishers on this platform are Hindi-language dailies -- a dateline
+// baked into their own SVG export is just as likely to read "सोमवार 24
+// अगस्त 2026" as "Monday 24 August 2026", so both scripts need to be
+// recognised, not just English (HINDI_DAYS/HINDI_MONTHS are defined above
+// for the Akhand-specific functions but are plain word maps, reusable here).
+const HINDI_DAY_WORDS = Object.values(HINDI_DAYS);
+const HINDI_MONTH_WORDS = Object.values(HINDI_MONTHS);
+const weekdayPattern = new RegExp(`\\b(${WEEKDAY_NAMES.join("|")})\\b|(${HINDI_DAY_WORDS.join("|")})`, "i");
+const monthWordPattern = new RegExp(`\\b(${MONTH_NAMES.join("|")})\\b|(${HINDI_MONTH_WORDS.join("|")})`, "i");
+// A 4-digit run isn't automatically "the year" everywhere it appears (a bare
+// "2026" text node is one), but a genuinely year-shaped one (1900-2099) can
+// be told apart from an unrelated small counter (an issue/volume number)
+// with no other context needed.
+const yearShapedPattern = /\b(19|20)\d{2}\b/;
+const dayOfMonthPattern = /\b\d{1,2}\b/;
+const namedOrNumericDateContextPattern = new RegExp(
+  `(${WEEKDAY_NAMES.join("|")})|(${HINDI_DAY_WORDS.join("|")})|(${MONTH_NAMES.join("|")})|(${HINDI_MONTH_WORDS.join("|")})|(\\d{1,2}[/\\-.]\\d{1,2}[/\\-.]\\d{2,4})`,
+  "i",
+);
 const numericDatePattern = /\b(\d{1,2})([/\-.])(\d{1,2})\2(\d{2,4})\b/;
 const pureDigitsPattern = /^\d{1,4}$/;
 
 type LiveDateParts = { weekday: string; dayOfMonth: string; monthName: string; year: string };
 
-/** Rewrites the date/weekday words found INSIDE an existing text run, leaving every other character (separators, city name, ...) exactly as the publisher's own design has them -- no assumption about overall format. */
+const liveWeekdayForMatch = (matchedWord: string, live: LiveDateParts): string =>
+  HINDI_DAY_WORDS.includes(matchedWord)
+    ? HINDI_DAYS[live.weekday.toLowerCase()] ?? live.weekday
+    : live.weekday;
+
+const liveMonthForMatch = (matchedWord: string, live: LiveDateParts): string =>
+  HINDI_MONTH_WORDS.includes(matchedWord)
+    ? HINDI_MONTHS[live.monthName.toLowerCase()] ?? live.monthName
+    : live.monthName;
+
+/**
+ * Rewrites just the date/weekday/day-of-month/year TOKENS found inside an
+ * existing text run, leaving every other character (separators, city name,
+ * a static "अंक-"/"Volume-" style label the publisher's own artwork already
+ * carries, ...) exactly as designed. Each token is matched and replaced
+ * independently rather than as one combined pattern, because real exports
+ * vary too much in spacing/gluing ("सोमवार24 अगस्त" with no space, "24
+ * अगस्त2026" with no space before the year, "24/08/2026", ...) for a single
+ * fixed shape to cover -- and critically, the year is always replaced FIRST
+ * and via its own distinct 4-digit pattern, so it's never mistaken for (or
+ * mistakenly overwritten by) the separate 1-2 digit day-of-month token.
+ */
 const substituteDateWords = (text: string, live: LiveDateParts): string => {
   let result = text;
-  if (live.dayOfMonth && live.monthName && live.year) {
-    result = result.replace(namedDatePattern, `${live.dayOfMonth} ${live.monthName} ${live.year}`);
-    result = result.replace(numericDatePattern, (_match, d: string, sep: string, m: string, y: string) => {
-      const monthIndex = MONTH_NAMES.findIndex((name) => name.toLowerCase() === live.monthName.toLowerCase());
-      const monthNum = monthIndex >= 0 ? String(monthIndex + 1) : m;
-      const day = d.length >= 2 ? live.dayOfMonth.padStart(2, "0") : live.dayOfMonth;
-      const month = m.length >= 2 ? monthNum.padStart(2, "0") : monthNum;
-      const year = y.length <= 2 ? live.year.slice(-2) : live.year;
-      return `${day}${sep}${month}${sep}${year}`;
-    });
+  result = result.replace(numericDatePattern, (_match, d: string, sep: string, m: string, y: string) => {
+    if (!live.dayOfMonth || !live.monthName || !live.year) {
+      return _match;
+    }
+    const monthIndex = MONTH_NAMES.findIndex((name) => name.toLowerCase() === live.monthName.toLowerCase());
+    const monthNum = monthIndex >= 0 ? String(monthIndex + 1) : m;
+    const day = d.length >= 2 ? live.dayOfMonth.padStart(2, "0") : live.dayOfMonth;
+    const month = m.length >= 2 ? monthNum.padStart(2, "0") : monthNum;
+    const year = y.length <= 2 ? live.year.slice(-2) : live.year;
+    return `${day}${sep}${month}${sep}${year}`;
+  });
+  if (live.year) {
+    result = result.replace(yearShapedPattern, live.year);
   }
   if (live.weekday) {
-    result = result.replace(weekdayPattern, live.weekday);
+    result = result.replace(weekdayPattern, (matched) => liveWeekdayForMatch(matched, live));
+  }
+  if (live.monthName) {
+    result = result.replace(monthWordPattern, (matched) => liveMonthForMatch(matched, live));
+  }
+  if (live.dayOfMonth) {
+    result = result.replace(dayOfMonthPattern, live.dayOfMonth);
   }
   return result;
 };
@@ -649,10 +696,19 @@ const frontLiveDateParts = (values: FrontHeaderDynamicValues): LiveDateParts => 
   };
 };
 
-/** Inside's `placeAndDate` is already one combined "{{city}},{{day}} {{dayOfMonth}} {{monthYear}}"-shaped string (see HeaderDefaults.ts) -- the same date/weekday patterns used to find date text in a publisher's own SVG also find the live values inside this string, so no separate fields need to be threaded through the resolver just for this. */
+// Parses ONLY this app's own server-built combined string (always English --
+// `{{day}}`/`{{monthYear}}` are formatted in English regardless of the
+// publisher's language, see HeaderTokenResolver.ts), so this stays a plain
+// English-only extraction rather than reusing the bilingual scan patterns
+// above (which are for recognising date TEXT ALREADY SITTING in a
+// publisher's own, possibly Hindi, artwork).
+const englishWeekdayPattern = new RegExp(`\\b(${WEEKDAY_NAMES.join("|")})\\b`, "i");
+const englishNamedDatePattern = new RegExp(`\\b(\\d{1,2})[\\s\\-]+(${MONTH_NAMES.join("|")})[\\s\\-]*(\\d{4})\\b`, "i");
+
+/** Inside's `placeAndDate` is already one combined "{{city}},{{day}} {{dayOfMonth}} {{monthYear}}"-shaped string (see HeaderDefaults.ts). */
 const insideLiveDateParts = (placeAndDate: string): LiveDateParts => {
-  const weekdayMatch = placeAndDate.match(weekdayPattern);
-  const namedMatch = placeAndDate.match(namedDatePattern);
+  const weekdayMatch = placeAndDate.match(englishWeekdayPattern);
+  const namedMatch = placeAndDate.match(englishNamedDatePattern);
   if (namedMatch) {
     return { weekday: weekdayMatch?.[1] ?? "", dayOfMonth: namedMatch[1], monthName: namedMatch[2], year: namedMatch[3] };
   }
@@ -678,11 +734,31 @@ const insideLiveDateParts = (placeAndDate: string): LiveDateParts => {
  * a 4-text-element inside: masthead name + "NATIONAL" category + a combined
  * "Bhopal,Monday 10 August 2026" dateline + a lone "12" page number).
  */
+/**
+ * A lone digit run isn't automatically "the volume badge" -- a real export
+ * can carry TWO independent bare numbers (an issue/edition counter AND the
+ * year, e.g. "अंक-101" ... "2026"), and conflating them means the year gets
+ * overwritten with the volume and vice-versa. A year-shaped run (1900-2099)
+ * is always the year; any other lone run is the volume/page-number badge --
+ * substituted with just its digits (`values.volume` here already carries a
+ * baked-in "Volume-" label from this app's own default template, see
+ * HeaderDefaults.ts's rightEar -- stripping down to the digits respects
+ * whatever label the publisher's OWN artwork already has, like "अंक-",
+ * instead of pasting a second, English "Volume-" label over it).
+ */
+const substitutePureDigitField = (original: string, year: string, badgeDigits: string): string | null => {
+  if (year && yearShapedPattern.test(original)) {
+    return year;
+  }
+  return badgeDigits || null;
+};
+
 export const applyGenericFrontHeaderDynamicValues = (
   svgText: string,
   values: FrontHeaderDynamicValues,
 ): string => {
   const dateParts = frontLiveDateParts(values);
+  const volumeDigits = firstAsciiNumber(values.volume);
 
   return svgText.replace(textContentPattern, (match, open: string, body: string, close: string) => {
     const original = stripXmlTags(body);
@@ -690,9 +766,10 @@ export const applyGenericFrontHeaderDynamicValues = (
       return match;
     }
     if (pureDigitsPattern.test(original)) {
-      return values.volume ? `${open}${escapeXmlText(values.volume)}${close}` : match;
+      const next = substitutePureDigitField(original, dateParts.year, volumeDigits);
+      return next ? `${open}${escapeXmlText(next)}${close}` : match;
     }
-    if (weekdayPattern.test(original) || namedDatePattern.test(original) || numericDatePattern.test(original)) {
+    if (namedOrNumericDateContextPattern.test(original)) {
       return `${open}${escapeXmlText(substituteDateWords(original, dateParts))}${close}`;
     }
     return match;
@@ -705,6 +782,7 @@ export const applyGenericInsideHeaderDynamicValues = (
 ): string => {
   const dateParts = insideLiveDateParts(values.placeAndDate);
   const publicationName = values.publicationName?.trim().toLowerCase();
+  const pageNumberDigits = firstAsciiNumber(values.pageNumber);
 
   return svgText.replace(textContentPattern, (match, open: string, body: string, close: string) => {
     const original = stripXmlTags(body);
@@ -712,9 +790,10 @@ export const applyGenericInsideHeaderDynamicValues = (
       return match;
     }
     if (pureDigitsPattern.test(original)) {
-      return values.pageNumber ? `${open}${escapeXmlText(values.pageNumber)}${close}` : match;
+      const next = substitutePureDigitField(original, dateParts.year, pageNumberDigits);
+      return next ? `${open}${escapeXmlText(next)}${close}` : match;
     }
-    if (weekdayPattern.test(original) || namedDatePattern.test(original) || numericDatePattern.test(original)) {
+    if (namedOrNumericDateContextPattern.test(original)) {
       return `${open}${escapeXmlText(substituteDateWords(original, dateParts))}${close}`;
     }
     if (publicationName && original.trim().toLowerCase() === publicationName) {
