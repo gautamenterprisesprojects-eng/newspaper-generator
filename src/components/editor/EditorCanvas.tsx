@@ -3274,6 +3274,28 @@ export function EditorCanvas() {
     }
     drawTextBlockToCanvas(context, layout.byline, story.x, story.y);
 
+    // The drop cap is drawn in the live Konva preview (ArticleBox.tsx) but
+    // was never drawn here -- the export builds its own separate canvas, so
+    // anything not explicitly drawn in both places silently vanishes from
+    // the PDF while still showing on screen. Same simple text style path
+    // the body's own segments already use below, not `drawTextBlockToCanvas`
+    // (that expects a multi-line `lineBoxes` block; a drop cap is one glyph).
+    if (layout.body.dropCap) {
+      const dropCap = layout.body.dropCap;
+      const printableDropCapText = sanitizeCanvasText(dropCap.text);
+      if (printableDropCapText) {
+        applyPrintTextStyle(context, dropCap.style);
+        context.textAlign = "left";
+        const inkShiftY = getDisplayInkShiftY(printableDropCapText, dropCap.style);
+        fillCanvasText(
+          context,
+          printableDropCapText,
+          story.x + dropCap.x,
+          story.y + dropCap.y + inkShiftY,
+        );
+      }
+    }
+
     for (const column of layout.body.columns) {
       for (const line of column.lines) {
         if (line.segments?.length) {
