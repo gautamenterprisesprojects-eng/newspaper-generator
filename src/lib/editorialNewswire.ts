@@ -95,6 +95,8 @@ const RASHIFAL_SLOT_BY_TEMPLATE: Partial<Record<TemplateId, number>> = {
   // Story 3 — the आज का राशिफल block nested in the middle band.
   CliffEditorial8A: 2,
   CliffEditorial9A: 2,
+  // Story 7 — its own 5-column band across the foot of the page.
+  AkhandVicharManthan6A: 6,
 };
 
 export const getRashifalSlotIndex = (templateId: TemplateId) =>

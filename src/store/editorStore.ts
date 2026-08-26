@@ -399,7 +399,69 @@ const PAGE_HEADER_CLEARANCE_PT = 4;
 const NEWS_FILL_WORD_TIER = 1000;
 const NEWS_FILL_MIN_COLUMN_SPAN = 2;
 
+const AKHAND_EDITORIAL_5A_TEMPLATE_ID: TemplateId = "AkhandEditorial5A";
+const AKHAND_EDITORIAL_5A_BOUNDS = {
+  x: 36,
+  y: 46,
+  width: 864,
+  height: 1424,
+};
+const AKHAND_EDITORIAL_5A_SLOT_STYLES: Record<number, { fill: string; border: string; headline: string }> = {
+  1: { fill: "#fff5f2", border: "#cc0010", headline: "#c8102e" },
+  2: { fill: "#fff5cd", border: "#4d4dff", headline: "#155f9d" },
+  3: { fill: "#f9e7fd", border: "#0000ff", headline: "#111111" },
+  4: { fill: "#f3fae9", border: "#ffcc00", headline: "#188038" },
+  5: { fill: "#eff9fc", border: "#cc0010", headline: "#111111" },
+};
+
+const AKHAND_VICHAR_MANTHAN_6A_TEMPLATE_ID: TemplateId = "AkhandVicharManthan6A";
+// Story 1 (मप्र) and 2/5 (the two author-rail pieces) keep the page's plain
+// ground -- only the boxes that print with their own tint on the real page
+// get an entry here. Story 7 (राशिफल, nested into story 6's foot) is left
+// off too: its container is irrelevant once parseRashifalReadings swaps
+// its content for the grid.
+const AKHAND_VICHAR_MANTHAN_6A_SLOT_STYLES: Record<number, { fill: string; border: string; headline: string }> = {
+  3: { fill: "#f6ecd9", border: "#8a1f2b", headline: "#111111" }, // सुनी सुनाई -- cream ground, maroon rule
+  4: { fill: "#ffffff", border: "#231f20", headline: "#111111" }, // नमो घाट + बात मुद्दे की, merged -- plain ink border
+  6: { fill: "#f7dde1", border: "#d9b7c2", headline: "#111111" }, // आध्यात्मिक ज्ञान -- rose ground, no header bar
+};
+const AKHAND_EDITORIAL_IMAGE_PLACEHOLDER_URL =
+  "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22800%22%20height%3D%22520%22%20viewBox%3D%220%200%20800%20520%22%3E%3Crect%20width%3D%22800%22%20height%3D%22520%22%20fill%3D%22%23dfddd6%22%2F%3E%3Crect%20x%3D%2220%22%20y%3D%2220%22%20width%3D%22760%22%20height%3D%22480%22%20fill%3D%22none%22%20stroke%3D%22%23b9b5aa%22%20stroke-width%3D%226%22%2F%3E%3Ctext%20x%3D%22400%22%20y%3D%22278%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20sans-serif%22%20font-size%3D%2256%22%20letter-spacing%3D%228%22%20fill%3D%22%236b665c%22%3EIMAGE%3C%2Ftext%3E%3C%2Fsvg%3E";
+
+const createAkhandEditorialContainerStyle = (fill: string, border: string) => ({
+  mode: "frame" as const,
+  frameMode: "frame" as const,
+  contentHorizontalAlignment: "left" as const,
+  contentVerticalAlignment: "top" as const,
+  minimumFrameHeight: 0,
+  minimumFrameWidth: 0,
+  autoFrameHeight: true,
+  framePaddingTop: 0,
+  framePaddingBottom: 0,
+  framePaddingLeft: 0,
+  framePaddingRight: 0,
+  frameBorderWidth: 0,
+  frameBorderColor: "transparent",
+  frameBorderStyle: "solid" as const,
+  frameBackgroundColor: fill,
+  frameRadius: 0,
+  frameOpacity: 1,
+  containerPaddingTop: 0,
+  containerPaddingBottom: 0,
+  containerPaddingLeft: 0,
+  containerPaddingRight: 0,
+  containerBorderRadius: 5,
+  containerBorderWidth: 1.5,
+  containerBorderColor: border,
+  containerBackgroundColor: fill,
+  containerOpacity: 1,
+});
+
 const getPageKindContentBounds = (pageKind: PageKind | undefined, templateId?: TemplateId) => {
+  if (pageKind === "editorial" && templateId === AKHAND_EDITORIAL_5A_TEMPLATE_ID) {
+    return AKHAND_EDITORIAL_5A_BOUNDS;
+  }
+
   // Every page starts its stories below whatever band its header occupies: the
   // ~6.1cm masthead on a front page, the ~1.9cm folio strip everywhere else.
   //
@@ -3573,8 +3635,14 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         // its 7 real story slots pick up the same cyan theme as the front
         // page's stories.
         const isYouthUpdateInsideStory = isYouthUpdateInsideTemplateId(options?.templateId);
+        const isAkhandEditorial5A = options?.templateId === AKHAND_EDITORIAL_5A_TEMPLATE_ID;
+        const isAkhandVicharManthan6A = options?.templateId === AKHAND_VICHAR_MANTHAN_6A_TEMPLATE_ID;
+        const isAkhandVicharManthanImageSlot =
+          isAkhandVicharManthan6A && [2, 3, 4, 5, 6].includes(slot.storyNumber);
         const youthUpdateInsideCompactSlot = isYouthUpdateInsideStory && slot.columnSpan <= 2;
-        const resolvedImageEnabled = priorityForbidsImage || verySmallImageDenied || youthUpdateInsideCompactSlot
+        const resolvedImageEnabled = isAkhandEditorial5A || isAkhandVicharManthanImageSlot
+          ? true
+          : priorityForbidsImage || verySmallImageDenied || youthUpdateInsideCompactSlot
           ? false
           : isProfessional10A
             ? imageAllowed && (Boolean(item?.imageUrl) || hasAnyNewswireImage)
@@ -3627,6 +3695,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
                 // is keyed off the slot, not off whether a name happens to be
                 // present.
                 storyNumber: slot.storyNumber,
+                compositionSettings: {
+                  editorialTemplateId: options?.templateId,
+                },
               })
             : null;
         // Page 8 sets a signed comment's photograph exactly ONE text column
@@ -3647,8 +3718,17 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         // `getEditorialTextColumnCount` — a partial column leaves a sliver that
         // the line breaker fills and the justifier then stretches, which is what
         // strung the comment's copy out into isolated words.
-        if (options?.pageKind === "editorial" && isEditorialAuthorSlot(slot.storyNumber)) {
-          resolvedColumnCount = getEditorialTextColumnCount(slot.columnSpan);
+        if (options?.pageKind === "editorial" && isEditorialAuthorSlot(slot.storyNumber, options?.templateId)) {
+          resolvedColumnCount =
+            isAkhandEditorial5A && slot.storyNumber === 4
+              ? Math.max(3, Math.min(slot.columnSpan, 4))
+              // Same pixel width as story 2 (both columnStart 2, columnSpan 4),
+              // but the printed page sets this one's copy in 3 columns instead
+              // of 4 -- the whole reason this template exists. See
+              // AKHAND_VICHAR_MANTHAN_6A's doc comment in TemplateRegistry.ts.
+              : isAkhandVicharManthan6A && (slot.storyNumber === 2 || slot.storyNumber === 5)
+                ? 3
+                : getEditorialTextColumnCount(slot.columnSpan);
         }
         if (isYouthUpdateShortNewsSlot) {
           resolvedColumnCount = 1;
@@ -3665,8 +3745,28 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           y: slot.y,
           width: slot.width,
           height: slot.height,
+          ...(isAkhandEditorial5A && slot.storyNumber === 4
+            ? {
+                headlineFontSize: Math.max(18, getDefaultStoryTypographySettings(slot.priority).headlineFontSize - 16),
+                headlineLineHeight: 0.78,
+                headlineLineHeightMode: "percentage" as const,
+              }
+            : {}),
+          ...(isAkhandVicharManthan6A && (slot.storyNumber === 2 || slot.storyNumber === 5)
+            ? {
+                headlineFontSize: Math.max(
+                  18,
+                  getDefaultStoryTypographySettings(slot.priority).headlineFontSize -
+                    (slot.storyNumber === 2 ? 16 : 9),
+                ),
+                headlineLineHeight: slot.storyNumber === 2 ? 0.76 : 0.84,
+                headlineLineHeightMode: "percentage" as const,
+              }
+            : {}),
           bodyFontSize:
-            language === "english"
+            isAkhandEditorial5A
+              ? Math.max(8, getDefaultStoryTypographySettings(slot.priority).bodyFontSize - 0.6)
+              : language === "english"
               ? Math.max(8, getDefaultStoryTypographySettings(slot.priority).bodyFontSize - 1)
               : getDefaultStoryTypographySettings(slot.priority).bodyFontSize,
           ...(isYouthUpdateInsideStory
@@ -3722,6 +3822,60 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
                 autoSizeImage: false,
               }
             : {}),
+          ...(isAkhandEditorial5A && resolvedImageEnabled
+            ? {
+                imageAlignment: "top-center" as const,
+                imageColumnSpan: Math.min(slot.columnSpan, slot.columnSpan >= 4 ? 2 : 1) as StoryColumnSpan,
+                imageHeight:
+                  slot.storyNumber === 1
+                    ? 210
+                    : slot.storyNumber === 2
+                      ? 176
+                    : slot.storyNumber === 4
+                      ? 165
+                      : slot.storyNumber === 5
+                        ? 156
+                      : slot.columnSpan === 1
+                        ? 150
+                        : 118,
+                imageHeightMode: "fixed" as const,
+                autoSizeImage: false,
+                imageWrapMode: slot.columnSpan >= 4 ? ("rectangular" as const) : ("none" as const),
+              }
+            : {}),
+          // Stories 2 (मुख्य संपादकीय) and 5 (गांधी) mirror AkhandEditorial5A's
+          // own story 1 and story 4 exactly -- both are 4-column author-rail
+          // boxes there too, and the printed Vichar-Manthan page places its
+          // photos the same way theirs does: centred across two of the four
+          // columns, not the narrow single-column rail portrait the generic
+          // `authorRail` block above would otherwise give them.
+          ...(isAkhandVicharManthan6A && (slot.storyNumber === 2 || slot.storyNumber === 5) && resolvedImageEnabled
+            ? {
+                imageAlignment: "top-center" as const,
+                imageColumnSpan: Math.min(slot.columnSpan, 2) as StoryColumnSpan,
+                imageHeight: slot.storyNumber === 2 ? 210 : 165,
+                imageHeightMode: "fixed" as const,
+                autoSizeImage: false,
+                imageWrapMode: slot.storyNumber === 2 ? ("none" as const) : ("rectangular" as const),
+              }
+            : {}),
+          // Stories 3 (सुनी सुनाई) and 6 (आध्यात्मिक ज्ञान) each carry one inset
+          // photo in their single narrow column; story 4 (नमो घाट + बात मुद्दे
+          // की, merged) prints its picture larger since the photo is the
+          // box's own lead image, not just an accent. None of these three are
+          // author-rail slots, so the `authorRail` block above never fires for
+          // them -- sized here instead, same pattern as AkhandEditorial5A's
+          // own per-story image block just above.
+          ...(isAkhandVicharManthan6A && resolvedImageEnabled && !authorRail
+            ? {
+                imageAlignment: "top-center" as const,
+                imageColumnSpan: Math.min(slot.columnSpan, 1) as StoryColumnSpan,
+                imageHeight: slot.storyNumber === 4 ? 170 : 90,
+                imageHeightMode: "fixed" as const,
+                autoSizeImage: false,
+                imageWrapMode: "none" as const,
+              }
+            : {}),
           articleData: {
             ...prototypeArticle,
             headline: item?.headline ?? `Article ${slot.storyNumber}`,
@@ -3758,6 +3912,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             // The inside page's own exclusive template carries the same
             // theme (isYouthUpdateInsideStory).
             ...(isYouthUpdateFrontStory || isYouthUpdateInsideStory ? { headlineToBylineExtraGap: 6 } : {}),
+            ...(isAkhandEditorial5A && slot.storyNumber === 4 ? { headlineToBylineExtraGap: 7 } : {}),
+            ...(isAkhandVicharManthan6A && slot.storyNumber === 2 ? { headlineToBylineExtraGap: -2 } : {}),
             // This template's kicker label (the part through the colon)
             // matches the page's own cyan theme instead of the standard
             // kicker red. Narrow/badge kickers ignore this field by design
@@ -3809,6 +3965,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             ...(options?.pageKind === "editorial"
               ? {
                   editorialPageStyle: EDITORIAL_PAGE_ARTICLE_STYLE,
+                  editorialTemplateId: options?.templateId,
+                  // Editorial pages use a house drop cap on every story box.
+                  // The DropCapEngine owns the two-row geometry, so canvas and
+                  // PDF export share the same text flow.
+                  enableDropCap: true,
                   // No white space at the foot of an editorial box: the copy is
                   // justified down to the bottom rule, as the sub-editor sets it.
                   ...EDITORIAL_FILL_TO_FOOT,
@@ -3908,9 +4069,15 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         // over the palette rotation above, which is a news-page device.
         if (
           options?.pageKind === "editorial" &&
-          isEditorialAuthorSlot(slot.storyNumber)
+          isEditorialAuthorSlot(slot.storyNumber, options?.templateId)
         ) {
           finalHeadlineColor = EDITORIAL_COLOURS.accent;
+        }
+        if (isAkhandEditorial5A) {
+          finalHeadlineColor = AKHAND_EDITORIAL_5A_SLOT_STYLES[slot.storyNumber]?.headline ?? finalHeadlineColor;
+        }
+        if (isAkhandVicharManthan6A) {
+          finalHeadlineColor = AKHAND_VICHAR_MANTHAN_6A_SLOT_STYLES[slot.storyNumber]?.headline ?? finalHeadlineColor;
         }
 
         let finalContainerStyles = initialArticleData.containerStyles;
@@ -4011,6 +4178,25 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           isPreviousStoryTinted = false;
         }
         previousVisualStyle = visualStyle;
+
+        if (isAkhandEditorial5A) {
+          const style = AKHAND_EDITORIAL_5A_SLOT_STYLES[slot.storyNumber];
+          if (style) {
+            finalContainerStyles = normalizeContainerStyles({
+              ...initialArticleData.containerStyles,
+              article: createAkhandEditorialContainerStyle(style.fill, style.border),
+            });
+          }
+        }
+        if (isAkhandVicharManthan6A) {
+          const style = AKHAND_VICHAR_MANTHAN_6A_SLOT_STYLES[slot.storyNumber];
+          if (style) {
+            finalContainerStyles = normalizeContainerStyles({
+              ...initialArticleData.containerStyles,
+              article: createAkhandEditorialContainerStyle(style.fill, style.border),
+            });
+          }
+        }
 
         // ── Layout 16 Specific Overrides ────────────────────────────────────
         if (options?.templateId === "Layout16") {
@@ -4147,8 +4333,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           articleData.inlineSubheadingColor = YOUTH_UPDATE_COLORS.wordmarkLight;
         }
 
-        if (options?.pageKind === "editorial" && isEditorialAuthorSlot(slot.storyNumber)) {
-          const authorIndex = slot.storyNumber === 2 ? 1 : 0;
+        if (options?.pageKind === "editorial" && isEditorialAuthorSlot(slot.storyNumber, options?.templateId)) {
+          const authorIndex =
+            options?.templateId === AKHAND_EDITORIAL_5A_TEMPLATE_ID
+              ? slot.storyNumber === 4 ? 1 : 0
+              : slot.storyNumber === 2 ? 1 : 0;
           const authorDefaults =
             options.editorialAuthorSelections?.[authorIndex] ??
             options.editorialAuthorDefaults;
@@ -4309,8 +4498,18 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
       // ── Step 4: Register image assets ──────────────────────────────────────
       const assignedArticles = slotAssignments.map((assignment: any) => assignment.item as NewswireStory);
-      const fallbackImageUrl = assignedArticles.find((a: NewswireStory) => a.imageUrl)?.imageUrl ?? "";
-      const effectiveImageUrls = assignedArticles.map((a: NewswireStory) => a.imageUrl || fallbackImageUrl);
+      const reserveAkhandEditorialImageFields =
+        options?.templateId === AKHAND_EDITORIAL_5A_TEMPLATE_ID ||
+        options?.templateId === AKHAND_VICHAR_MANTHAN_6A_TEMPLATE_ID;
+      const fallbackImageUrl = reserveAkhandEditorialImageFields
+        ? ""
+        : assignedArticles.find((a: NewswireStory) => a.imageUrl)?.imageUrl ?? "";
+      const effectiveImageUrls = assignedArticles.map((a: NewswireStory, index: number) =>
+        a.imageUrl ||
+        (reserveAkhandEditorialImageFields && newStories[index]?.imageEnabled
+          ? AKHAND_EDITORIAL_IMAGE_PLACEHOLDER_URL
+          : fallbackImageUrl),
+      );
       const imageAssets = assignedArticles
         .map((item: NewswireStory, index: number) => createNewswireImageAsset(item, index, effectiveImageUrls[index]))
         .filter((asset): asset is NewspaperAsset => Boolean(asset));
@@ -4374,6 +4573,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             const imageUrl = (storyIndex >= 0 && storyFrame?.imageEnabled) ? effectiveImageUrls[storyIndex] : "";
             const assetId = imageUrl ? assetIdsByUrl.get(imageUrl) ?? null : null;
             const hasValidImage = Boolean(assetId);
+            const allowReservedImageFrame =
+              options?.templateId === AKHAND_EDITORIAL_5A_TEMPLATE_ID &&
+              Boolean(storyFrame?.imageEnabled);
 
             return [
               storyId,
@@ -4392,7 +4594,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
                         autoSizeImage: storyFrame.autoSizeImage,
                       }
                     : {}),
-                  imageEnabled: hasValidImage && storyObject.imageSettings.imageEnabled,
+                  imageEnabled: (hasValidImage || allowReservedImageFrame) && storyObject.imageSettings.imageEnabled,
                 },
               },
             ];

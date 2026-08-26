@@ -2609,12 +2609,36 @@ function composeArticleBoxPass(
       : 0,
   );
 
-  const isLeaderRail = settings.editorialPageStyle && (articleBox as any).templateStoryNumber === 1 && ((articleBox as any).columnCount ?? 1) <= 1;
+  const templateStoryNumber = (articleBox as any).templateStoryNumber;
+  const editorialStoryNumber = Number(templateStoryNumber);
+  const editorialTemplateId = settings.editorialTemplateId;
+  const usesLegacyEditorialFurniture =
+    Boolean(settings.editorialPageStyle) &&
+    (!editorialTemplateId ||
+      editorialTemplateId === "CliffEditorial8A" ||
+      editorialTemplateId === "CliffEditorial9A");
+
+  const isLeaderRail = usesLegacyEditorialFurniture && editorialStoryNumber === 1 && ((articleBox as any).columnCount ?? 1) <= 1;
   if (isLeaderRail) {
     articleData.kicker = {
       ...articleData.kicker,
       enabled: true,
       text: { spans: [{ text: "सम्पादकीय", style: { fontWeight: "bold", fontStyle: "italic" } }] } as any,
+    };
+  }
+  // Vichar-Manthan's two right-rail/left-column boxes each print under a
+  // fixed, recurring section name -- "सुनी सुनाई" and "बात मुद्दे की" -- the
+  // same kind of fixed masthead label isLeaderRail sets above for "सम्पादकीय",
+  // not text derived from whatever the story's own headline happens to be.
+  const isVicharManthanBandKicker =
+    editorialTemplateId === "AkhandVicharManthan6A" && (editorialStoryNumber === 3 || editorialStoryNumber === 4);
+  if (isVicharManthanBandKicker) {
+    articleData.kicker = {
+      ...articleData.kicker,
+      enabled: true,
+      text: {
+        spans: [{ text: editorialStoryNumber === 3 ? "सुनी सुनाई" : "बात मुद्दे की", style: { fontWeight: "bold" } }],
+      } as any,
     };
   }
 
@@ -2632,9 +2656,12 @@ function composeArticleBoxPass(
   // already-built badge layout post hoc (an earlier version of this) left
   // the text's own pre-measured segment widths out of sync with its new
   // font size, silently dropping words instead of just rendering bigger.
-  const isHealthDeskKicker = Boolean(settings.editorialPageStyle && (articleBox as any).templateStoryNumber === 6);
+  const isHealthDeskKicker = Boolean(usesLegacyEditorialFurniture && editorialStoryNumber === 6);
   const isNarrowKicker =
-    !isLeaderRail && !isHealthDeskKicker && ((articleData.badgeKickerEnabled ?? false) && kickerWidthRatio < 0.45 && articleBox.height < 800);
+    !isLeaderRail &&
+    !isHealthDeskKicker &&
+    !isVicharManthanBandKicker &&
+    ((articleData.badgeKickerEnabled ?? false) && kickerWidthRatio < 0.45 && articleBox.height < 800);
   // Extra inset on top of ARTICLE_PADDING.left/right for narrow badge boxes.
   // Kept so their total inset stays 12pt (8 + 4) — unchanged from before the
   // base horizontal padding existed, so the badge layout is unaffected.
@@ -2781,7 +2808,7 @@ function composeArticleBoxPass(
     bodyFontFamily,
   });
   const isEditorialBox2 =
-    Boolean(settings.editorialPageStyle) && (articleBox as any).templateStoryNumber === 2;
+    usesLegacyEditorialFurniture && editorialStoryNumber === 2;
   const headlineStyle = {
     ...editorialStyles.headline,
     ...(isWideBottomFrontPackage
@@ -3256,7 +3283,7 @@ function composeArticleBoxPass(
   // itself would show, not a full "label: content" kicker sentence.
   let trimmedKickerWords = isLeaderRail
     ? [kickerPlainText].filter(Boolean)
-    : isNarrowKicker || isHealthDeskKicker
+    : isNarrowKicker || isHealthDeskKicker || isVicharManthanBandKicker
       ? [kickerLabelWithoutColon].filter(Boolean)
       : kickerAllowedForNonBadge
         ? [kickerLabelWords, ...kickerContentWords].filter(Boolean)
@@ -3265,7 +3292,7 @@ function composeArticleBoxPass(
   // up to the headline's own size (not just 80% of it) so a short kicker can
   // actually reach the target width instead of hitting an artificially low
   // ceiling and leaving white space on the right well before it gets there.
-  const kickerSizeCeiling = isHealthDeskKicker
+  const kickerSizeCeiling = isHealthDeskKicker || isVicharManthanBandKicker
     ? 19
     : isNarrowKicker
       ? 12
@@ -3275,7 +3302,7 @@ function composeArticleBoxPass(
           ? Math.max(8, headlineMetrics.fontSize * 0.7)
           : Math.max(9, headlineMetrics.fontSize * 0.7);
   const baseKickerFontSize = Math.min(
-    isHealthDeskKicker ? 17 : isNarrowKicker ? 11 : isWideBottomFrontPackage ? 13 : KICKER_BASE_FONT_SIZE,
+    isHealthDeskKicker || isVicharManthanBandKicker ? 17 : isNarrowKicker ? 11 : isWideBottomFrontPackage ? 13 : KICKER_BASE_FONT_SIZE,
     kickerSizeCeiling,
   );
   // Only the badge pill carries its own padding — a non-badge kicker has no
@@ -3576,6 +3603,48 @@ function composeArticleBoxPass(
       }),
     };
   }
+  if (kicker && isVicharManthanBandKicker) {
+    // Same colour/weight-only patch as isHealthDeskKicker just above --
+    // width, centring, vertical position and font size already come for
+    // free from the regular (non-badge) kicker path below, since this flag
+    // excludes the box from isNarrowKicker entirely. Story 3's band is
+    // maroon (सुनी सुनाई); story 5's is olive (बात मुद्दे की) -- the printed
+    // page uses two different band colours for its two labelled columns.
+    const bandFill = editorialStoryNumber === 3 ? "#8a1f2b" : "#6b7a3a";
+    const bandText = "#ffffff";
+
+    kicker.fill = bandFill;
+    kicker.stroke = bandFill;
+    kicker.strokeWidth = 0;
+    kicker.cornerRadius = 0;
+    const bandHeight = Math.max(kicker.height, kickerFontSize + 16);
+    kicker.height = bandHeight;
+    kicker.textBlock = {
+      ...kicker.textBlock,
+      y: kicker.y,
+      height: bandHeight,
+      style: {
+        ...kicker.textBlock.style,
+        fill: bandText,
+        fontFamily: getNewspaperFontStack("serif"),
+        fontStyle: "700",
+      },
+      lineBoxes: kicker.textBlock.lineBoxes.map((line) => {
+        const targetLineY = kicker.y + Math.max(0, (bandHeight - line.height) / 2);
+        const deltaY = targetLineY - line.y;
+        return {
+          ...line,
+          y: targetLineY,
+          style: { ...line.style, fill: bandText, fontFamily: getNewspaperFontStack("serif"), fontStyle: "700" },
+          segments: line.segments?.map((segment) => ({
+            ...segment,
+            y: segment.y + deltaY,
+            style: { ...segment.style, fill: bandText, fontFamily: getNewspaperFontStack("serif"), fontStyle: "700" },
+          })),
+        };
+      }),
+    };
+  }
   if (kicker && !isNarrowKicker) {
     if (!isLeaderRail) {
       kicker.x = inset;
@@ -3588,15 +3657,45 @@ function composeArticleBoxPass(
           ...kicker.textBlock.style,
           align: "center",
         },
-        lineBoxes: kicker.textBlock.lineBoxes.map((line) => ({
-          ...line,
-          x: inset + kicker.padding,
-          width: Math.max(1, contentWidth - kicker.padding * 2),
-          style: {
-            ...line.style,
-            align: "center",
-          },
-        })),
+        lineBoxes: kicker.textBlock.lineBoxes.map((line) => {
+          const centeredWidth = Math.max(1, contentWidth - kicker.padding * 2);
+          if (!isVicharManthanBandKicker || !line.segments?.length) {
+            return {
+              ...line,
+              x: inset + kicker.padding,
+              width: centeredWidth,
+              style: {
+                ...line.style,
+                align: "center",
+              },
+            };
+          }
+
+          const segmentStart = line.segments[0]?.x ?? line.x;
+          const segmentEnd = line.segments.reduce(
+            (max, segment) => Math.max(max, segment.x + (segment.renderedWidth ?? segment.measuredWidth ?? segment.width)),
+            segmentStart,
+          );
+          const renderedWidth = Math.max(1, segmentEnd - segmentStart);
+          const targetX = inset + kicker.padding + Math.max(0, (centeredWidth - renderedWidth) / 2);
+          const deltaX = targetX - segmentStart;
+
+          return {
+            ...line,
+            x: targetX,
+            width: centeredWidth,
+            measuredWidth: renderedWidth,
+            renderedWidth,
+            style: {
+              ...line.style,
+              align: "center",
+            },
+            segments: line.segments.map((segment) => ({
+              ...segment,
+              x: segment.x + deltaX,
+            })),
+          };
+        }),
       };
     }
     if (isWideBottomFrontPackage) {
@@ -3983,8 +4082,6 @@ function composeArticleBoxPass(
   // Scaling with the headline size keeps a big headline clear of the byline,
   // but a one-column title is exactly where that reads as a hole. Those boxes
   // take the flat minimum instead.
-  const templateStoryNumber = (articleBox as any).templateStoryNumber;
-  const editorialStoryNumber = Number(templateStoryNumber);
   const editorialHeadlineBottomGap =
     settings.editorialPageStyle && editorialStoryNumber === 1
       ? 6
@@ -4088,7 +4185,19 @@ function composeArticleBoxPass(
     columnCount: safeColumnCount,
     bodyText,
   });
-  const resolvedImageSettings = editorialImageQuality.imageSettings;
+  let resolvedImageSettings = editorialImageQuality.imageSettings;
+  if (
+    settings.editorialPageStyle &&
+    editorialTemplateId === "AkhandEditorial5A" &&
+    (editorialStoryNumber === 2 || editorialStoryNumber === 5)
+  ) {
+    resolvedImageSettings = {
+      ...resolvedImageSettings,
+      imageHeight: editorialStoryNumber === 2 ? 176 : 156,
+      imageHeightMode: "fixed",
+      autoSizeImage: false,
+    };
+  }
   const imagePlacement = placeImage({
     storyBounds: {
       x: inset,
@@ -4266,8 +4375,8 @@ function composeArticleBoxPass(
     "floor",
   );
   const editorialFloatImage =
-    settings.editorialPageStyle &&
-    (articleBox as any).templateStoryNumber === 2 &&
+    usesLegacyEditorialFurniture &&
+    editorialStoryNumber === 2 &&
     safeColumnCount >= 3 &&
     bodyHeight >= 180
       ? (() => {
@@ -4432,10 +4541,26 @@ function composeArticleBoxPass(
   // content-local (x measured from the content edge, y from the box top), so
   // convert before adding them.
   const isEditorialLeaderArticle =
-    Boolean(settings.editorialPageStyle) && Number(templateStoryNumber) === 1;
+    usesLegacyEditorialFurniture && editorialStoryNumber === 1;
+  const isAkhandEditorialCompactAuthorArticle =
+    editorialTemplateId === "AkhandEditorial5A" && (editorialStoryNumber === 1 || editorialStoryNumber === 4);
+  const isAkhandVicharManthanCompactAuthorArticle =
+    editorialTemplateId === "AkhandVicharManthan6A" && (editorialStoryNumber === 2 || editorialStoryNumber === 5);
+  const isAkhandCompactAuthorArticle =
+    Boolean(settings.editorialPageStyle) &&
+    (isAkhandEditorialCompactAuthorArticle || isAkhandVicharManthanCompactAuthorArticle);
+  const isAkhandSecondaryCompactAuthorArticle =
+    (editorialTemplateId === "AkhandEditorial5A" && editorialStoryNumber === 4) ||
+    (editorialTemplateId === "AkhandVicharManthan6A" && editorialStoryNumber === 5);
+  const isAkhandBodyStartCompactAuthorArticle = isAkhandCompactAuthorArticle;
+  const isAkhandTightPrimaryCompactAuthorArticle =
+    editorialTemplateId === "AkhandVicharManthan6A" && editorialStoryNumber === 2;
+  const hasAkhandEditorialAuthorIdentity =
+    isAkhandCompactAuthorArticle &&
+    Boolean((articleData.editorPortraitUrl ?? "").trim() || (articleData.editorName ?? "").trim());
 
   for (const region of settings.reservedRegions ?? []) {
-    if (isEditorialLeaderArticle) {
+    if (isEditorialLeaderArticle || isAkhandCompactAuthorArticle) {
       continue;
     }
 
@@ -4444,6 +4569,68 @@ function composeArticleBoxPass(
       y: region.y - articleBox.y,
       width: region.width,
       height: region.height,
+    });
+  }
+
+  if (
+    hasAkhandEditorialAuthorIdentity
+  ) {
+    const authorBlock = getAuthorBlock({
+      x: articleBox.x,
+      y: articleBox.y,
+      width: articleBox.width,
+      height: articleBox.height,
+      // Tight-primary's offset here MUST match `resolveAuthorBlock`'s own
+      // topOffset for the same card in AuthorBlockGeometry.ts -- one feeds
+      // the draw path, this one feeds text-avoidance, and `getAuthorBlock`
+      // now uses this value directly (no internal floor/lift for this
+      // case), so drifting the two out of sync means text avoids a
+      // rectangle that isn't where the portrait actually is.
+      topOffset: isAkhandBodyStartCompactAuthorArticle
+        ? bodyY
+        : headline.y +
+          headline.height -
+          articleBox.y +
+          (isAkhandSecondaryCompactAuthorArticle ? 7 : -10),
+      columnSpan: Math.max(1, (articleBox as any).columnSpan ?? 4),
+      compactPassport: true,
+      compactBodyAlignedPassport: isAkhandSecondaryCompactAuthorArticle,
+      compactBodyStartPassport: isAkhandBodyStartCompactAuthorArticle,
+      compactTightPrimaryPassport: isAkhandTightPrimaryCompactAuthorArticle,
+      hasSummary: false,
+    });
+    const pushAuthorObstacle = (rect: { x: number; y: number; width: number; height: number }) => {
+      const rawX = rect.x - articleBox.x - inset;
+      const clippedLeft = Math.max(0, -rawX);
+      const localX = Math.max(0, rawX);
+      const localWidth = Math.max(0, rect.width - clippedLeft);
+      if (localWidth <= 0 || rect.height <= 0) return;
+
+      obstacleRects.push({
+        x: localX,
+        y: rect.y - articleBox.y,
+        width: localWidth,
+        height: rect.height,
+      });
+    };
+
+    const authorWrapGutter = isAkhandBodyStartCompactAuthorArticle ? 10 : 1;
+    const authorStackBottom = Math.max(
+      authorBlock.portrait.y + authorBlock.portrait.height,
+      authorBlock.namePlate.y + authorBlock.namePlate.height,
+    );
+    const authorObstacleBottom = isAkhandBodyStartCompactAuthorArticle
+      ? snapToBaseline(authorStackBottom - articleBox.y, lineAdvanceGrid, "ceil") + articleBox.y
+      : Math.max(
+          authorBlock.portrait.y + authorBlock.portrait.height,
+          snapToBaseline(authorStackBottom - articleBox.y, lineAdvanceGrid, "floor") + articleBox.y,
+        );
+
+    pushAuthorObstacle({
+      x: authorBlock.portrait.x,
+      y: authorBlock.portrait.y,
+      width: authorBlock.portrait.width + authorWrapGutter,
+      height: Math.max(0, authorObstacleBottom - authorBlock.portrait.y),
     });
   }
 
@@ -4958,17 +5145,17 @@ function composeArticleBoxPass(
     minRegionWidth: Math.max(1, columnWidth * 0.2),
     minRegionLines: 1,
   };
+  const enableBodyDropCap = Boolean(settings.enableDropCap || hasAkhandEditorialAuthorIdentity);
   const dropCapComposition = composeDropCap({
-    enabled: settings.enableDropCap,
+    enabled: enableBodyDropCap,
     text: bodyText,
     regions: bodyRegions,
     bodyStyle: resolvedBodyStyle,
     lineHeight: bodyLineHeight,
-    lineSpan: 3,
   });
   const bodyFlow = createBodyColumns(
     dropCapComposition.text,
-    settings.enableDropCap ? dropCapComposition.text : articleData.body,
+    enableBodyDropCap ? dropCapComposition.text : articleData.body,
     dropCapComposition.regions,
     regionUsabilityRules,
     baselineGrid,

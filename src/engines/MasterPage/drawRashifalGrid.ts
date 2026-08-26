@@ -18,6 +18,7 @@ export const drawRashifalGridToCanvas = (
     height,
     readings,
     title,
+    columns,
   }: {
     x: number;
     y: number;
@@ -25,9 +26,11 @@ export const drawRashifalGridToCanvas = (
     height: number;
     readings: RashifalReading[];
     title?: string;
+    /** Cells per row. Omitted by every existing caller, which keeps the default of 2. */
+    columns?: number;
   },
 ) => {
-  const grid = getRashifalGrid({ x, y, width, height, readings, title });
+  const grid = getRashifalGrid({ x, y, width, height, readings, title, columns });
   const serif = getNewspaperFontStack("serif");
   const sans = getNewspaperFontStack("sans");
 

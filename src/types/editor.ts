@@ -993,6 +993,8 @@ export type ArticleCompositionSettings = {
    * editorial page, so every rule it carries is scoped to that page.
    */
   editorialPageStyle?: EditorialPageArticleStyle;
+  /** The concrete editorial template driving template-specific page furniture. */
+  editorialTemplateId?: string;
   /** Dynamic image balancing configuration. */
   dynamicImageBalancing?: Partial<{
     enabled: boolean;

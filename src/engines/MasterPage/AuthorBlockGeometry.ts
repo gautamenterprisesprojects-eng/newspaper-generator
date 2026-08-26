@@ -41,6 +41,14 @@ export type AuthorBlockInput = {
   topOffset: number;
   /** Columns the box spans; the rail is sized against a single column. */
   columnSpan: number;
+  /** Akhand page 5 uses a compact left author card inside wide stories. */
+  compactPassport?: boolean;
+  /** Akhand page 5's lower author slot starts closer to the body row. */
+  compactBodyAlignedPassport?: boolean;
+  /** Compact Akhand author cards that should start exactly with body copy. */
+  compactBodyStartPassport?: boolean;
+  /** Vichar-Manthan's top author card sits one body row higher than Akhand page 5. */
+  compactTightPrimaryPassport?: boolean;
   hasSummary: boolean;
   /**
    * Where the rail must stop, in page points.
@@ -126,6 +134,20 @@ const getLeaderReservationHeight = (boxHeight: number) =>
       leaderPortraitStackHeight(),
   );
 
+const isAkhandEditorial5A = (templateId?: string) => templateId === "AkhandEditorial5A";
+const isAkhandVicharManthan6A = (templateId?: string) => templateId === "AkhandVicharManthan6A";
+const isAkhandCompactAuthorTemplate = (templateId?: string) =>
+  isAkhandEditorial5A(templateId) || isAkhandVicharManthan6A(templateId);
+const isAkhandSecondaryAuthorSlot = (storyNumber: number | undefined, templateId?: string) =>
+  (isAkhandEditorial5A(templateId) && storyNumber === 4) ||
+  (isAkhandVicharManthan6A(templateId) && storyNumber === 5);
+
+const getAkhandCompactReservationHeight = (boxHeight: number) =>
+  Math.min(
+    boxHeight * AKHAND_AUTHOR_RESERVATION_MAX_FRACTION,
+    AKHAND_AUTHOR_RESERVATION_DEPTH_PT,
+  );
+
 /**
  * How much depth to allow for the leader's headline before its portrait.
  *
@@ -154,6 +176,44 @@ const getLeaderReservationHeight = (boxHeight: number) =>
 const LEADER_HEADLINE_ALLOWANCE_PT = 76;
 const LEADER_HEADLINE_ALLOWANCE_FRACTION = 0.125;
 const LEADER_RESERVATION_MAX_FRACTION = 0.55;
+const AKHAND_AUTHOR_HEADLINE_ALLOWANCE_PT = 118;
+const AKHAND_VICHAR_PRIMARY_HEADLINE_ALLOWANCE_PT = 68;
+const AKHAND_AUTHOR_SECONDARY_HEADLINE_ALLOWANCE_PT = 92;
+const AKHAND_AUTHOR_STACK_LIFT_PT = 20;
+const AKHAND_AUTHOR_RESERVATION_DEPTH_PT = 380;
+const AKHAND_AUTHOR_RESERVATION_MAX_FRACTION = 0.76;
+const AKHAND_AUTHOR_SECONDARY_PASSPORT_HEIGHT_PT = 58;
+/**
+ * Worst-case headline depth the tight-primary reservation budgets for.
+ *
+ * `AKHAND_VICHAR_PRIMARY_HEADLINE_ALLOWANCE_PT` (68) is the render side's
+ * FIXED offset used for a short headline; render pushes the stack lower than
+ * that for a longer one (`railTop - AKHAND_AUTHOR_STACK_LIFT_PT`, where
+ * `railTop` grows with the real composed headline height). The reservation
+ * has to happen before composition, so it can't know the real headline depth
+ * — it has to budget for the worst case up front, the same way the plain
+ * leader's own `getLeaderReservationHeight` already does. This is that same
+ * pattern, sized for a 2-3 line headline in this box's wider measure.
+ */
+const AKHAND_VICHAR_TIGHT_PRIMARY_HEADLINE_RESERVE_PT = 150;
+
+const getAkhandPassportHeight = (secondary = false) =>
+  secondary ? AKHAND_AUTHOR_SECONDARY_PASSPORT_HEIGHT_PT : EDITORIAL_RAIL.passportHeight;
+
+const getAkhandPassportStackHeight = (secondary = false) =>
+  getAkhandPassportHeight(secondary) +
+  EDITORIAL_RAIL.portraitGap +
+  EDITORIAL_RAIL.namePlateHeight;
+
+const getAkhandPassportStackTop = (
+  secondary: boolean,
+  tightPrimary: boolean,
+) =>
+  secondary
+    ? AKHAND_AUTHOR_SECONDARY_HEADLINE_ALLOWANCE_PT
+    : tightPrimary
+      ? AKHAND_VICHAR_PRIMARY_HEADLINE_ALLOWANCE_PT
+      : AKHAND_AUTHOR_HEADLINE_ALLOWANCE_PT;
 
 /**
  * Whether a story number is one of page 8's signed pieces.
@@ -162,8 +222,14 @@ const LEADER_RESERVATION_MAX_FRACTION = 0.55;
  * column and the health package all print a photograph of somebody, but none of
  * them is an author rail — see `EDITORIAL_AUTHOR_SLOTS`.
  */
-export const isEditorialAuthorSlot = (storyNumber: number | undefined) =>
-  storyNumber !== undefined && EDITORIAL_AUTHOR_SLOTS.has(storyNumber);
+export const isEditorialAuthorSlot = (storyNumber: number | undefined, templateId?: string) =>
+  storyNumber !== undefined &&
+  (
+    ((templateId === undefined || templateId === "CliffEditorial8A" || templateId === "CliffEditorial9A") &&
+      EDITORIAL_AUTHOR_SLOTS.has(storyNumber)) ||
+    (templateId === "AkhandEditorial5A" && (storyNumber === 1 || storyNumber === 4)) ||
+    (templateId === "AkhandVicharManthan6A" && (storyNumber === 2 || storyNumber === 5))
+  );
 
 /**
  * Whether a rail carries the quoted summary under its portrait.
@@ -171,8 +237,10 @@ export const isEditorialAuthorSlot = (storyNumber: number | undefined) =>
  * Only विचार मंथन does. The सम्पादकीय leader shows a passport portrait and the
  * writer's name, then goes straight into the leader itself.
  */
-export const isEditorialSummarySlot = (storyNumber: number | undefined) =>
-  storyNumber !== undefined && EDITORIAL_SUMMARY_SLOTS.has(storyNumber);
+export const isEditorialSummarySlot = (storyNumber: number | undefined, templateId?: string) =>
+  (templateId === undefined || templateId === "CliffEditorial8A" || templateId === "CliffEditorial9A") &&
+  storyNumber !== undefined &&
+  EDITORIAL_SUMMARY_SLOTS.has(storyNumber);
 
 /** The section label a rail prints above its portrait, if any. */
 export const getEditorialRailLabel = (storyNumber: number | undefined) =>
@@ -197,14 +265,19 @@ export const getAuthorRailReservation = (story: {
   height: number;
   columnSpan?: number;
   storyNumber?: number;
+  compositionSettings?: {
+    editorialTemplateId?: string;
+  } | null;
 }): AuthorBlockRect[] | null => {
-  if (!isEditorialAuthorSlot(story.storyNumber)) {
+  const templateId = story.compositionSettings?.editorialTemplateId;
+  if (!isEditorialAuthorSlot(story.storyNumber, templateId)) {
     return null;
   }
 
   const columnSpan = Math.max(1, story.columnSpan ?? 1);
+  const compactAkhandAuthor = isAkhandCompactAuthorTemplate(templateId);
 
-  if (columnSpan <= 1) {
+  if (columnSpan <= 1 || compactAkhandAuthor) {
     // The leader sets a passport-sized headshot against the left of its single
     // column with the copy wrapping around its right shoulder, so only the
     // headshot itself is reserved — not the full depth, which would leave the
@@ -224,25 +297,83 @@ export const getAuthorRailReservation = (story: {
     // of the column, and the copy sets in the space to their right — which is
     // the whole point of a passport-sized headshot rather than a full-measure
     // picture.
-    const total = getLeaderReservationHeight(story.height);
+    const total = compactAkhandAuthor
+      ? getAkhandCompactReservationHeight(story.height)
+      : getLeaderReservationHeight(story.height);
     const headerBand =
       total - (EDITORIAL_RAIL.passportHeight + EDITORIAL_RAIL.portraitGap + EDITORIAL_RAIL.namePlateHeight);
+    const compactRailWidth = compactAkhandAuthor
+      ? railWidthFor(story.width, columnSpan)
+      : story.width;
+    const stackTop = compactAkhandAuthor
+      ? Math.max(0, headerBand - EDITORIAL_RAIL.plateClearance - AKHAND_AUTHOR_STACK_LIFT_PT)
+      : headerBand;
+
+    if (compactAkhandAuthor) {
+      const isSecondaryAuthor = isAkhandSecondaryAuthorSlot(story.storyNumber, templateId);
+      const isTightPrimaryAuthor =
+        isAkhandVicharManthan6A(templateId) && story.storyNumber === 2;
+      const passportHeight = getAkhandPassportHeight(isSecondaryAuthor);
+      const passportWidth = passportHeight / EDITORIAL_RAIL.passportAspect;
+
+      if (isTightPrimaryAuthor) {
+        // Reservation runs before composition, so it can't read the real
+        // headline height the way the render side does — over-reserve
+        // upward from the box top instead of guessing a fixed offset (see
+        // AKHAND_VICHAR_TIGHT_PRIMARY_HEADLINE_RESERVE_PT's own comment).
+        // Anything reserved above the body's first line simply has no body
+        // in it, so this costs nothing even for a short headline.
+        //
+        // Width gets the same over-reserve treatment: a plain `passportWidth
+        // + gutter` matched the render side's nameplate width exactly, with
+        // no margin for rounding or for the composer's own column-boundary
+        // snapping, which was letting a sliver of a text line land under the
+        // plate's right edge. Doubling the gutter buffer costs nothing more
+        // than a slightly narrower text column, same principle as the
+        // height above.
+        return [
+          {
+            x: story.x,
+            y: story.y,
+            width: passportWidth + EDITORIAL_RAIL.gutter * 2,
+            height: Math.min(
+              story.height * AKHAND_AUTHOR_RESERVATION_MAX_FRACTION,
+              AKHAND_VICHAR_TIGHT_PRIMARY_HEADLINE_RESERVE_PT + getAkhandPassportStackHeight(false),
+            ),
+          },
+        ];
+      }
+
+      const stackTop =
+        story.y +
+        getAkhandPassportStackTop(isSecondaryAuthor, isTightPrimaryAuthor);
+      return [
+        {
+          x: story.x,
+          y: stackTop,
+          width: passportWidth + EDITORIAL_RAIL.gutter,
+          height: getAkhandPassportStackHeight(isSecondaryAuthor),
+        },
+      ];
+    }
 
     return [
       {
         x: story.x,
         y: story.y,
-        width: story.width,
-        height: headerBand,
+        width: compactAkhandAuthor ? compactRailWidth : story.width,
+        height: stackTop,
       },
       {
         x: story.x,
-        y: story.y + headerBand,
+        y: story.y + stackTop,
         width:
-          EDITORIAL_RAIL.padding +
-          EDITORIAL_RAIL.passportHeight / EDITORIAL_RAIL.passportAspect +
-          EDITORIAL_RAIL.gutter,
-        height: total - headerBand,
+          compactAkhandAuthor
+            ? compactRailWidth
+            : EDITORIAL_RAIL.padding +
+              EDITORIAL_RAIL.passportHeight / EDITORIAL_RAIL.passportAspect +
+              EDITORIAL_RAIL.gutter,
+        height: total - stackTop,
       },
     ];
   }
@@ -272,6 +403,7 @@ export const getAuthorRailReservation = (story: {
 export const resolveAuthorBlock = ({
   story,
   headlineBottom,
+  bodyTop,
 }: {
   story: {
     x: number;
@@ -282,6 +414,7 @@ export const resolveAuthorBlock = ({
     storyNumber?: number;
     compositionSettings?: {
       editorialPageStyle?: unknown;
+      editorialTemplateId?: string;
       reservedRegions?: { x: number; y: number; width: number; height: number }[];
     } | null;
     articleData?: {
@@ -292,6 +425,8 @@ export const resolveAuthorBlock = ({
   };
   /** Bottom of the composed headline block, in box-local points. */
   headlineBottom: number;
+  /** Top of the composed body block, in box-local points. */
+  bodyTop?: number;
 }):
   | (AuthorBlockInput & {
       contentBottom: number;
@@ -315,7 +450,8 @@ export const resolveAuthorBlock = ({
   }
 
   // ...and within the editorial page, only the two signed pieces.
-  if (!isEditorialAuthorSlot(story.storyNumber)) {
+  const templateId = story.compositionSettings?.editorialTemplateId;
+  if (!isEditorialAuthorSlot(story.storyNumber, templateId)) {
     return null;
   }
 
@@ -329,6 +465,16 @@ export const resolveAuthorBlock = ({
     return null;
   }
 
+  const compactPassport = isAkhandCompactAuthorTemplate(templateId);
+  const compactBodyAlignedPassport = compactPassport && isAkhandSecondaryAuthorSlot(story.storyNumber, templateId);
+  const compactBodyStartPassport = compactPassport && typeof bodyTop === "number";
+  const compactTightPrimaryPassport =
+    compactPassport && isAkhandVicharManthan6A(templateId) && story.storyNumber === 2;
+  const authorTop =
+    compactBodyStartPassport
+      ? bodyTop
+      : headlineBottom;
+
   return {
     x: story.x,
     y: story.y,
@@ -338,18 +484,44 @@ export const resolveAuthorBlock = ({
     // The one-column leader has no visible rail label, so its portrait can
     // start on the same row as the body. The wider signed comment keeps air
     // below its label.
-    topOffset: headlineBottom + (Math.max(1, story.columnSpan ?? 1) <= 1 ? 0 : 6),
+    //
+    // The tight-primary card's offset here MUST match the one
+    // `composeArticleBox.ts` uses in its own separate `getAuthorBlock` call
+    // (search `isAkhandTightPrimaryCompactAuthorArticle`) -- that second
+    // call computes the actual TEXT-AVOIDANCE obstacle from the real
+    // composed headline height, independently of this function, which only
+    // feeds the DRAW path (CanvasRenderLayers/EditorCanvas). Changing this
+    // value without changing that one moves what gets drawn without moving
+    // what text avoids, which is worse than leaving both alone -- confirmed
+    // the hard way this session. 0 lines the stack up exactly with
+    // headlineBottom now that `getAuthorBlock`'s own floor/lift no longer
+    // distorts it (see the `railTop` comment there) -- any future spacing
+    // tweak for this card belongs in composeArticleBox.ts's
+    // `authorWrapGutter` / `authorNamePlateBaselineBottom`, not here.
+    topOffset:
+      authorTop +
+      (compactBodyStartPassport || compactTightPrimaryPassport
+        ? 0
+        : compactPassport
+          ? -10
+          : Math.max(1, story.columnSpan ?? 1) <= 1
+            ? 0
+            : 6),
     columnSpan: Math.max(1, story.columnSpan ?? 1),
+    compactPassport,
+    compactBodyAlignedPassport,
+    compactBodyStartPassport,
+    compactTightPrimaryPassport,
     // The leader prints no pull-quote however much summary copy it carries.
     hasSummary:
-      isEditorialSummarySlot(story.storyNumber) &&
+      isEditorialSummarySlot(story.storyNumber, story.compositionSettings?.editorialTemplateId) &&
       Boolean((data?.editorSummary ?? "").trim()),
     portraitUrl,
     editorName,
-    summary: isEditorialSummarySlot(story.storyNumber)
+    summary: isEditorialSummarySlot(story.storyNumber, story.compositionSettings?.editorialTemplateId)
       ? (data?.editorSummary ?? "").trim()
       : "",
-    label: getEditorialRailLabel(story.storyNumber),
+    label: compactPassport ? "" : getEditorialRailLabel(story.storyNumber),
   };
 };
 
@@ -405,6 +577,10 @@ export const getAuthorBlock = ({
   height,
   topOffset,
   columnSpan,
+  compactPassport = false,
+  compactBodyAlignedPassport = false,
+  compactBodyStartPassport = false,
+  compactTightPrimaryPassport = false,
   hasSummary,
   contentBottom,
 }: AuthorBlockInput): AuthorBlock => {
@@ -424,17 +600,33 @@ export const getAuthorBlock = ({
   // On the leader the whole stack is pinned to the foot of the reserved band
   // instead, so no gap can open between the name plate and the first line of
   // copy. Never above `railTop`, which would print it across the headline.
-  const isLeaderRail = columnSpan <= 1;
+  const isLeaderRail = columnSpan <= 1 || compactPassport;
   const labelHeight = isLeaderRail ? 0 : EDITORIAL_RAIL.labelHeight;
   const labelGap = isLeaderRail ? 0 : EDITORIAL_RAIL.labelGap;
   const leaderStackTop = isLeaderRail
-    ? Math.max(
-        railTop,
-        y +
-          getLeaderReservationHeight(height) -
-          leaderPortraitStackHeight() -
-          EDITORIAL_RAIL.plateClearance,
-      )
+    ? compactPassport
+      ? compactBodyStartPassport || compactTightPrimaryPassport
+        ? // No floor/lift here on purpose: with them, this position was a
+          // `Math.max` of a FIXED box-top offset and a headline-relative
+          // one, so a short headline landed on the fixed floor (stack
+          // renders below where the shorter headline's own text row
+          // starts) while a long headline landed on the other branch
+          // instead (stack pulled up past where a taller headline's text
+          // row starts) -- two different, unpredictable outcomes depending
+          // on copy length, neither reliably "the same row as the body".
+          // Using `railTop` directly makes the stack track the real
+          // composed headline exactly, every time, regardless of length.
+          railTop
+        : compactBodyAlignedPassport
+          ? Math.max(y + getAkhandPassportStackTop(true, false), railTop)
+          : Math.max(y + getAkhandPassportStackTop(false, false), railTop - AKHAND_AUTHOR_STACK_LIFT_PT)
+      : Math.max(
+          railTop,
+          y +
+            getLeaderReservationHeight(height) -
+            leaderPortraitStackHeight() -
+            EDITORIAL_RAIL.plateClearance,
+        )
     : railTop;
   const label = {
     x: railX,
@@ -449,7 +641,8 @@ export const getAuthorBlock = ({
   // off the foot of the page.
   const portraitTop = label.y + label.height + labelGap;
   const availableDepth = Math.max(0, boxFoot - portraitTop);
-  const stackBelowPortrait = EDITORIAL_RAIL.namePlateHeight + EDITORIAL_RAIL.portraitGap;
+  const portraitToNameGap = compactTightPrimaryPassport ? -6 : EDITORIAL_RAIL.portraitGap;
+  const stackBelowPortrait = EDITORIAL_RAIL.namePlateHeight + portraitToNameGap;
 
   // Portrait size comes from a stated HEIGHT, not from the rail's measure.
   //
@@ -461,10 +654,13 @@ export const getAuthorBlock = ({
   const portraitAspect = isPassport
     ? EDITORIAL_RAIL.passportAspect
     : EDITORIAL_RAIL.portraitAspect;
+  const passportHeight = compactPassport
+    ? getAkhandPassportHeight(compactBodyAlignedPassport)
+    : EDITORIAL_RAIL.passportHeight;
   const portraitHeight = Math.max(
     0,
     Math.min(
-      isPassport ? EDITORIAL_RAIL.passportHeight : EDITORIAL_RAIL.portraitHeight,
+      isPassport ? passportHeight : EDITORIAL_RAIL.portraitHeight,
       availableDepth - stackBelowPortrait,
       // Never wider than the rail, however shallow the box.
       innerWidth * portraitAspect,
@@ -477,7 +673,7 @@ export const getAuthorBlock = ({
   // side of it. The comment's rail has a column to itself with no copy beside
   // the picture, so there the headshot is centred in its column.
   const portraitX = isPassport
-    ? railX
+    ? railX - (compactPassport ? EDITORIAL_RAIL.padding : 0)
     : railX + Math.max(0, (innerWidth - portraitWidth) / 2);
 
   const portrait = {
@@ -491,7 +687,7 @@ export const getAuthorBlock = ({
   // than a caption bar wider than the photograph above it.
   const namePlate = {
     x: portraitX,
-    y: portrait.y + portrait.height + EDITORIAL_RAIL.portraitGap,
+    y: portrait.y + portrait.height + portraitToNameGap,
     width: portraitWidth,
     height: EDITORIAL_RAIL.namePlateHeight,
   };

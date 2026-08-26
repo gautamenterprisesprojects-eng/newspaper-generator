@@ -78,6 +78,28 @@ const assertDropCapRegionSplit = () => {
   assert(result.regions[1].y === 60, "second flow region should continue below drop cap");
 };
 
+const assertDefaultDropCapUsesTwoRows = () => {
+  const result = composeDropCap(
+    {
+      enabled: true,
+      text: "Opening paragraph",
+      regions: [createRegion()],
+      bodyStyle,
+      lineHeight: 20,
+    },
+    { provider: deterministicProvider },
+  );
+
+  assert(result.dropCap !== null, "default drop cap should create layout");
+  if (!result.dropCap) {
+    return;
+  }
+
+  assert(result.dropCap.height === 40, "default drop cap should occupy two body lines");
+  assert(result.regions[0].height === 40, "first flow region should match default two-line drop cap");
+  assert(result.regions[1].y === 40, "second flow region should continue after default two-line drop cap");
+};
+
 const assertTinyRegionSkipsDropCap = () => {
   const result = composeDropCap(
     {
@@ -109,6 +131,10 @@ const tests: TestCase[] = [
   {
     name: "Enabled drop cap creates occupied three-line region",
     run: assertDropCapRegionSplit,
+  },
+  {
+    name: "Default drop cap occupies two body lines",
+    run: assertDefaultDropCapUsesTwoRows,
   },
   {
     name: "Drop cap is skipped for tiny regions",

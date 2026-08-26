@@ -56,6 +56,8 @@ export type TemplateId =
   // Dedicated editorial/comment page
   | "CliffEditorial8A"
   | "CliffEditorial9A"
+  | "AkhandEditorial5A"
+  | "AkhandVicharManthan6A"
   // Publisher-exclusive: Youth UPDATE only (see YouthUpdateConfig.ts) --
   // never offered to any other publisher, gated by publisher_id.
   | "CliffFrontYouthUpdate1A"

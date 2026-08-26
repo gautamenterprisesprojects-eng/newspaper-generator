@@ -3597,6 +3597,9 @@ export function EditorCanvas() {
           width: story.width,
           height: story.height,
           readings: rashifalReadings,
+          // Kept in lockstep with CanvasRenderLayers's own RashifalGrid call --
+          // see its comment for why Vichar-Manthan asks for 3.
+          columns: story.compositionSettings.editorialTemplateId === "AkhandVicharManthan6A" ? 3 : undefined,
         });
         continue;
       }
@@ -3669,6 +3672,7 @@ export function EditorCanvas() {
         ? resolveAuthorBlock({
             story: { ...story, storyNumber: story.templateStoryNumber },
             headlineBottom: storyLayout.layout.headline.y + storyLayout.layout.headline.height,
+            bodyTop: storyLayout.layout.body?.y,
           })
         : null;
 

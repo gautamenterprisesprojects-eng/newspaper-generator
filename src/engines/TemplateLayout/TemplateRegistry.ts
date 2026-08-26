@@ -2018,6 +2018,97 @@ const CLIFF_EDITORIAL_8A: TemplateDefinition = {
     ],
   };
 
+const AKHAND_EDITORIAL_5A: TemplateDefinition = {
+  id: "AkhandEditorial5A",
+  name: "Akhand Doot - Dharm Sanskriti page 5",
+  storyCount: 5,
+  columnCount: EDITORIAL_COLUMN_COUNT,
+  trimToInsets: [1],
+  rowRhythm: [
+    { row: 1, baseRatio: 0.64, receivesRemainingSpace: false, minimumHeight: 760 },
+    { row: 2, baseRatio: 0.36, receivesRemainingSpace: true, minimumHeight: 430 },
+  ],
+  slots: [
+    { storyNumber: 1, row: 1, columnStart: 1, columnSpan: 4, priority: "lead" },
+    { storyNumber: 2, row: 1, columnStart: 5, columnSpan: 1, priority: "secondary" },
+    {
+      storyNumber: 3,
+      row: 1,
+      columnStart: 1,
+      columnSpan: 4,
+      priority: "major",
+      insetInto: {
+        parentStoryNumber: 1,
+        topFraction: 0.66,
+      },
+    },
+    { storyNumber: 4, row: 2, columnStart: 1, columnSpan: 4, priority: "major" },
+    { storyNumber: 5, row: 2, columnStart: 5, columnSpan: 1, priority: "secondary" },
+  ],
+};
+
+/**
+ * Akhand Doot - Vichar Manthan (opinion) page, traced off the publisher's
+ * own print PDF. Its own 6-column grid (not EDITORIAL_COLUMN_COUNT, which
+ * the two Cliff editorial templates own -- this page measures 16%/67%/17%
+ * left/centre/right, which only divides cleanly on six).
+ *
+ * The centre well runs the SAME pixel width top and bottom (columns 2-5 in
+ * both rows) but a different TEXT-column count -- 4 up top, 3 below. That
+ * split is not a slot-geometry concern (columnSpan only sets pixel width);
+ * it is a per-story `resolvedColumnCount` override in editorStore.ts,
+ * mirroring the story-4 override AkhandEditorial5A already uses.
+ *
+ * The left column's photo box and its caption/op-ed (story 4) runs all the
+ * way to the page foot -- there is no row 3 for it to stop short of. Rows 2
+ * and 3 are merged into one tall row so story 4 (and गांधी, story 5) can
+ * reach the bottom; गांधी and आध्यात्मिक ज्ञान (story 6) are each cut back
+ * up to the SAME line with `bottomTrimFraction`/an inset so राशिफल still
+ * reads as sitting in its own band below them, at its original 5-column
+ * width (2-6) -- it's an inset into story 6 for vertical placement, but
+ * states its own wider columnStart/columnSpan (an inset's column range
+ * doesn't have to match its parent's, only its top edge is derived from
+ * the parent's box).
+ */
+const AKHAND_VICHAR_MANTHAN_6A: TemplateDefinition = {
+  id: "AkhandVicharManthan6A",
+  name: "Akhand Doot - Vichar Manthan page 2",
+  storyCount: 7,
+  columnCount: 6,
+  trimToInsets: [6],
+  rowRhythm: [
+    { row: 1, baseRatio: 0.42, receivesRemainingSpace: false, minimumHeight: 620 },
+    { row: 2, baseRatio: 0.58, receivesRemainingSpace: true, minimumHeight: 900 },
+  ],
+  slots: [
+    // Left column, top: मप्र निवेशक -- 1 col, plain text, editorial tag inset in its own copy.
+    { storyNumber: 1, row: 1, columnStart: 1, columnSpan: 1, priority: "secondary" },
+    // Centre well, top: मुख्य संपादकीय -- 4 text columns (forced via resolvedColumnCount).
+    { storyNumber: 2, row: 1, columnStart: 2, columnSpan: 4, priority: "lead" },
+    // Right rail, top: सुनी सुनाई -- maroon band header, 2 short items with inset photos.
+    { storyNumber: 3, row: 1, columnStart: 6, columnSpan: 1, priority: "secondary" },
+    // Left column, bottom: नमो घाट photo + बात मुद्दे की merged into ONE box --
+    // olive band header, inset photo, copy below. Runs the FULL row-2 height.
+    { storyNumber: 4, row: 2, columnStart: 1, columnSpan: 1, priority: "secondary" },
+    // Centre well, bottom: गांधी feature -- same pixel width as story 2, but
+    // 3 text columns. Cut back to the same line आध्यात्मिक ज्ञान is, below.
+    { storyNumber: 5, row: 2, columnStart: 2, columnSpan: 4, priority: "major", bottomTrimFraction: 0.336 },
+    // Right rail, bottom: आध्यात्मिक ज्ञान -- no band header, rose-tinted
+    // ground. Trimmed (see trimToInsets) to the same line as story 5 above.
+    { storyNumber: 6, row: 2, columnStart: 6, columnSpan: 1, priority: "secondary" },
+    // Sits below both 5 and 6, spanning their combined width (2-6): आज का
+    // राशिफल -- content-sniffed into the horoscope grid automatically.
+    {
+      storyNumber: 7,
+      row: 2,
+      columnStart: 2,
+      columnSpan: 5,
+      priority: "secondary",
+      insetInto: { parentStoryNumber: 6, topFraction: 0.664 },
+    },
+  ],
+};
+
 export const TEMPLATE_REGISTRY: Record<TemplateId, TemplateDefinition> = {
   // Original (locked)
   FrontPage5A: FRONT_PAGE_5A,
@@ -2068,6 +2159,8 @@ export const TEMPLATE_REGISTRY: Record<TemplateId, TemplateDefinition> = {
   // Editorial page
   CliffEditorial8A: CLIFF_EDITORIAL_8A,
   CliffEditorial9A: CLIFF_EDITORIAL_9A,
+  AkhandEditorial5A: AKHAND_EDITORIAL_5A,
+  AkhandVicharManthan6A: AKHAND_VICHAR_MANTHAN_6A,
   // Publisher-exclusive (see YouthUpdateConfig.ts) -- kept out of
   // FRONT_PAGE_TEMPLATE_IDS below so it never appears in the shared wizard.
   CliffFrontYouthUpdate1A: CLIFF_FRONT_YOUTH_UPDATE_1A,
@@ -2121,6 +2214,8 @@ export const isFrontPageTemplate = (templateId: TemplateId) =>
 export const EDITORIAL_PAGE_TEMPLATE_IDS: TemplateId[] = [
   "CliffEditorial8A",
   "CliffEditorial9A",
+  "AkhandEditorial5A",
+  "AkhandVicharManthan6A",
 ];
 
 export const isEditorialPageTemplate = (templateId: TemplateId) =>

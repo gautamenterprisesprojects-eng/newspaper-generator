@@ -15,6 +15,8 @@ type RashifalGridProps = {
   height: number;
   readings: RashifalReading[];
   title?: string;
+  /** Cells per row. Omitted by every existing caller, which keeps the default of 2. */
+  columns?: number;
 };
 
 /**
@@ -24,8 +26,8 @@ type RashifalGridProps = {
  * the export canvas draws from as well, so the screen and the printed sheet
  * cannot drift apart.
  */
-export function RashifalGrid({ x, y, width, height, readings, title }: RashifalGridProps) {
-  const grid = getRashifalGrid({ x, y, width, height, readings, title });
+export function RashifalGrid({ x, y, width, height, readings, title, columns }: RashifalGridProps) {
+  const grid = getRashifalGrid({ x, y, width, height, readings, title, columns });
   const serif = getNewspaperFontStack("serif");
   const sans = getNewspaperFontStack("sans");
 

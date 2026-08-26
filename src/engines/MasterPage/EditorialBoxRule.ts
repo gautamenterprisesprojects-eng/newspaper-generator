@@ -43,6 +43,10 @@ export const resolveEditorialBoxRule = (story: {
     return null;
   }
 
+  if ((story.compositionSettings as { editorialTemplateId?: string }).editorialTemplateId === "AkhandEditorial5A") {
+    return null;
+  }
+
   if (story.width <= 0 || story.height <= 0) {
     return null;
   }

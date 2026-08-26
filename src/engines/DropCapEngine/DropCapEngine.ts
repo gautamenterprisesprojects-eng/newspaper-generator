@@ -19,7 +19,7 @@ export type DropCapResult = {
   dropCap: DropCapLayout | null;
 };
 
-const DEFAULT_DROP_CAP_LINE_SPAN = 3;
+const DEFAULT_DROP_CAP_LINE_SPAN = 2;
 const DROP_CAP_GUTTER = 6;
 const MIN_REMAINING_TEXT_WIDTH = 36;
 

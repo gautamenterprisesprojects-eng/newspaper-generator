@@ -7,7 +7,7 @@
  *
  * Flow:
  *  1. Layout picker  (reuses existing LayoutPickerScreen logic)
- *  2. Slot detection  (calls composeEditorialPage from existing engine)
+ *  2. Slot detection  (reads the selected template)
  *  3. N slot cards   (Paste / Browse / Choose Existing / Preview / Clear)
  *  4. Auto Fill toggle + Generate button
  *
@@ -25,7 +25,6 @@ import {
   type ChangeEvent,
 } from "react";
 import { ChevronLeft, FileText, Link, Eye, Trash2, RefreshCw, X } from "lucide-react";
-import { composeEditorialPage } from "@/engines/EditorialPageComposer/EditorialPageComposer";
 import { WIZARD_EDITORIAL_PAGE_DESIGNS, type NewswireImportOptions, type WizardAction, type PageAdvertisementState } from "./GenerationWizardModal";
 import type { NewswireStory, NewswireCategory } from "@/lib/newswire";
 import type { TemplateId } from "@/engines/TemplateLayout/TemplateTypes";
@@ -677,15 +676,12 @@ export const EditorialSlotPanel = memo(function EditorialSlotPanel({
     [editorialAuthors, selectedEditorialAuthors],
   );
 
-  // Derive slot count from the selected layout via composeEditorialPage
+  // Derive slot count from the selected layout template. This keeps newer
+  // editorial templates honest even when the legacy composer defaults to 6.
   const detectedSlotCount = useMemo(() => {
-    try {
-      const composition = composeEditorialPage({ storyCount: state.articleCount });
-      return composition?.slots.length ?? state.articleCount;
-    } catch {
-      return state.articleCount;
-    }
-  }, [state.articleCount]);
+    const template = getTemplateDefinition(state.layoutDesign);
+    return template?.storyCount ?? state.articleCount;
+  }, [state.articleCount, state.layoutDesign]);
 
   // When entering "slots" phase, initialize slots array
   useEffect(() => {
@@ -981,8 +977,14 @@ export const EditorialSlotPanel = memo(function EditorialSlotPanel({
         return emptyEditorialStory(slotIndex);
       });
 
-      // Call existing importNewswireStories — all engines run as normal
-      onImportNewswireStories("Editorial", articles, buildImportOptions());
+      // Call existing importNewswireStories — all engines run as normal.
+      // The saved profile author selections live in this panel, so pass them
+      // with the generated editorial feed before the page renderer places the
+      // Akhand author portraits in boxes 1 and 4.
+      onImportNewswireStories("Editorial", articles, {
+        ...buildImportOptions(),
+        editorialAuthorSelections: selectedEditorialAuthors,
+      });
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "एडिटोरियल पेज नहीं बन सका।");
@@ -1000,6 +1002,7 @@ export const EditorialSlotPanel = memo(function EditorialSlotPanel({
     autoFillSource,
     feed,
     buildImportOptions,
+    selectedEditorialAuthors,
     onImportNewswireStories,
     onClose,
   ]);
@@ -1119,7 +1122,12 @@ export const EditorialSlotPanel = memo(function EditorialSlotPanel({
           {[0, 1].map((railIndex) => {
             const typedRailIndex = railIndex as 0 | 1;
             const selected = selectedEditorialAuthors[typedRailIndex];
-            const label = getEditorialRailLabel(railIndex + 1) || (railIndex === 0 ? "Sampadakiya author" : "Vichar Manthan author");
+            const label =
+              state.layoutDesign === "AkhandEditorial5A"
+                ? railIndex === 0 ? "Box 1 author" : "Box 4 author"
+                : state.layoutDesign === "AkhandVicharManthan6A"
+                  ? railIndex === 0 ? "मुख्य संपादकीय author" : "गांधी विरासत author"
+                  : getEditorialRailLabel(railIndex + 1) || (railIndex === 0 ? "Sampadakiya author" : "Vichar Manthan author");
             return (
               <div className="editorial-author-select-card" key={railIndex}>
                 <label htmlFor={`editorial-author-select-${railIndex}`}>

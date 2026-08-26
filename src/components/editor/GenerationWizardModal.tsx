@@ -328,6 +328,20 @@ export const WIZARD_EDITORIAL_PAGE_DESIGNS: Array<{
     description:
       "A modern, highly uneven mosaic layout: Left Rail, Center Op-Ed (with embedded horoscope), and Right Rail at the top, abruptly broken by a full-span Cartoon and Letters block underneath.",
   },
+  {
+    id: "AkhandEditorial5A",
+    name: "Akhand Doot - Dharm Sanskriti (5A)",
+    storyCount: 5,
+    description:
+      "Akhand Doot page-5 style with a wide lead, middle band, tall right rail, lower feature, and right lower column.",
+  },
+  {
+    id: "AkhandVicharManthan6A",
+    name: "Akhand Doot - Vichar Manthan (6A)",
+    storyCount: 7,
+    description:
+      "Akhand Doot's opinion page: a fixed left column and right news rail flank a centre well that runs 4 text columns on top and 3 below at the same width, closing with a full-width horoscope grid.",
+  },
 ];
 
 // A function, not a frozen constant: Youth UPDATE's default front-page design

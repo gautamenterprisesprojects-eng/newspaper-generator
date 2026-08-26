@@ -578,6 +578,11 @@ const StoryItem = memo(function StoryItem({
         width={story.width}
         height={story.height}
         readings={rashifalReadings}
+        // Vichar-Manthan's राशिफल box is 5 columns wide -- wider than the
+        // other editorial templates' narrower box the default of 2 cells
+        // per row was tuned for -- so it asks for 3 instead. Every other
+        // template leaves this unset and keeps the existing default.
+        columns={story.compositionSettings.editorialTemplateId === "AkhandVicharManthan6A" ? 3 : undefined}
       />
     );
   }
@@ -603,6 +608,7 @@ const StoryItem = memo(function StoryItem({
         // signs two of its seven pieces, not all of them.
         story: { ...story, storyNumber: story.templateStoryNumber },
         headlineBottom: layout.headline.y + layout.headline.height,
+        bodyTop: layout.body?.y,
       })
     : null;
 

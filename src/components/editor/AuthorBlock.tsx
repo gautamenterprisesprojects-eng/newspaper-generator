@@ -17,6 +17,10 @@ export type AuthorBlockProps = {
   height: number;
   topOffset: number;
   columnSpan: number;
+  compactPassport?: boolean;
+  compactBodyAlignedPassport?: boolean;
+  compactBodyStartPassport?: boolean;
+  compactTightPrimaryPassport?: boolean;
   portraitUrl: string;
   editorName: string;
   summary: string;
@@ -67,6 +71,10 @@ export function AuthorBlock({
   height,
   topOffset,
   columnSpan,
+  compactPassport = false,
+  compactBodyAlignedPassport = false,
+  compactBodyStartPassport = false,
+  compactTightPrimaryPassport = false,
   portraitUrl,
   editorName,
   summary,
@@ -101,7 +109,19 @@ export function AuthorBlock({
   }, [portraitUrl]);
 
   const hasSummary = Boolean(summary.trim());
-  const block = getAuthorBlock({ x, y, width, height, topOffset, columnSpan, hasSummary });
+  const block = getAuthorBlock({
+    x,
+    y,
+    width,
+    height,
+    topOffset,
+    columnSpan,
+    compactPassport,
+    compactBodyAlignedPassport,
+    compactBodyStartPassport,
+    compactTightPrimaryPassport,
+    hasSummary,
+  });
 
   return (
     <Group>

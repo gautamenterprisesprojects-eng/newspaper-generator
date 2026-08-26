@@ -26,6 +26,10 @@ export const drawAuthorBlockToCanvas = async (
     height,
     topOffset,
     columnSpan,
+    compactPassport = false,
+    compactBodyAlignedPassport = false,
+    compactBodyStartPassport = false,
+    compactTightPrimaryPassport = false,
     portraitUrl,
     editorName,
     summary,
@@ -37,6 +41,10 @@ export const drawAuthorBlockToCanvas = async (
     height: number;
     topOffset: number;
     columnSpan: number;
+    compactPassport?: boolean;
+    compactBodyAlignedPassport?: boolean;
+    compactBodyStartPassport?: boolean;
+    compactTightPrimaryPassport?: boolean;
     portraitUrl: string;
     editorName: string;
     summary: string;
@@ -44,7 +52,19 @@ export const drawAuthorBlockToCanvas = async (
   },
 ) => {
   const hasSummary = Boolean(summary.trim());
-  const block = getAuthorBlock({ x, y, width, height, topOffset, columnSpan, hasSummary });
+  const block = getAuthorBlock({
+    x,
+    y,
+    width,
+    height,
+    topOffset,
+    columnSpan,
+    compactPassport,
+    compactBodyAlignedPassport,
+    compactBodyStartPassport,
+    compactTightPrimaryPassport,
+    hasSummary,
+  });
   const serif = getNewspaperFontStack("serif");
 
   context.save();
