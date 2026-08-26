@@ -2086,6 +2086,7 @@ type EditorActions = {
   setHeaderBannerImage: (kind: "front" | "inside", url: string, maskColors?: string[]) => void;
   setHeaderAccentColor: (color: string) => void;
   setFrontTeaserImageOverride: (url: string) => void;
+  setFrontTeaserAutoPick: (headline: string, imageUrl: string) => void;
   setFrontHeaderLayout: (layout: HeaderLayoutKind) => void;
   setInsideHeaderLayout: (layout: InsideHeaderLayoutKind) => void;
   saveActiveHeaderSetAs: (name: string) => void;
@@ -6243,6 +6244,48 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       };
 
       return commitHeaderDocumentChange("Front teaser image replaced", state.document, nextDocument);
+    }),
+
+  // Persists the live-fetched "fresh news" teaser (see the async fetch in
+  // EditorCanvas.tsx around `frontTeaserFetchedArticle`) into the document
+  // itself, so `resolveFrontHeaderTeaser`'s PDF-export pass can read the
+  // exact same headline+image the live preview is already showing instead
+  // of falling back to picking a different story from this page's own
+  // frames. Silent no-op if there's no active header set yet, same as
+  // setFrontTeaserImageOverride above.
+  setFrontTeaserAutoPick: (headline, imageUrl) =>
+    set((state) => {
+      const headerSystem = normalizeHeaderSystemState(state.document.headerSystem, state.document.metadata, {
+        enableDefaultHeader: true,
+      });
+      const activeHeaderSetId = headerSystem.activeHeaderSetId;
+
+      if (!activeHeaderSetId) {
+        return state;
+      }
+
+      const headerSet = headerSystem.headerSets[activeHeaderSetId];
+
+      const nextDocument = {
+        ...state.document,
+        headerSystem: {
+          ...headerSystem,
+          headerSets: {
+            ...headerSystem.headerSets,
+            [activeHeaderSetId]: {
+              ...headerSet,
+              front: {
+                ...headerSet.front,
+                autoTeaserHeadline: headline,
+                autoTeaserImageUrl: imageUrl,
+              },
+              updatedAt: new Date().toISOString(),
+            },
+          },
+        },
+      };
+
+      return commitHeaderDocumentChange("Front teaser auto-pick saved", state.document, nextDocument);
     }),
 
   setFrontHeaderLayout: (layout) =>

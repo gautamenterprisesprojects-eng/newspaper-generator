@@ -72,6 +72,18 @@ export type FrontHeaderTemplate = {
   maskColors?: string[];
   /** A publisher-picked replacement for the front masthead's own promo teaser photo (Akhand Doot's live SVG template only — see isAkhandDootHeaderUrl), set by clicking that teaser image in the editor. Takes priority over the auto-picked "first front-page story with both an image and a headline" default in both the live preview and PDF export (see frontHeaderTeaser in EditorCanvas.tsx and resolveFrontHeaderTeaser in HeaderPrintModel.ts). */
   teaserImageOverrideUrl?: string;
+  /**
+   * The live-fetched "fresh news" teaser the editor picks in place of
+   * duplicating one of this front page's own stories (see the async fetch
+   * in EditorCanvas.tsx that sets `frontTeaserFetchedArticle`). That fetch
+   * result used to live only in React state, invisible to the PDF export
+   * (a separate, synchronous canvas-drawing pass with no access to it) --
+   * export fell back to `resolveFrontHeaderTeaser`'s own page-story pick
+   * instead, showing a different story than the live preview. Persisting
+   * it here as soon as the fetch resolves gives both paths the same data.
+   */
+  autoTeaserHeadline?: string;
+  autoTeaserImageUrl?: string;
   masthead: HeaderTextSlot;
   eyebrowLeft: HeaderTextSlot;
   eyebrowCenter: HeaderTextSlot;

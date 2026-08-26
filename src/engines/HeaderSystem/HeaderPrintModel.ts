@@ -193,7 +193,10 @@ export const buildHeaderPrintModel = async (
   const isLiveInsideSvg = header.header.kind === "inside" && isLiveHeaderSvgUrl(headerBannerSource);
   const frontHeaderTeaser =
     isLiveFrontSvg && header.header.kind === "front"
-      ? resolveFrontHeaderTeaser(document, pageId, header.header.teaserImageOverrideUrl)
+      ? resolveFrontHeaderTeaser(document, pageId, header.header.teaserImageOverrideUrl, {
+          headline: header.header.autoTeaserHeadline,
+          imageUrl: header.header.autoTeaserImageUrl,
+        })
       : null;
   const resolvedBannerSource = isLiveFrontSvg && header.header.kind === "front"
     ? await resolveFrontHeaderSvgSource(headerBannerSource, {
@@ -312,10 +315,29 @@ export const buildHeaderPrintModel = async (
   };
 };
 
-const resolveFrontHeaderTeaser = (document: NewspaperDocument, pageId: string, imageOverrideUrl?: string) => {
+const resolveFrontHeaderTeaser = (
+  document: NewspaperDocument,
+  pageId: string,
+  imageOverrideUrl?: string,
+  autoTeaser?: { headline?: string; imageUrl?: string },
+) => {
   const page = document.pages.find((candidate) => candidate.id === pageId);
   if (!page) {
     return null;
+  }
+
+  // The live preview's primary pick isn't one of this page's own stories at
+  // all -- it's a separately live-fetched "fresh news" item (see the async
+  // fetch in EditorCanvas.tsx, persisted here via setFrontTeaserAutoPick so
+  // this export pass can see it too). Only fall through to a page story
+  // when that fetch hasn't produced anything yet (e.g. this page was never
+  // opened in the live editor before export), matching what the preview
+  // itself falls back to while its own fetch is in flight.
+  if (autoTeaser?.headline && autoTeaser?.imageUrl) {
+    return {
+      headline: autoTeaser.headline,
+      imageUrl: imageOverrideUrl || autoTeaser.imageUrl,
+    };
   }
 
   const candidates: Array<{ headline: string; imageUrl: string }> = [];

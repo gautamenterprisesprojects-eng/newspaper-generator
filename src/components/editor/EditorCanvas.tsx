@@ -1754,6 +1754,7 @@ export function EditorCanvas() {
   const relinkAsset = useEditorStore((state) => state.relinkAsset);
   const replaceStoryImage = useEditorStore((state) => state.replaceStoryImage);
   const setFrontTeaserImageOverride = useEditorStore((state) => state.setFrontTeaserImageOverride);
+  const setFrontTeaserAutoPick = useEditorStore((state) => state.setFrontTeaserAutoPick);
   const setAssetStatus = useEditorStore((state) => state.setAssetStatus);
   const createAdvertisementBooking = useEditorStore((state) => state.createAdvertisementBooking);
   const updateAdvertisementLifecycle = useEditorStore((state) => state.updateAdvertisementLifecycle);
@@ -2402,6 +2403,14 @@ export function EditorCanvas() {
         );
         if (picked && !cancelled) {
           setFrontTeaserFetchedArticle({ headline: picked.headline, imageUrl: picked.imageUrl });
+          // Also saved into the document itself (not just this component's
+          // local state) so the PDF export's separate, synchronous drawing
+          // pass -- which cannot run this async fetch -- shows the exact
+          // same teaser the live preview just picked, instead of falling
+          // back to a different story already on this page. See
+          // setFrontTeaserAutoPick's own comment and autoTeaserHeadline/
+          // autoTeaserImageUrl on FrontHeaderTemplate.
+          setFrontTeaserAutoPick(picked.headline, picked.imageUrl);
           // Deliberately not persisted to the portal's per-issue ledger:
           // saveIssueUsedArticles replaces that page's *entire* saved list
           // rather than appending, and this page's own regular stories
