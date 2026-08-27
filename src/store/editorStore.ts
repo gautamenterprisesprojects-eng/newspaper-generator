@@ -1034,7 +1034,7 @@ const cloneArticleData = (articleData: ArticleData): ArticleData => {
 
 export const cleanSubheadlineText = (text?: string) => {
   if (!text) return "";
-  const cleaned = text.replace(/\bSubheadings?\s*[:-]\s*/gi, "").trim();
+  const cleaned = text.replace(/\bSubheadings?\s*[:-]\s*/gi, "").replace(/स्थितशक्ति/gu, "स्थित शक्ति").trim();
   if (cleaned === "• ... •" || cleaned === "• • •" || cleaned === "•" || /^[\s•.*_-]+$/u.test(cleaned)) {
     return "";
   }
