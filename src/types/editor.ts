@@ -918,6 +918,8 @@ export type ArticleCompositionSettings = {
   opticalTypography: boolean;
   productionView?: boolean;
   storyHierarchyStyle?: StoryHierarchyVisualStyle;
+  /** Hard cap for this story's headline lines. Used by template-specific boxes. */
+  headlineMaxLines?: number;
   pageBounds?: { x: number; y: number; width: number; height: number };
   otherStories?: { id: string; x: number; y: number; width: number; height: number }[];
   /**

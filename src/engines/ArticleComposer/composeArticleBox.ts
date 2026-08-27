@@ -2727,8 +2727,11 @@ function composeArticleBoxPass(
   // Reuses the same width check the headline text truncation above already
   // made, so the two can never drift out of sync with each other.
   const isSingleColumnBox = isSingleColumnHeadlineBox;
+  const hasExplicitHeadlineMaxLines =
+    settings.headlineMaxLines !== undefined || houseStyle?.headlineMaxLines !== undefined;
   const headlineMaxLines =
-    isWideBottomFrontPackage
+    settings.headlineMaxLines ??
+    (isWideBottomFrontPackage
       ? 2
       : priority === "brief" || priority === "filler" || isSingleColumnBox || isFrontPageTwoColumnBox
       ? 2
@@ -2736,7 +2739,7 @@ function composeArticleBoxPass(
       // below gives a "secondary" story three lines, and on an inside page's
       // deeper boxes that is exactly what produced three-line headlines where
       // the front page — which caps its two-column boxes above — shows two.
-      : (houseStyle?.headlineMaxLines ?? (priority === "secondary" ? 3 : 4));
+      : (houseStyle?.headlineMaxLines ?? (priority === "secondary" ? 3 : 4)));
   // Single-column boxes land in the narrowest hierarchy tiers (brief/small,
   // capped at 16-22pt) purely because their importance score is starved by
   // width — not because the story deserves a small headline. Boosting the
@@ -2918,7 +2921,7 @@ function composeArticleBoxPass(
         // states its own ceiling does not get the extra line — the whole point
         // there is that the ceiling is hard.
         maxLines:
-          isFrontPageTwoColumnBox || houseStyle?.headlineMaxLines !== undefined
+          isFrontPageTwoColumnBox || hasExplicitHeadlineMaxLines
             ? headlineMaxLines
             : headlineMaxLines + 1,
         fontFamily: headlineStyle.fontFamily,
@@ -2951,7 +2954,7 @@ function composeArticleBoxPass(
         fontFamily: headlineStyle.fontFamily,
         fontSize: headlineMetrics.fontSize,
         fontStyle: headlineStyle.fontStyle,
-        maxLines: isFrontPageTwoColumnBox ? headlineMaxLines : headlineMaxLines + 1,
+        maxLines: isFrontPageTwoColumnBox || hasExplicitHeadlineMaxLines ? headlineMaxLines : headlineMaxLines + 1,
         autoBalance: typographySettings.autoBalanceHeadline,
         enableHyphenation: typographySettings.enableHyphenation,
         forceFullWidth: headlineForceFullWidth,
@@ -2976,7 +2979,7 @@ function composeArticleBoxPass(
           fontFamily: headlineStyle.fontFamily,
           fontSize: safeSize,
           fontStyle: headlineStyle.fontStyle,
-          maxLines: isFrontPageTwoColumnBox ? headlineMaxLines : headlineMaxLines + 1,
+          maxLines: isFrontPageTwoColumnBox || hasExplicitHeadlineMaxLines ? headlineMaxLines : headlineMaxLines + 1,
           autoBalance: typographySettings.autoBalanceHeadline,
           enableHyphenation: typographySettings.enableHyphenation,
           forceFullWidth: headlineForceFullWidth,

@@ -4158,6 +4158,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
                   // No white space at the foot of an editorial box: the copy is
                   // justified down to the bottom rule, as the sub-editor sets it.
                   ...EDITORIAL_FILL_TO_FOOT,
+                  ...(isAkhandEditorial5AStory3Headline ? { headlineMaxLines: 1 } : {}),
                 }
               : {}),
             // No deliberate white at the end of an article, on any news page.
