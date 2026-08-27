@@ -415,7 +415,7 @@ const AKHAND_EDITORIAL_5A_BOUNDS = {
   // page foot.
   y: 60,
   width: CONTENT_BOUNDS.width,
-  height: 1410,
+  height: 1388,
 };
 const AKHAND_EDITORIAL_5A_SLOT_STYLES: Record<number, { fill: string; border: string; headline: string }> = {
   1: { fill: "#fff5f2", border: "#cc0010", headline: "#c8102e" },
@@ -1060,6 +1060,43 @@ const extractNewswireDatelinePlace = (...values: Array<string | undefined>) => {
   return "";
 };
 
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const stripLeadingNewswireDateline = (
+  body: string,
+  places: Array<string | undefined>,
+) => {
+  const text = body.trimStart();
+  const uniquePlaces = Array.from(
+    new Set(
+      places
+        .map((place) => cleanNewswireText(place))
+        .filter((place) => place.length >= 2),
+    ),
+  ).sort((a, b) => b.length - a.length);
+
+  for (const place of uniquePlaces) {
+    const pattern = new RegExp(`^${escapeRegExp(place)}\\s*(?:[.:,;|\\-\\u0964\\uFF1A])\\s*`, "iu");
+    const stripped = text.replace(pattern, "");
+    if (stripped !== text) {
+      return stripped.trimStart();
+    }
+  }
+
+  const genericDateline = /^([\u0900-\u097FA-Za-z][\u0900-\u097FA-Za-z\s.'()/-]{1,47})\s*(?:[.:,;|\-\u0964\uFF1A])\s+/u.exec(text);
+  if (!genericDateline) {
+    return text;
+  }
+
+  const candidate = cleanNewswireText(genericDateline[1]);
+  const candidateWordCount = candidate.split(/\s+/u).filter(Boolean).length;
+  if (candidateWordCount <= 4 && !/[0-9!?]/u.test(candidate)) {
+    return text.slice(genericDateline[0].length).trimStart();
+  }
+
+  return text;
+};
+
 const resolveNewswireBylineName = (value: string, language: ArticleLanguage) => {
   const cleaned = value.replace(/\s+/gu, " ").trim();
 
@@ -1148,6 +1185,8 @@ const createArticleDataFromNewswireStory = (
   // that computed a real override) is the fix; everyone else passes
   // undefined and keeps inheriting story.articleData's own value unchanged.
   headlineOverride?: { fontSize: number; lineHeight: number; lineHeightMode: "percentage" },
+  stripBodyDateline?: boolean,
+  preferSecondaryHeadlineAsHeadline?: boolean,
 ): ArticleData => {
   const baseCapacity = capacity ?? estimateStoryWordCapacity(story);
   const targetTier = selectOptimisticNewswireWordTier(baseCapacity);
@@ -1157,8 +1196,15 @@ const createArticleDataFromNewswireStory = (
     throw new Error(`Not enough ${language === "english" ? "English" : "Hindi"} articles are available to generate this page.`);
   }
 
-  const headlineText = localized.headline || "Untitled";
-  const cleanedSubheadline = ensureEndsWithFullStop(cleanSubheadlineText(localized.subheadline));
+  const apiSecondaryHeadlineText = cleanSubheadlineText(localized.kicker || item.kicker || "");
+  const secondaryHeadlineText = cleanSubheadlineText(localized.subheadline);
+  const headlineText =
+    preferSecondaryHeadlineAsHeadline && apiSecondaryHeadlineText
+      ? apiSecondaryHeadlineText
+      : localized.headline || "Untitled";
+  const cleanedSubheadline = ensureEndsWithFullStop(
+    preferSecondaryHeadlineAsHeadline ? "" : secondaryHeadlineText,
+  );
   // The newswire's subheadings endpoint returns three per story, shortest last.
   // A one-column box titles itself with the third — it is the only one of the
   // title-length fields that lands complete in two lines of so narrow a
@@ -1192,6 +1238,21 @@ const createArticleDataFromNewswireStory = (
   if (language === "english" && story.columnSpan >= 3) {
     sanitizedBodyText = paragraphizeEnglishBody(sanitizedBodyText);
   }
+  const suppliedPlace = (localized.place || item.place || "").trim();
+  const datelinePlace = extractNewswireDatelinePlace(
+    localized.kicker,
+    item.kicker,
+    localized.body,
+    item.body,
+  );
+  if (stripBodyDateline) {
+    sanitizedBodyText = stripLeadingNewswireDateline(sanitizedBodyText, [
+      suppliedPlace,
+      datelinePlace,
+      localized.place,
+      item.place,
+    ]);
+  }
   // A small image (<= 1 internal image-column) tucked at the start of a
   // narrow (2-3 col) box has no real room for a caption to sit underneath
   // or beside it without looking cramped — always skip the caption for this
@@ -1211,13 +1272,6 @@ const createArticleDataFromNewswireStory = (
   // actually attributed.
   const isLocalDeskCategory =
     String(item.category) === "Madhya Pradesh" || String(item.category) === "National";
-  const suppliedPlace = (localized.place || item.place || "").trim();
-  const datelinePlace = extractNewswireDatelinePlace(
-    localized.kicker,
-    item.kicker,
-    localized.body,
-    item.body,
-  );
   const localDeskPlace = language === "hindi" ? "भोपाल" : "Bhopal";
   const bylinePlace = suppliedPlace || datelinePlace || (isLocalDeskCategory ? localDeskPlace : "");
   // An explicit byline typed into the wizard always wins — the agency default
@@ -1320,7 +1374,11 @@ const createArticleDataFromNewswireStory = (
   // value normalizeDeliveryRecord picks as a top-level default, so reading
   // it directly here showed Hindi kicker text under an English headline.
   const resolvedKickerText = localized.kicker || item.kicker || "";
-  const wantsKicker = !disableKicker && !isTooShortForKicker && Boolean(resolvedKickerText);
+  const wantsKicker =
+    !preferSecondaryHeadlineAsHeadline &&
+    !disableKicker &&
+    !isTooShortForKicker &&
+    Boolean(resolvedKickerText);
   const wantsStrap = !isCompactHeight && Boolean(item.strap);
   const kickerText = resolvedKickerText;
   const strapText = item.strap ?? "";
@@ -1352,7 +1410,7 @@ const createArticleDataFromNewswireStory = (
       enabled: wantsStrap,
       text: wantsStrap ? normalizeRichText(strapText) : story.articleData.strap.text,
     },
-    headline: localized.headline || "Untitled",
+    headline: headlineText,
     // Compact box: clear subheadline text and disable subheadline banner + inline sub-heads.
     subheadline: suppressSubheadline
       ? ""
@@ -1402,9 +1460,9 @@ const createArticleDataFromNewswireStory = (
       ...caption,
       // Front pages carry no photo captions — the picture sits inside the story
       // package and the copy carries the context.
-      enabled: frontPageStyle?.suppressCaptions || isNarrowWidth
-        ? false
-        : Boolean(localized.imageCaption || localized.caption),
+      enabled: !disableCaption &&
+        !(frontPageStyle?.suppressCaptions || isNarrowWidth) &&
+        Boolean(localized.imageCaption || localized.caption),
       position: autoCaptionPosition,
       // Populate photo credit from the newswire item so every photo caption has attribution.
       creditText: item.photoCredit ? normalizeRichText(item.photoCredit) : caption.creditText,
@@ -1573,12 +1631,18 @@ const chooseLayoutFittedNewswireArticleData = ({
   // site), so a flag only on the discarded draft never reaches the printed
   // page. Confirmed live: the caption kept showing until this call got it too.
   const disableCaption = options?.templateId === AKHAND_EDITORIAL_5A_TEMPLATE_ID;
+  const stripBodyDateline = options?.templateId === AKHAND_EDITORIAL_5A_TEMPLATE_ID;
   // Box 3 (मां बगलामुखी मंदिर) never carries a kicker on the printed page,
   // regardless of whether the fetched Dharma article happens to have kicker
   // text -- same "explicit override, only for this one story" shape as
   // disableCaption above.
   const disableKicker =
     options?.templateId === AKHAND_EDITORIAL_5A_TEMPLATE_ID && baseStory.templateStoryNumber === 3;
+  const preferSecondaryHeadlineAsHeadline =
+    options?.templateId === AKHAND_EDITORIAL_5A_TEMPLATE_ID &&
+    (baseStory.templateStoryNumber === 2 ||
+      baseStory.templateStoryNumber === 3 ||
+      baseStory.templateStoryNumber === 5);
   // Same fix as disableCaption/disableKicker: baseStory.headlineFontSize
   // etc already hold the correct per-story compact value (set in
   // createStoryFrame's own call in the per-slot loop above), but this
@@ -1616,6 +1680,8 @@ const chooseLayoutFittedNewswireArticleData = ({
             disableCaption,
             disableKicker,
             headlineOverride,
+            stripBodyDateline,
+            preferSecondaryHeadlineAsHeadline,
           ),
           headlineColor: finalHeadlineColor,
           subheadlineBanner: finalSubheadlineBanner,
@@ -1661,7 +1727,21 @@ const chooseLayoutFittedNewswireArticleData = ({
 
   return bestCandidate?.articleData ?? transformTypography(
     applyNewswireImportTypography(
-      createArticleDataFromNewswireStory(baseStory, item, language, bylineName, subheadingStyle, initialCapacity, options?.inlineColumnSubheadings, options?.inlineSubheadingColor),
+      createArticleDataFromNewswireStory(
+        baseStory,
+        item,
+        language,
+        bylineName,
+        subheadingStyle,
+        initialCapacity,
+        options?.inlineColumnSubheadings,
+        options?.inlineSubheadingColor,
+        disableCaption,
+        disableKicker,
+        headlineOverride,
+        stripBodyDateline,
+        preferSecondaryHeadlineAsHeadline,
+      ),
       language,
       options,
       usesRaggedRightBody(baseStory, item),
@@ -4121,8 +4201,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
                 fontSize: baseStory.headlineFontSize,
                 lineHeight: baseStory.headlineLineHeight,
                 lineHeightMode: baseStory.headlineLineHeightMode as "percentage",
-              }
+          }
             : undefined,
+          isAkhandEditorial5A,
+          isAkhandEditorial5A &&
+            (slot.storyNumber === 2 || slot.storyNumber === 3 || slot.storyNumber === 5),
         );
 
         // Prevent subheading background box collisions on adjacent/consecutive stories
@@ -4386,7 +4469,21 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           };
         }
 
-        // ── Layout 16 Specific Overrides (Post-Generation) ──────────────────
+        // ── Template Specific Overrides (Post-Generation) ───────────────────
+        if (isAkhandEditorial5A) {
+          articleData.caption = {
+            ...articleData.caption,
+            enabled: false,
+            text: "",
+            creditText: "",
+            photographer: "",
+            agency: "",
+            source: "",
+            showCredit: false,
+            showSource: false,
+          };
+        }
+
         if (options?.templateId === "Layout16") {
           if (slotIndex === 0) {
             // Force dummy fact box data if the item didn't have any

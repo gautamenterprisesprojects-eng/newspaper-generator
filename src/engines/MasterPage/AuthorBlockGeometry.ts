@@ -347,12 +347,16 @@ export const getAuthorRailReservation = (story: {
       const stackTop =
         story.y +
         getAkhandPassportStackTop(isSecondaryAuthor, isTightPrimaryAuthor);
+      const reservedStackHeight =
+        isAkhandEditorial5A(templateId) && story.storyNumber === 4
+          ? Math.max(0, getAkhandPassportStackHeight(true) - EDITORIAL_RAIL.plateClearance)
+          : getAkhandPassportStackHeight(isSecondaryAuthor);
       return [
         {
           x: story.x,
           y: stackTop,
           width: passportWidth + EDITORIAL_RAIL.gutter,
-          height: getAkhandPassportStackHeight(isSecondaryAuthor),
+          height: reservedStackHeight,
         },
       ];
     }
