@@ -401,14 +401,20 @@ const NEWS_FILL_MIN_COLUMN_SPAN = 2;
 
 const AKHAND_EDITORIAL_5A_TEMPLATE_ID: TemplateId = "AkhandEditorial5A";
 const AKHAND_EDITORIAL_5A_BOUNDS = {
-  x: 36,
+  // x/width used to be their own hardcoded 36/864 instead of CONTENT_BOUNDS'
+  // 18/900 -- the header (drawn from CONTENT_BOUNDS.x, same as every other
+  // template) sits 18pt further left and 18pt further right than this box
+  // did, which is exactly the "header and body don't line up, only on this
+  // layout" the user saw. Referencing CONTENT_BOUNDS directly instead of a
+  // second hardcoded copy means the two can never drift apart again.
+  x: CONTENT_BOUNDS.x,
   // y was 46 -- too tight a gap under the masthead, the first row of boxes
   // visibly touched the header. Bumped by 14pt and height trimmed by the
   // same amount so the content area's bottom edge (y + height) stays put --
   // this only opens breathing room at the top, doesn't shrink or shift the
   // page foot.
   y: 60,
-  width: 864,
+  width: CONTENT_BOUNDS.width,
   height: 1410,
 };
 const AKHAND_EDITORIAL_5A_SLOT_STYLES: Record<number, { fill: string; border: string; headline: string }> = {
