@@ -1539,6 +1539,13 @@ const chooseLayoutFittedNewswireArticleData = ({
   } | null = null;
   const transformTypography = (articleData: ArticleData) =>
     typographyTransform ? typographyTransform(articleData) : articleData;
+  // The Akhand5A caption suppression lives here, not just the earlier
+  // `createArticleDataFromNewswireStory` call that builds initialArticleData
+  // above -- this function's own result replaces that draft entirely
+  // (`articleData = chooseLayoutFittedNewswireArticleData(...)` at its call
+  // site), so a flag only on the discarded draft never reaches the printed
+  // page. Confirmed live: the caption kept showing until this call got it too.
+  const disableCaption = options?.templateId === AKHAND_EDITORIAL_5A_TEMPLATE_ID;
 
   for (const requestedWords of requestedTiers) {
     const candidateData = transformTypography(
@@ -1553,6 +1560,7 @@ const chooseLayoutFittedNewswireArticleData = ({
             requestedWords,
             options?.inlineColumnSubheadings,
             options?.inlineSubheadingColor,
+            disableCaption,
           ),
           headlineColor: finalHeadlineColor,
           subheadlineBanner: finalSubheadlineBanner,
@@ -3740,6 +3748,14 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         const isAkhandEditorial5AMiddleBand = isAkhandEditorial5A && slot.storyNumber === 3;
         const isAkhandEditorial5ACompactHeadline =
           isAkhandEditorial5A && (slot.storyNumber === 3 || slot.storyNumber === 4);
+        // Stories 1 (Ram Darbar lead) and 2 (Shiva, narrow rail) both print
+        // at the generic "lead"/"secondary" priority's default headline
+        // size, which reads oversized against how compact this page's real
+        // boxes are -- same kind of fix as the story-3/4 case just above,
+        // separate condition because these two are shaped differently and
+        // may need their own tuning later.
+        const isAkhandEditorial5ATopHeadline =
+          isAkhandEditorial5A && (slot.storyNumber === 1 || slot.storyNumber === 2);
         const isWideShallowNewsBand =
           (options?.pageKind === "front" || options?.pageKind === "inside") &&
           slot.priority !== "lead" &&
@@ -3761,6 +3777,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             ? {
                 headlineFontSize: Math.max(18, Math.round(defaultTypography.headlineFontSize * 0.72)),
                 headlineLineHeight: 0.86,
+                headlineLineHeightMode: "percentage" as const,
+              }
+            : {}),
+          ...(isAkhandEditorial5ATopHeadline
+            ? {
+                headlineFontSize: Math.max(20, Math.round(defaultTypography.headlineFontSize * 0.78)),
+                headlineLineHeight: 0.88,
                 headlineLineHeightMode: "percentage" as const,
               }
             : {}),
