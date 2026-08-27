@@ -1127,6 +1127,7 @@ const createArticleDataFromNewswireStory = (
   capacity?: number,
   inlineSubheadings?: boolean,
   inlineSubheadingColor?: string,
+  disableCaption?: boolean,
 ): ArticleData => {
   const baseCapacity = capacity ?? estimateStoryWordCapacity(story);
   const targetTier = selectOptimisticNewswireWordTier(baseCapacity);
@@ -1178,7 +1179,7 @@ const createArticleDataFromNewswireStory = (
   const isSmallStartImageInNarrowBox = story.columnSpan <= 3 && story.imageColumnSpan <= 1;
   const caption = {
     ...createDefaultCaptionData(localized.imageCaption || localized.caption),
-    enabled: !isSmallStartImageInNarrowBox,
+    enabled: !isSmallStartImageInNarrowBox && !disableCaption,
   };
   const cleanBody: RichTextDocument = normalizeRichText(sanitizedBodyText);
   // The upstream feed leaves `place` empty on most records, and the local city
@@ -3737,6 +3738,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
         const defaultTypography = getDefaultStoryTypographySettings(slot.priority);
         const isAkhandEditorial5AMiddleBand = isAkhandEditorial5A && slot.storyNumber === 3;
+        const isAkhandEditorial5ACompactHeadline =
+          isAkhandEditorial5A && (slot.storyNumber === 3 || slot.storyNumber === 4);
         const isWideShallowNewsBand =
           (options?.pageKind === "front" || options?.pageKind === "inside") &&
           slot.priority !== "lead" &&
@@ -3754,17 +3757,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           y: slot.y,
           width: slot.width,
           height: slot.height,
-          ...(isAkhandEditorial5AMiddleBand
+          ...(isAkhandEditorial5ACompactHeadline
             ? {
-                headlineFontSize: Math.max(20, defaultTypography.headlineFontSize - 7),
-                headlineLineHeight: 0.82,
-                headlineLineHeightMode: "percentage" as const,
-              }
-            : {}),
-          ...(isAkhandEditorial5A && slot.storyNumber === 4
-            ? {
-                headlineFontSize: Math.max(18, defaultTypography.headlineFontSize - 16),
-                headlineLineHeight: 0.78,
+                headlineFontSize: Math.max(18, Math.round(defaultTypography.headlineFontSize * 0.72)),
+                headlineLineHeight: 0.86,
                 headlineLineHeightMode: "percentage" as const,
               }
             : {}),
@@ -3934,6 +3930,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             // The inside page's own exclusive template carries the same
             // theme (isYouthUpdateInsideStory).
             ...(isYouthUpdateFrontStory || isYouthUpdateInsideStory ? { headlineToBylineExtraGap: 6 } : {}),
+            ...(isAkhandEditorial5AMiddleBand ? { headlineToBylineExtraGap: 6 } : {}),
             ...(isAkhandEditorial5A && slot.storyNumber === 4 ? { headlineToBylineExtraGap: 7 } : {}),
             ...(isAkhandVicharManthan6A && slot.storyNumber === 2 ? { headlineToBylineExtraGap: -2 } : {}),
             // This template's kicker label (the part through the colon)
@@ -4036,6 +4033,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           capacity,
           options.inlineColumnSubheadings,
           options.inlineSubheadingColor,
+          // Dharm-Sanskriti's photos are decorative page furniture (Ram
+          // Darbar, Shiva, Tulsidas), not news photos needing a source/credit
+          // caption underneath -- the printed page never captions them.
+          isAkhandEditorial5A,
         );
 
         // Prevent subheading background box collisions on adjacent/consecutive stories
