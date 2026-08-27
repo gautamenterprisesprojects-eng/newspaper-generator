@@ -17,6 +17,8 @@ type RashifalGridProps = {
   title?: string;
   /** Cells per row. Omitted by every existing caller, which keeps the default of 2. */
   columns?: number;
+  /** See RashifalGridInput.fitToContent — only Vichar-Manthan's caller sets this. */
+  fitToContent?: boolean;
 };
 
 /**
@@ -26,8 +28,8 @@ type RashifalGridProps = {
  * the export canvas draws from as well, so the screen and the printed sheet
  * cannot drift apart.
  */
-export function RashifalGrid({ x, y, width, height, readings, title, columns }: RashifalGridProps) {
-  const grid = getRashifalGrid({ x, y, width, height, readings, title, columns });
+export function RashifalGrid({ x, y, width, height, readings, title, columns, fitToContent }: RashifalGridProps) {
+  const grid = getRashifalGrid({ x, y, width, height, readings, title, columns, fitToContent });
   const serif = getNewspaperFontStack("serif");
   const sans = getNewspaperFontStack("sans");
 
@@ -181,8 +183,8 @@ export function RashifalGrid({ x, y, width, height, readings, title, columns }: 
             text={cell.text}
             fill="#2A2621"
             fontFamily={serif}
-            fontSize={7.4}
-            lineHeight={1.18}
+            fontSize={cell.textFontSize}
+            lineHeight={cell.textLineHeight / cell.textFontSize}
             align="left"
             wrap="word"
             ellipsis

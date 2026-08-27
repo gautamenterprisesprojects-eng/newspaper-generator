@@ -3629,8 +3629,9 @@ export function EditorCanvas() {
           height: story.height,
           readings: rashifalReadings,
           // Kept in lockstep with CanvasRenderLayers's own RashifalGrid call --
-          // see its comment for why Vichar-Manthan asks for 3.
+          // see its comment for why Vichar-Manthan asks for 3 and fits.
           columns: story.compositionSettings.editorialTemplateId === "AkhandVicharManthan6A" ? 3 : undefined,
+          fitToContent: story.compositionSettings.editorialTemplateId === "AkhandVicharManthan6A",
         });
         continue;
       }

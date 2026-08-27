@@ -19,6 +19,7 @@ export const drawRashifalGridToCanvas = (
     readings,
     title,
     columns,
+    fitToContent,
   }: {
     x: number;
     y: number;
@@ -28,9 +29,11 @@ export const drawRashifalGridToCanvas = (
     title?: string;
     /** Cells per row. Omitted by every existing caller, which keeps the default of 2. */
     columns?: number;
+    /** See RashifalGridInput.fitToContent — only Vichar-Manthan's caller sets this. */
+    fitToContent?: boolean;
   },
 ) => {
-  const grid = getRashifalGrid({ x, y, width, height, readings, title, columns });
+  const grid = getRashifalGrid({ x, y, width, height, readings, title, columns, fitToContent });
   const serif = getNewspaperFontStack("serif");
   const sans = getNewspaperFontStack("sans");
 
@@ -127,9 +130,9 @@ export const drawRashifalGridToCanvas = (
     // The reading, wrapped by hand and clipped to the cell — canvas has no
     // wrapping of its own, and a cell must never spill into its neighbour.
     context.fillStyle = "#2A2621";
-    const fontSize = 7.4;
+    const fontSize = cell.textFontSize;
     context.font = `${fontSize}px ${serif}`;
-    const lineHeight = fontSize * 1.18;
+    const lineHeight = cell.textLineHeight;
     const maxLines = Math.max(1, Math.floor(cell.textHeight / lineHeight));
     let line = "";
     let lineIndex = 0;

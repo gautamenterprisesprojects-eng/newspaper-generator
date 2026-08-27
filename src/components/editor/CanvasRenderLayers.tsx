@@ -583,6 +583,11 @@ const StoryItem = memo(function StoryItem({
         // per row was tuned for -- so it asks for 3 instead. Every other
         // template leaves this unset and keeps the existing default.
         columns={story.compositionSettings.editorialTemplateId === "AkhandVicharManthan6A" ? 3 : undefined}
+        // Same template's readings were being cut off mid-sentence at the
+        // shared fixed reading size -- fit shrinks a long reading's own
+        // font just enough to print in full. Every other template is
+        // unaffected.
+        fitToContent={story.compositionSettings.editorialTemplateId === "AkhandVicharManthan6A"}
       />
     );
   }

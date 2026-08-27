@@ -12,6 +12,9 @@
  * a tinted header with the sign's name and glyph, and the reading beneath.
  */
 
+import { getNewspaperFontStack } from "@/engines/FontManager/FontManagerEngine";
+import { measureTextWidth } from "@/engines/TypographyEngine/TextMeasure";
+
 /**
  * Font stack for the zodiac glyphs.
  *
@@ -21,6 +24,12 @@
  */
 export const RASHIFAL_GLYPH_FONT =
   '"Segoe UI Symbol", "Noto Sans Symbols 2", "Noto Sans Symbols", "Apple Symbols", "DejaVu Sans", sans-serif';
+
+/** The reading text's default size and line-height ratio, unchanged for every template that doesn't ask to fit-to-content. */
+export const RASHIFAL_TEXT_FONT_SIZE = 7.4;
+export const RASHIFAL_TEXT_LINE_HEIGHT_RATIO = 1.18;
+/** Never shrunk past this — below it the reading stops being comfortably legible at print size. */
+const RASHIFAL_TEXT_FONT_SIZE_FLOOR = 6;
 
 /** The twelve signs, in the order a horoscope prints them. */
 export const RASHIFAL_SIGNS = [
@@ -93,6 +102,9 @@ export type RashifalCell = RashifalReading & {
   textY: number;
   textWidth: number;
   textHeight: number;
+  /** Reading's font size and line-height, in points/px. Shrunk below the shared default only when fitToContent finds the full reading would otherwise be cut. */
+  textFontSize: number;
+  textLineHeight: number;
   metaX: number;
   metaY: number;
   metaWidth: number;
@@ -177,6 +189,15 @@ export type RashifalGridInput = {
   /** Columns of cells. Two is what the printed page uses. */
   columns?: number;
   title?: string;
+  /**
+   * Shrinks a cell's reading font just enough to fit every line of its own
+   * text, instead of the shared fixed size cutting long readings off
+   * mid-sentence. Opt-in and per-caller: Vichar-Manthan's wider, 3-column
+   * box is the one template whose readings were overflowing at the shared
+   * size, so only its caller sets this — every other template keeps the
+   * exact fixed size/line-height it always has.
+   */
+  fitToContent?: boolean;
 };
 
 /** Height of the block's own title bar. */
@@ -205,6 +226,67 @@ const washTowardsWhite = (hex: string, amount: number) => {
   return `#${[mix(r), mix(g), mix(b)]
     .map((c) => c.toString(16).padStart(2, "0"))
     .join("")}`;
+};
+
+/**
+ * How many lines `text` wraps to at `fontSize`, word-wrapped to `maxWidth`.
+ *
+ * Mirrors the by-hand wrapping `drawRashifalGridToCanvas` does with a real
+ * canvas context, but against the cached width measurer so it works
+ * wherever text metrics are available (screen or export), not just where a
+ * 2D context happens to already be open.
+ */
+const countWrappedLines = (text: string, fontFamily: string, fontSize: number, maxWidth: number): number => {
+  const trimmed = text.trim();
+
+  if (!trimmed || maxWidth <= 0) {
+    return 0;
+  }
+
+  let lines = 1;
+  let line = "";
+
+  for (const word of trimmed.split(/\s+/u)) {
+    const candidate = line ? `${line} ${word}` : word;
+    const width = measureTextWidth({ text: candidate, fontFamily, fontSize });
+
+    if (width <= maxWidth || !line) {
+      line = candidate;
+    } else {
+      lines += 1;
+      line = word;
+    }
+  }
+
+  return lines;
+};
+
+/**
+ * Finds the largest font size (down to a legibility floor) at which `text`'s
+ * own line count fits inside `maxHeight` — so a long reading shrinks just
+ * enough to print in full instead of being cut off mid-sentence at the
+ * shared fixed size. Falls back to the shared default whenever text
+ * measurement isn't available (e.g. a non-DOM test runner), which only
+ * restores the previous cutting behaviour rather than crashing.
+ */
+const fitRashifalTextSize = (text: string, fontFamily: string, maxWidth: number, maxHeight: number) => {
+  const fallback = { fontSize: RASHIFAL_TEXT_FONT_SIZE, lineHeight: RASHIFAL_TEXT_FONT_SIZE * RASHIFAL_TEXT_LINE_HEIGHT_RATIO };
+
+  try {
+    for (let fontSize = RASHIFAL_TEXT_FONT_SIZE; fontSize >= RASHIFAL_TEXT_FONT_SIZE_FLOOR; fontSize -= 0.2) {
+      const lineHeight = fontSize * RASHIFAL_TEXT_LINE_HEIGHT_RATIO;
+      const maxLines = Math.max(1, Math.floor(maxHeight / lineHeight));
+      const lines = countWrappedLines(text, fontFamily, fontSize, maxWidth);
+
+      if (lines <= maxLines) {
+        return { fontSize, lineHeight };
+      }
+    }
+
+    return { fontSize: RASHIFAL_TEXT_FONT_SIZE_FLOOR, lineHeight: RASHIFAL_TEXT_FONT_SIZE_FLOOR * RASHIFAL_TEXT_LINE_HEIGHT_RATIO };
+  } catch {
+    return fallback;
+  }
 };
 
 /** Gap between cells, horizontally and vertically. */
@@ -480,8 +562,10 @@ export const getRashifalGrid = ({
   readings,
   columns = 2,
   title = "आज का राशिफल",
+  fitToContent = false,
 }: RashifalGridInput): RashifalGrid => {
   const safeColumns = Math.max(1, columns);
+  const readingFontFamily = getNewspaperFontStack("serif");
   const count = readings.length;
   const rows = Math.max(1, Math.ceil(count / safeColumns));
 
@@ -515,6 +599,11 @@ export const getRashifalGrid = ({
     const metaHeight = metaText ? RASHIFAL_CELL_META_HEIGHT : 0;
     const textY = cellY + RASHIFAL_CELL_HEADER_HEIGHT + RASHIFAL_CELL_PADDING;
     const metaY = cellY + cellHeight - metaHeight - RASHIFAL_CELL_PADDING;
+    const textWidth = Math.max(0, cellWidth - RASHIFAL_CELL_PADDING * 2);
+    const textHeight = Math.max(0, metaY - textY - RASHIFAL_CELL_PADDING);
+    const { fontSize: textFontSize, lineHeight: textLineHeight } = fitToContent
+      ? fitRashifalTextSize(reading.text, readingFontFamily, textWidth, textHeight)
+      : { fontSize: RASHIFAL_TEXT_FONT_SIZE, lineHeight: RASHIFAL_TEXT_FONT_SIZE * RASHIFAL_TEXT_LINE_HEIGHT_RATIO };
 
     return {
       ...reading,
@@ -530,11 +619,10 @@ export const getRashifalGrid = ({
       glyphRadius,
       textX: cellX + RASHIFAL_CELL_PADDING,
       textY,
-      textWidth: Math.max(0, cellWidth - RASHIFAL_CELL_PADDING * 2),
-      textHeight: Math.max(
-        0,
-        metaY - textY - RASHIFAL_CELL_PADDING,
-      ),
+      textWidth,
+      textHeight,
+      textFontSize,
+      textLineHeight,
       metaX: cellX + RASHIFAL_CELL_PADDING,
       metaY,
       metaWidth: Math.max(0, cellWidth - RASHIFAL_CELL_PADDING * 2),
