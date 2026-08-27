@@ -6,6 +6,11 @@ export const NEWSWIRE_CATEGORIES = [
   "Business",
   "Health",
   "Entertainment",
+  // Akhand Doot's Dharm-Sanskriti editorial page only (AkhandEditorial5A) --
+  // the generic /api/editorial desk feed carries no images at all, and this
+  // page's boxes are built around real photos, so it pulls from the same
+  // delivery-news API every other category already uses instead.
+  "Dharma",
 ] as const;
 
 export type NewswireCategory = (typeof NEWSWIRE_CATEGORIES)[number];

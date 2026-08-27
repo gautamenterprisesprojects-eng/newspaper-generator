@@ -906,7 +906,34 @@ export const EditorialSlotPanel = memo(function EditorialSlotPanel({
 
       let autoFetchedStories: NewswireStory[] = [];
 
-      if (autoFill && emptyCount > 0 && autoFillSource === "editorial") {
+      // Dharm-Sanskriti (AkhandEditorial5A) only: its boxes are built around
+      // real photos (Ram Darbar, Shiva, Tulsidas), but the generic editorial
+      // desk feed below carries no image field at all -- every box would
+      // print the grey placeholder forever. Pulls from the same
+      // delivery-news API every category-based page already uses instead,
+      // filtered to articles that actually have a photo. Takes priority
+      // over the desk feed for this one template regardless of which
+      // auto-fill tab is selected, since the desk feed can never help it.
+      if (autoFill && emptyCount > 0 && state.layoutDesign === "AkhandEditorial5A") {
+        try {
+          const response = await fetch(
+            `/api/newswire?category=Dharma&language=hindi&limit=20&ts=${Date.now()}`,
+            { cache: "no-store" },
+          );
+          const payload = (await response.json().catch(() => null)) as {
+            success?: boolean;
+            data?: NewswireStory[];
+          } | null;
+
+          if (Array.isArray(payload?.data)) {
+            editorialStories = payload.data.filter((story) => Boolean(story.imageUrl)).slice(0, slots.length);
+          }
+        } catch {
+          // Leave editorialStories empty so live-feed problems remain visible.
+        }
+      }
+
+      if (autoFill && emptyCount > 0 && autoFillSource === "editorial" && editorialStories.length === 0 && state.layoutDesign !== "AkhandEditorial5A") {
         // The editorial page has its own feed: the desk's leader and comment
         // copy, plus the day's राशिफल. It is fetched per slot rather than as a
         // flat list because the headline a box gets depends on how wide it is —

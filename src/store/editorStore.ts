@@ -3735,6 +3735,14 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           resolvedColumnCount = 1;
         }
 
+        const defaultTypography = getDefaultStoryTypographySettings(slot.priority);
+        const isAkhandEditorial5AMiddleBand = isAkhandEditorial5A && slot.storyNumber === 3;
+        const isWideShallowNewsBand =
+          (options?.pageKind === "front" || options?.pageKind === "inside") &&
+          slot.priority !== "lead" &&
+          slot.columnSpan >= 4 &&
+          slot.height <= 310;
+
         const baseStory = createStoryFrame({
           id: `story-${storyNumberOffset + slot.storyNumber}`,
           templateStoryNumber: slot.storyNumber,
@@ -3746,10 +3754,24 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           y: slot.y,
           width: slot.width,
           height: slot.height,
+          ...(isAkhandEditorial5AMiddleBand
+            ? {
+                headlineFontSize: Math.max(20, defaultTypography.headlineFontSize - 7),
+                headlineLineHeight: 0.82,
+                headlineLineHeightMode: "percentage" as const,
+              }
+            : {}),
           ...(isAkhandEditorial5A && slot.storyNumber === 4
             ? {
-                headlineFontSize: Math.max(18, getDefaultStoryTypographySettings(slot.priority).headlineFontSize - 16),
+                headlineFontSize: Math.max(18, defaultTypography.headlineFontSize - 16),
                 headlineLineHeight: 0.78,
+                headlineLineHeightMode: "percentage" as const,
+              }
+            : {}),
+          ...(isWideShallowNewsBand
+            ? {
+                headlineFontSize: Math.max(18, defaultTypography.headlineFontSize - 4),
+                headlineLineHeight: 0.92,
                 headlineLineHeightMode: "percentage" as const,
               }
             : {}),
@@ -3757,8 +3779,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             ? {
                 headlineFontSize: Math.max(
                   18,
-                  getDefaultStoryTypographySettings(slot.priority).headlineFontSize -
-                    (slot.storyNumber === 2 ? 16 : 9),
+                  defaultTypography.headlineFontSize - (slot.storyNumber === 2 ? 16 : 9),
                 ),
                 headlineLineHeight: slot.storyNumber === 2 ? 0.76 : 0.84,
                 headlineLineHeightMode: "percentage" as const,
@@ -3766,10 +3787,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             : {}),
           bodyFontSize:
             isAkhandEditorial5A
-              ? Math.max(8, getDefaultStoryTypographySettings(slot.priority).bodyFontSize - 0.6)
+              ? Math.max(8, defaultTypography.bodyFontSize - 0.6)
               : language === "english"
-              ? Math.max(8, getDefaultStoryTypographySettings(slot.priority).bodyFontSize - 1)
-              : getDefaultStoryTypographySettings(slot.priority).bodyFontSize,
+              ? Math.max(8, defaultTypography.bodyFontSize - 1)
+              : defaultTypography.bodyFontSize,
           ...(isYouthUpdateInsideStory
             ? {
                 bodyLineHeight: 1.25,
