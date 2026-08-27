@@ -1636,8 +1636,7 @@ const chooseLayoutFittedNewswireArticleData = ({
   // regardless of whether the fetched Dharma article happens to have kicker
   // text -- same "explicit override, only for this one story" shape as
   // disableCaption above.
-  const disableKicker =
-    options?.templateId === AKHAND_EDITORIAL_5A_TEMPLATE_ID && baseStory.templateStoryNumber === 3;
+  const disableKicker = options?.templateId === AKHAND_EDITORIAL_5A_TEMPLATE_ID;
   const preferSecondaryHeadlineAsHeadline =
     options?.templateId === AKHAND_EDITORIAL_5A_TEMPLATE_ID &&
     (baseStory.templateStoryNumber === 2 ||
@@ -3881,8 +3880,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
         const defaultTypography = getDefaultStoryTypographySettings(slot.priority);
         const isAkhandEditorial5AMiddleBand = isAkhandEditorial5A && slot.storyNumber === 3;
+        const isAkhandEditorial5AStory3Headline =
+          isAkhandEditorial5A && slot.storyNumber === 3;
         const isAkhandEditorial5ACompactHeadline =
-          isAkhandEditorial5A && (slot.storyNumber === 3 || slot.storyNumber === 4);
+          isAkhandEditorial5A && slot.storyNumber === 4;
         // Stories 1 (Ram Darbar lead) and 2 (Shiva, narrow rail) both print
         // at the generic "lead"/"secondary" priority's default headline
         // size, which reads oversized against how compact this page's real
@@ -3912,6 +3913,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             ? {
                 headlineFontSize: Math.max(18, Math.round(defaultTypography.headlineFontSize * 0.72)),
                 headlineLineHeight: 0.86,
+                headlineLineHeightMode: "percentage" as const,
+              }
+            : {}),
+          ...(isAkhandEditorial5AStory3Headline
+            ? {
+                headlineFontSize: Math.max(16, Math.round(defaultTypography.headlineFontSize * 0.52)),
+                headlineLineHeight: 0.76,
                 headlineLineHeightMode: "percentage" as const,
               }
             : {}),
@@ -4195,7 +4203,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           // Darbar, Shiva, Tulsidas), not news photos needing a source/credit
           // caption underneath -- the printed page never captions them.
           isAkhandEditorial5A,
-          isAkhandEditorial5A && slot.storyNumber === 3,
+          isAkhandEditorial5A,
           isAkhandEditorial5A && slot.storyNumber !== 5
             ? {
                 fontSize: baseStory.headlineFontSize,
