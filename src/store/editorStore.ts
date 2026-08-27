@@ -402,9 +402,14 @@ const NEWS_FILL_MIN_COLUMN_SPAN = 2;
 const AKHAND_EDITORIAL_5A_TEMPLATE_ID: TemplateId = "AkhandEditorial5A";
 const AKHAND_EDITORIAL_5A_BOUNDS = {
   x: 36,
-  y: 46,
+  // y was 46 -- too tight a gap under the masthead, the first row of boxes
+  // visibly touched the header. Bumped by 14pt and height trimmed by the
+  // same amount so the content area's bottom edge (y + height) stays put --
+  // this only opens breathing room at the top, doesn't shrink or shift the
+  // page foot.
+  y: 60,
   width: 864,
-  height: 1424,
+  height: 1410,
 };
 const AKHAND_EDITORIAL_5A_SLOT_STYLES: Record<number, { fill: string; border: string; headline: string }> = {
   1: { fill: "#fff5f2", border: "#cc0010", headline: "#c8102e" },
@@ -1128,6 +1133,15 @@ const createArticleDataFromNewswireStory = (
   inlineSubheadings?: boolean,
   inlineSubheadingColor?: string,
   disableCaption?: boolean,
+  disableKicker?: boolean,
+  // `story.headlineFontSize`/etc set via createStoryFrame's own typography
+  // params land on the StoryFrame directly, NOT inside story.articleData --
+  // this function's return spreads story.articleData as its base, so those
+  // per-template overrides were silently invisible to every printed
+  // headline. Passing the exact values explicitly here (only from callers
+  // that computed a real override) is the fix; everyone else passes
+  // undefined and keeps inheriting story.articleData's own value unchanged.
+  headlineOverride?: { fontSize: number; lineHeight: number; lineHeightMode: "percentage" },
 ): ArticleData => {
   const baseCapacity = capacity ?? estimateStoryWordCapacity(story);
   const targetTier = selectOptimisticNewswireWordTier(baseCapacity);
@@ -1300,7 +1314,7 @@ const createArticleDataFromNewswireStory = (
   // value normalizeDeliveryRecord picks as a top-level default, so reading
   // it directly here showed Hindi kicker text under an English headline.
   const resolvedKickerText = localized.kicker || item.kicker || "";
-  const wantsKicker = !isTooShortForKicker && Boolean(resolvedKickerText);
+  const wantsKicker = !disableKicker && !isTooShortForKicker && Boolean(resolvedKickerText);
   const wantsStrap = !isCompactHeight && Boolean(item.strap);
   const kickerText = resolvedKickerText;
   const strapText = item.strap ?? "";
@@ -1315,6 +1329,13 @@ const createArticleDataFromNewswireStory = (
 
   return {
     ...cloneArticleData(story.articleData),
+    ...(headlineOverride
+      ? {
+          headlineFontSize: headlineOverride.fontSize,
+          headlineLineHeight: headlineOverride.lineHeight,
+          headlineLineHeightMode: headlineOverride.lineHeightMode,
+        }
+      : {}),
     kicker: {
       ...story.articleData.kicker,
       enabled: wantsKicker,
@@ -1546,6 +1567,32 @@ const chooseLayoutFittedNewswireArticleData = ({
   // site), so a flag only on the discarded draft never reaches the printed
   // page. Confirmed live: the caption kept showing until this call got it too.
   const disableCaption = options?.templateId === AKHAND_EDITORIAL_5A_TEMPLATE_ID;
+  // Box 3 (मां बगलामुखी मंदिर) never carries a kicker on the printed page,
+  // regardless of whether the fetched Dharma article happens to have kicker
+  // text -- same "explicit override, only for this one story" shape as
+  // disableCaption above.
+  const disableKicker =
+    options?.templateId === AKHAND_EDITORIAL_5A_TEMPLATE_ID && baseStory.templateStoryNumber === 3;
+  // Same fix as disableCaption/disableKicker: baseStory.headlineFontSize
+  // etc already hold the correct per-story compact value (set in
+  // createStoryFrame's own call in the per-slot loop above), but this
+  // function's return spreads story.articleData, which never had them --
+  // passing them through explicitly here is what actually gets them onto
+  // the printed headline. Undefined (no override) for every other page.
+  // Only stories 1-4 actually get an explicit compact size from
+  // createStoryFrame (see isAkhandEditorial5ATopHeadline/
+  // isAkhandEditorial5ACompactHeadline) -- story 5 keeps the untouched
+  // default, so it's excluded here rather than risk re-deriving a value
+  // that might not exactly match whatever story.articleData's own prototype
+  // already carries for it.
+  const headlineOverride =
+    options?.templateId === AKHAND_EDITORIAL_5A_TEMPLATE_ID && baseStory.templateStoryNumber !== 5
+      ? {
+          fontSize: baseStory.headlineFontSize,
+          lineHeight: baseStory.headlineLineHeight,
+          lineHeightMode: baseStory.headlineLineHeightMode as "percentage",
+        }
+      : undefined;
 
   for (const requestedWords of requestedTiers) {
     const candidateData = transformTypography(
@@ -1561,6 +1608,8 @@ const chooseLayoutFittedNewswireArticleData = ({
             options?.inlineColumnSubheadings,
             options?.inlineSubheadingColor,
             disableCaption,
+            disableKicker,
+            headlineOverride,
           ),
           headlineColor: finalHeadlineColor,
           subheadlineBanner: finalSubheadlineBanner,
@@ -4060,6 +4109,14 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           // Darbar, Shiva, Tulsidas), not news photos needing a source/credit
           // caption underneath -- the printed page never captions them.
           isAkhandEditorial5A,
+          isAkhandEditorial5A && slot.storyNumber === 3,
+          isAkhandEditorial5A && slot.storyNumber !== 5
+            ? {
+                fontSize: baseStory.headlineFontSize,
+                lineHeight: baseStory.headlineLineHeight,
+                lineHeightMode: baseStory.headlineLineHeightMode as "percentage",
+              }
+            : undefined,
         );
 
         // Prevent subheading background box collisions on adjacent/consecutive stories
