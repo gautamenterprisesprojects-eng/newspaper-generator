@@ -238,7 +238,7 @@ const objectFrameStyleKeys: Partial<Record<EditorObjectType, keyof ArticleData["
 
 const typographyWeights: StoryTypographyWeight[] = ["400", "500", "600", "700", "800", "900"];
 const storyPriorities: StoryFrame["priority"][] = ["lead", "major", "secondary", "brief", "filler"];
-const storyColumnSpans: StoryColumnSpan[] = [1, 2, 3, 4, 5, 6];
+const storyColumnSpans: StoryColumnSpan[] = [1, 2, 3, 4, 5, 6, 7, 8];
 const pageTypes: PageType[] = ["front", "state", "city", "national", "sports", "editorial"];
 const imageAlignments: StoryImageAlignment[] = ["top-left", "top-right", "center", "bottom", "left", "right", "top"];
 const imageWrapModes: StoryImageWrapMode[] = ["none", "rectangular", "newspaper", "contour"];

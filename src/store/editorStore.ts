@@ -424,6 +424,16 @@ const AKHAND_EDITORIAL_5A_SLOT_STYLES: Record<number, { fill: string; border: st
   4: { fill: "#f3fae9", border: "#ffcc00", headline: "#188038" },
   5: { fill: "#eff9fc", border: "#cc0010", headline: "#111111" },
 };
+const CLIFF_EIGHT_COLUMN_SLOT_STYLE_SEQUENCE = [
+  AKHAND_EDITORIAL_5A_SLOT_STYLES[1],
+  AKHAND_EDITORIAL_5A_SLOT_STYLES[2],
+  AKHAND_EDITORIAL_5A_SLOT_STYLES[3],
+  AKHAND_EDITORIAL_5A_SLOT_STYLES[4],
+  AKHAND_EDITORIAL_5A_SLOT_STYLES[5],
+  AKHAND_EDITORIAL_5A_SLOT_STYLES[1],
+  AKHAND_EDITORIAL_5A_SLOT_STYLES[2],
+  AKHAND_EDITORIAL_5A_SLOT_STYLES[3],
+] as const;
 
 const AKHAND_VICHAR_MANTHAN_6A_TEMPLATE_ID: TemplateId = "AkhandVicharManthan6A";
 // Story 1 (मप्र) and 2/5 (the two author-rail pieces) keep the page's plain
@@ -1113,7 +1123,8 @@ const determineInternalTextColumnCount = (widthPt: number, defaultSpan: number, 
   if (templateId === "ProfessionalNews10A" || isCustomLayout || !templateId) {
     return computePhysicalTextColumns(widthPt, defaultSpan);
   }
-  return Math.min(Math.max(defaultSpan, 1), 6);
+  const templateColumnCount = getTemplateColumnCount(templateId as TemplateId, DEFAULT_PAGE_MASTER.columns);
+  return Math.min(Math.max(defaultSpan, 1), templateColumnCount);
 };
 
 // Deterministic string hash used to pick per-story visual variants (e.g. caption
@@ -1335,6 +1346,7 @@ const createArticleDataFromNewswireStory = (
     // The editorial page has no subheadline banner at all — page 8 goes from
     // headline straight into the copy, with no reversed bar anywhere on it.
     Boolean(editorialPageStyle?.suppressSubheadline) ||
+    Boolean(story.compositionSettings?.suppressSubheadline) ||
     (!keepSubheadlineAsNarrowTitle &&
       (priorityBasedSuppressSubheadline || isTinyHeight || isNarrowWidth));
   const internalTextColumns = story.articleData?.columnCount ?? 1;
@@ -1353,7 +1365,8 @@ const createArticleDataFromNewswireStory = (
     frontPageSuppressInlineSubheadings ||
     // A signed comment runs as one continuous argument on an editorial page,
     // never chopped into sections.
-    Boolean(editorialPageStyle?.suppressInlineSubheadings);
+    Boolean(editorialPageStyle?.suppressInlineSubheadings) ||
+    Boolean(story.compositionSettings?.suppressInlineSubheadings);
 
   // ── Per-story chrome from newswire item ─────────────────────────────────
   // Kicker + strap + pull-quote + fact-box are only enabled when the source
@@ -3301,8 +3314,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           templateStoryNumber: slot.storyNumber,
           role: getRoleFromPriority(slot.priority),
           priority: slot.priority,
-          columnStart: Math.min(Math.max(slot.columnStart, 1), 6) as StoryColumnSpan,
-          columnSpan: Math.min(Math.max(slot.columnSpan, 1), 6) as StoryColumnSpan,
+          columnStart: Math.min(Math.max(slot.columnStart, 1), DEFAULT_PAGE_MASTER.columns) as StoryColumnSpan,
+          columnSpan: Math.min(Math.max(slot.columnSpan, 1), DEFAULT_PAGE_MASTER.columns) as StoryColumnSpan,
           x: slot.x,
           y: slot.y,
           width: slot.width,
@@ -3313,7 +3326,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
               slot.storyNumber === 1
                 ? prototypeArticle.headline
                 : `${richTextToPlainText(prototypeArticle.headline)} ${slot.storyNumber}`,
-            columnCount: Math.min(Math.max(slot.columnSpan, 1), 6),
+            columnCount: Math.min(Math.max(slot.columnSpan, 1), DEFAULT_PAGE_MASTER.columns),
           },
           compositionSettings: {
             ...initialCompositionSettings,
@@ -3781,12 +3794,19 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         const isYouthUpdateInsideStory = isYouthUpdateInsideTemplateId(options?.templateId);
         const isAkhandEditorial5A = options?.templateId === AKHAND_EDITORIAL_5A_TEMPLATE_ID;
         const isAkhandVicharManthan6A = options?.templateId === AKHAND_VICHAR_MANTHAN_6A_TEMPLATE_ID;
+        const isEightColumnTemplate = options?.templateId?.includes("EightColumn") ?? false;
+        const isEightColumnTwoColumnSlot = isEightColumnTemplate && slot.columnSpan <= 2;
+        const isEightColumnThreeColumnSlot = isEightColumnTemplate && slot.columnSpan === 3;
+        const isShortEightColumnNarrowSlot =
+          isEightColumnTemplate &&
+          slot.columnSpan === 3 &&
+          slot.height < 260;
         const isAkhandVicharManthanImageSlot =
           isAkhandVicharManthan6A && [2, 3, 4, 5, 6].includes(slot.storyNumber);
         const youthUpdateInsideCompactSlot = isYouthUpdateInsideStory && slot.columnSpan <= 2;
         const resolvedImageEnabled = isAkhandEditorial5A || isAkhandVicharManthanImageSlot
           ? true
-          : priorityForbidsImage || verySmallImageDenied || youthUpdateInsideCompactSlot
+          : priorityForbidsImage || verySmallImageDenied || youthUpdateInsideCompactSlot || isEightColumnTwoColumnSlot
           ? false
           : isProfessional10A
             ? imageAllowed && (Boolean(item?.imageUrl) || hasAnyNewswireImage)
@@ -3903,8 +3923,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           templateStoryNumber: slot.storyNumber,
           role: getRoleFromPriority(slot.priority),
           priority: slot.priority,
-          columnStart: Math.min(Math.max(slot.columnStart, 1), 6) as StoryColumnSpan,
-          columnSpan: Math.min(Math.max(slot.columnSpan, 1), 6) as StoryColumnSpan,
+          columnStart: Math.min(Math.max(slot.columnStart, 1), pageColumnCount) as StoryColumnSpan,
+          columnSpan: Math.min(Math.max(slot.columnSpan, 1), pageColumnCount) as StoryColumnSpan,
           x: slot.x,
           y: slot.y,
           width: slot.width,
@@ -3950,6 +3970,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           bodyFontSize:
             isAkhandEditorial5A
               ? Math.max(8, defaultTypography.bodyFontSize - 0.6)
+              : isEightColumnTemplate
+              ? Math.max(8, defaultTypography.bodyFontSize - 1)
               : language === "english"
               ? Math.max(8, defaultTypography.bodyFontSize - 1)
               : defaultTypography.bodyFontSize,
@@ -3974,6 +3996,19 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             : {}),
           ...(isFrontPageBottomThreeColumn && resolvedImageEnabled
             ? { imageAlignment: "top-right" as const, imageColumnSpan: 1 as StoryColumnSpan }
+            : {}),
+          ...(isEightColumnTemplate && resolvedImageEnabled
+            ? {
+                imageColumnSpan: Math.min(2, slot.columnSpan) as StoryColumnSpan,
+                imageHeight:
+                  slot.priority === "lead"
+                    ? 156
+                    : slot.priority === "major"
+                      ? 132
+                      : 112,
+                imageHeightMode: "fixed" as const,
+                autoSizeImage: false,
+              }
             : {}),
           ...(isYouthUpdateInsideStory && resolvedImageEnabled
             ? {
@@ -4099,6 +4134,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             ...(isAkhandEditorial5AMiddleBand ? { headlineToBylineExtraGap: 6 } : {}),
             ...(isAkhandEditorial5A && slot.storyNumber === 4 ? { headlineToBylineExtraGap: 7 } : {}),
             ...(isAkhandVicharManthan6A && slot.storyNumber === 2 ? { headlineToBylineExtraGap: -2 } : {}),
+            ...(isEightColumnTwoColumnSlot ? { headlineToBylineExtraGap: 4 } : {}),
             // This template's kicker label (the part through the colon)
             // matches the page's own cyan theme instead of the standard
             // kicker red. Narrow/badge kickers ignore this field by design
@@ -4110,11 +4146,15 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           },
           compositionSettings: {
             ...initialCompositionSettings,
+            editorialTemplateId: options?.templateId,
             bodyRendererMode: "segmented" as const,
             // Enable fact-box / pull-quote gating based on whether the newswire
             // item actually carries the data — Phase 1 chrome plumbing.
             enableFactBox: Boolean(item?.factBoxRows && item.factBoxRows.length > 0),
             enablePullQuote: Boolean(item?.pullQuoteText),
+            ...(isEightColumnTwoColumnSlot ? { tightTwoColumnBylineToBodyGap: true } : {}),
+            ...(isShortEightColumnNarrowSlot ? { suppressSubheadline: true } : {}),
+            ...(isEightColumnThreeColumnSlot ? { suppressInlineSubheadings: true } : {}),
             ...(options?.pageKind === "front" ? { frontPageStyle: FRONT_PAGE_ARTICLE_STYLE } : {}),
             // Inside pages take the same typography through their own field, so
             // the front page's band geometry stays off. Editorial pages take
@@ -4150,7 +4190,6 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             ...(options?.pageKind === "editorial"
               ? {
                   editorialPageStyle: EDITORIAL_PAGE_ARTICLE_STYLE,
-                  editorialTemplateId: options?.templateId,
                   // Editorial pages use a house drop cap on every story box.
                   // The DropCapEngine owns the two-row geometry, so canvas and
                   // PDF export share the same text flow.
@@ -4400,6 +4439,17 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         }
 
         // ── Layout 16 Specific Overrides ────────────────────────────────────
+        if (isEightColumnTemplate) {
+          const style =
+            CLIFF_EIGHT_COLUMN_SLOT_STYLE_SEQUENCE[
+              (slot.storyNumber - 1) % CLIFF_EIGHT_COLUMN_SLOT_STYLE_SEQUENCE.length
+            ];
+          finalContainerStyles = normalizeContainerStyles({
+            ...initialArticleData.containerStyles,
+            article: createAkhandEditorialContainerStyle(style.fill, style.border),
+          });
+        }
+
         if (options?.templateId === "Layout16") {
           // 1. Eclips images (rounded corners) for all stories
           baseStory.imageShapeType = "ellipse";

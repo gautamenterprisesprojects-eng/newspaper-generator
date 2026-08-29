@@ -5,7 +5,7 @@ import {
 } from "@/engines/TypographyEngine/SentenceBoundaryEngine";
 
 const MIN_COLUMN_COUNT = 1;
-const MAX_COLUMN_COUNT = 6;
+const MAX_COLUMN_COUNT = 8;
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 

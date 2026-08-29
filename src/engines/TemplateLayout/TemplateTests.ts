@@ -231,7 +231,7 @@ for (const frontTemplateId of FRONT_PAGE_TEMPLATE_IDS) {
     contentY,
     contentWidth: contentBounds.width,
     contentHeight: contentBounds.y + contentBounds.height - contentY,
-    columnCount: DEFAULT_PAGE_MASTER.columns,
+    columnCount: getTemplateColumnCount(frontTemplateId, DEFAULT_PAGE_MASTER.columns),
     gutter: toPoints(DEFAULT_PAGE_MASTER.gutter),
   });
 

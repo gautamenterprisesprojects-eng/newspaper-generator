@@ -60,7 +60,7 @@ export type StoryWorkflowStatus =
   | "edited"
   | "locked";
 
-export type StoryColumnSpan = 1 | 2 | 3 | 4 | 5 | 6;
+export type StoryColumnSpan = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
 export type StoryHierarchyVisualStyle = {
   headlineSize: number;
@@ -950,6 +950,10 @@ export type ArticleCompositionSettings = {
   insidePageStyle?: FrontPageArticleStyle;
   /** Suppresses inside-page gutter hairlines for custom layouts that draw their own visual separation. */
   suppressColumnRules?: boolean;
+  /** Clear the subheadline/banner for template-specific story boxes. */
+  suppressSubheadline?: boolean;
+  /** Disable inline bullet/subheading blocks for template-specific story boxes. */
+  suppressInlineSubheadings?: boolean;
   /** Draw body copy as natural lines instead of per-word positioned segments. */
   suppressBodySegments?: boolean;
   /** Render body columns through Konva Text's native justify path. */
@@ -990,6 +994,13 @@ export type ArticleCompositionSettings = {
    * default and set only for Youth UPDATE, so no other publisher's boxes move.
    */
   tightBylineToBodyGap?: boolean;
+  /**
+   * Tightens only narrow two-column article boxes that keep the normal byline
+   * treatment. Unlike `tightBylineToBodyGap`, this does not convert the byline
+   * into a colored badge; it only avoids double-snapping the byline reserve
+   * before body flow begins.
+   */
+  tightTwoColumnBylineToBodyGap?: boolean;
   /**
    * Editorial-page house style. Present only on stories composed for an
    * editorial page, so every rule it carries is scoped to that page.

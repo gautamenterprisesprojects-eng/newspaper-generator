@@ -1,7 +1,7 @@
 import type { RegionEngineInput, RegionEngineResult, RegionRect, TextRegion } from "./RegionTypes";
 
 const MIN_COLUMN_COUNT = 1;
-const MAX_COLUMN_COUNT = 6;
+const MAX_COLUMN_COUNT = 8;
 const MIN_REGION_SIZE = 0.001;
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);

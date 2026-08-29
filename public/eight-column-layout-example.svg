@@ -1,0 +1,140 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 936 1512" width="936" height="1512" role="img" aria-label="Eight column front page layout example">
+  <defs>
+    <style>
+      .page { fill: #fffdf8; }
+      .margin { fill: none; stroke: #d7cab8; stroke-width: 1.2; stroke-dasharray: 8 7; }
+      .header { fill: #efe5d4; stroke: #1f2933; stroke-width: 2; }
+      .col { fill: #f7f2e9; stroke: #ddcfba; stroke-width: 0.8; }
+      .box { fill: #ffffff; stroke: #111827; stroke-width: 2; }
+      .box-soft { fill: #fbf7ef; stroke: #111827; stroke-width: 2; }
+      .photo { fill: #d8e8ef; stroke: #31586a; stroke-width: 1.4; }
+      .rail { fill: #f3f5f7; }
+      .label { font-family: Arial, sans-serif; fill: #111827; font-size: 16px; font-weight: 700; }
+      .small { font-family: Arial, sans-serif; fill: #374151; font-size: 12px; }
+      .tiny { font-family: Arial, sans-serif; fill: #6b7280; font-size: 10px; }
+      .rule { stroke: #111827; stroke-width: 1.1; }
+      .accent { fill: #b51d28; }
+      .accent-text { font-family: Arial, sans-serif; fill: white; font-size: 12px; font-weight: 700; }
+    </style>
+  </defs>
+
+  <rect class="page" x="0" y="0" width="936" height="1512"/>
+  <rect class="header" x="0" y="0" width="936" height="173"/>
+  <text class="label" x="468" y="74" text-anchor="middle" style="font-size:36px">EXISTING FRONT HEADER AREA</text>
+  <text class="small" x="468" y="105" text-anchor="middle">13in wide x 2.4in high - header artwork unchanged</text>
+  <rect class="margin" x="18" y="27" width="900" height="1434"/>
+
+  <g opacity="0.55">
+    <rect class="col" x="18" y="173" width="107" height="1288"/>
+    <rect class="col" x="131" y="173" width="107" height="1288"/>
+    <rect class="col" x="244" y="173" width="107" height="1288"/>
+    <rect class="col" x="357" y="173" width="107" height="1288"/>
+    <rect class="col" x="470" y="173" width="107" height="1288"/>
+    <rect class="col" x="583" y="173" width="107" height="1288"/>
+    <rect class="col" x="696" y="173" width="107" height="1288"/>
+    <rect class="col" x="811" y="173" width="107" height="1288"/>
+  </g>
+
+  <g>
+    <rect class="box-soft" x="18" y="185" width="220" height="320"/>
+    <rect class="accent" x="18" y="185" width="220" height="24"/>
+    <text class="accent-text" x="28" y="202">RAIL / SHORTS</text>
+    <text class="label" x="30" y="238">Box 1</text>
+    <text class="small" x="30" y="260">2 columns, text only</text>
+    <line class="rule" x1="30" y1="284" x2="226" y2="284"/>
+    <line class="rule" x1="30" y1="310" x2="226" y2="310"/>
+    <line class="rule" x1="30" y1="336" x2="210" y2="336"/>
+  </g>
+
+  <g>
+    <rect class="box" x="244" y="185" width="446" height="320"/>
+    <rect class="photo" x="260" y="218" width="414" height="120"/>
+    <text class="label" x="467" y="285" text-anchor="middle">PHOTO OK</text>
+    <text class="label" x="260" y="374">Box 2 - lead</text>
+    <text class="small" x="260" y="396">4 columns, strong height</text>
+    <line class="rule" x1="260" y1="425" x2="674" y2="425"/>
+    <line class="rule" x1="260" y1="452" x2="640" y2="452"/>
+  </g>
+
+  <g>
+    <rect class="box-soft" x="696" y="185" width="222" height="320"/>
+    <text class="label" x="710" y="238">Box 3</text>
+    <text class="small" x="710" y="260">2 columns, text only</text>
+    <line class="rule" x1="710" y1="286" x2="904" y2="286"/>
+    <line class="rule" x1="710" y1="312" x2="904" y2="312"/>
+    <line class="rule" x1="710" y1="338" x2="884" y2="338"/>
+  </g>
+
+  <g>
+    <rect class="box" x="18" y="521" width="333" height="285"/>
+    <rect class="photo" x="34" y="552" width="301" height="96"/>
+    <text class="small" x="184" y="607" text-anchor="middle">3-column image</text>
+    <text class="label" x="34" y="686">Box 4</text>
+    <line class="rule" x1="34" y1="720" x2="334" y2="720"/>
+    <line class="rule" x1="34" y1="746" x2="304" y2="746"/>
+  </g>
+
+  <g>
+    <rect class="box" x="357" y="521" width="333" height="285"/>
+    <text class="label" x="373" y="568">Box 5</text>
+    <text class="small" x="373" y="590">3 columns, no cramped band</text>
+    <line class="rule" x1="373" y1="632" x2="674" y2="632"/>
+    <line class="rule" x1="373" y1="660" x2="674" y2="660"/>
+    <line class="rule" x1="373" y1="688" x2="648" y2="688"/>
+  </g>
+
+  <g>
+    <rect class="box-soft" x="696" y="521" width="222" height="285"/>
+    <text class="label" x="710" y="568">Box 6</text>
+    <text class="small" x="710" y="590">2 columns, text only</text>
+    <line class="rule" x1="710" y1="630" x2="904" y2="630"/>
+    <line class="rule" x1="710" y1="656" x2="904" y2="656"/>
+    <line class="rule" x1="710" y1="682" x2="884" y2="682"/>
+  </g>
+
+  <g>
+    <rect class="box-soft" x="18" y="822" width="107" height="270"/>
+    <rect class="rail" x="18" y="822" width="107" height="270"/>
+    <text class="label" x="31" y="868">Box 7</text>
+    <text class="small" x="31" y="890">1 col</text>
+    <text class="small" x="31" y="910">text only</text>
+  </g>
+
+  <g>
+    <rect class="box" x="131" y="822" width="446" height="270"/>
+    <rect class="photo" x="147" y="852" width="414" height="88"/>
+    <text class="small" x="354" y="905" text-anchor="middle">4-column image</text>
+    <text class="label" x="147" y="978">Box 8</text>
+    <line class="rule" x1="147" y1="1012" x2="560" y2="1012"/>
+    <line class="rule" x1="147" y1="1038" x2="526" y2="1038"/>
+  </g>
+
+  <g>
+    <rect class="box" x="583" y="822" width="335" height="270"/>
+    <text class="label" x="599" y="868">Box 9</text>
+    <text class="small" x="599" y="890">3 columns</text>
+    <line class="rule" x1="599" y1="932" x2="902" y2="932"/>
+    <line class="rule" x1="599" y1="958" x2="902" y2="958"/>
+    <line class="rule" x1="599" y1="984" x2="870" y2="984"/>
+  </g>
+
+  <g>
+    <rect class="box" x="18" y="1108" width="446" height="330"/>
+    <text class="label" x="34" y="1154">Box 10 - wide package</text>
+    <text class="small" x="34" y="1176">4 columns, proper depth</text>
+    <line class="rule" x1="34" y1="1218" x2="448" y2="1218"/>
+    <line class="rule" x1="34" y1="1246" x2="448" y2="1246"/>
+    <line class="rule" x1="34" y1="1274" x2="420" y2="1274"/>
+  </g>
+
+  <g>
+    <rect class="box" x="470" y="1108" width="448" height="330"/>
+    <rect class="photo" x="486" y="1140" width="416" height="110"/>
+    <text class="small" x="694" y="1204" text-anchor="middle">4-column image</text>
+    <text class="label" x="486" y="1288">Box 11</text>
+    <line class="rule" x1="486" y1="1322" x2="902" y2="1322"/>
+    <line class="rule" x1="486" y1="1350" x2="864" y2="1350"/>
+  </g>
+
+  <text class="tiny" x="18" y="1486">8-column concept: images only in 3+ column boxes; 1-2 column boxes remain text/rail modules. Body starts after existing front header height.</text>
+</svg>

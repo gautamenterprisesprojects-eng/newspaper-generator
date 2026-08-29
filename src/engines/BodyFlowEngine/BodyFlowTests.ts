@@ -83,7 +83,7 @@ const runDistributionAssertions = (wordCount: number, columnCount: number) => {
 };
 
 const tests: TestCase[] = [500, 2000, 5000].flatMap((wordCount) =>
-  [1, 2, 3, 4, 5, 6].map((columnCount) => ({
+  [1, 2, 3, 4, 5, 6, 7, 8].map((columnCount) => ({
     name: `${wordCount} words / ${columnCount} columns`,
     run: () => runDistributionAssertions(wordCount, columnCount),
   })),

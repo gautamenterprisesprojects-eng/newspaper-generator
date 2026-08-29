@@ -40,8 +40,10 @@ const minSpanByPriority: Record<StoryFrame["priority"], StoryColumnSpan> = {
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
+const MAX_STORY_COLUMN_SPAN = 8;
+
 const toStoryColumnSpan = (value: number): StoryColumnSpan =>
-  clamp(Math.round(value), 1, 6) as StoryColumnSpan;
+  clamp(Math.round(value), 1, MAX_STORY_COLUMN_SPAN) as StoryColumnSpan;
 
 const getMinSpan = (story: StoryFrame) => minSpanByPriority[story.priority];
 

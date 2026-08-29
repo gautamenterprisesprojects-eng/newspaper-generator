@@ -209,14 +209,14 @@ const positions: ImagePosition[] = [
 ];
 
 const tests: TestCase[] = positions.flatMap((position) =>
-  [1, 2, 3, 4, 5, 6].map((columnCount) => ({
+  [1, 2, 3, 4, 5, 6, 7, 8].map((columnCount) => ({
     name: `${position} / ${columnCount} columns`,
     run: () => assertRegionSet(position, columnCount),
   })),
 ).concat({
   name: "Top-side image creates column recovery regions",
   run: assertTopSideImageCreatesColumnRecoveryRegions,
-}, ...[2, 3, 4, 5, 6].map((columnCount) => ({
+}, ...[2, 3, 4, 5, 6, 7, 8].map((columnCount) => ({
   name: `${columnCount}-column top-right image leaves no unused columns`,
   run: () => assertTopRightImageLeavesNoUnusedColumns(columnCount),
 })), {

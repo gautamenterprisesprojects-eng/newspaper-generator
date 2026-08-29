@@ -116,8 +116,8 @@ const placeStoryInSlot = (
   height: slot.height,
   priority: slot.priority,
   role: slot.priority === "lead" ? "lead" : slot.priority === "major" ? "major" : slot.priority === "brief" ? "brief" : "medium",
-  columnStart: Math.max(1, Math.min(6, slot.columnStart)) as StoryColumnSpan,
-  columnSpan: Math.max(1, Math.min(6, slot.columnSpan)) as StoryColumnSpan,
+  columnStart: Math.max(1, Math.min(8, slot.columnStart)) as StoryColumnSpan,
+  columnSpan: Math.max(1, Math.min(8, slot.columnSpan)) as StoryColumnSpan,
   imageEnabled: story.imageEnabled || slot.priority === "lead",
   compositionSettings: {
     ...story.compositionSettings,
@@ -195,4 +195,3 @@ export const composeAutoPage = (input: AutoPageComposerInput): PageCompositionRe
 export const AutoPageComposer = {
   composeAutoPage,
 };
-

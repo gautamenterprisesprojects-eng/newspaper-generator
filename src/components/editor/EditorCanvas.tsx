@@ -271,6 +271,14 @@ const getYouthUpdateInsideTemplateIdFromLayoutShape = (
   return null;
 };
 const wizardLayoutDesigns: Array<{ id: TemplateId; name: string; storyCount: number }> = [
+  { id: "CliffFrontEightColumn8A", name: "8 Column Lead Mix", storyCount: 8 },
+  { id: "CliffFrontEightColumn8B", name: "8 Column Right Lead Mix", storyCount: 8 },
+  { id: "CliffFrontEightColumn7C", name: "8 Column Banner Mix", storyCount: 7 },
+  { id: "CliffFrontEightColumn8D", name: "8 Column Split Mix", storyCount: 8 },
+  { id: "CliffInsideEightColumn8A", name: "8 Column Inside Banner Mix", storyCount: 8 },
+  { id: "CliffInsideEightColumn8B", name: "8 Column Inside City Mix", storyCount: 8 },
+  { id: "CliffInsideEightColumn7C", name: "8 Column Inside Anchor Mix", storyCount: 7 },
+  { id: "CliffInsideEightColumn8D", name: "8 Column Inside Lead Mix", storyCount: 8 },
   { id: "IndianFront6A", name: "Indian Front 6A", storyCount: 6 },
   { id: "IndianFront6B", name: "Indian Front 6B", storyCount: 6 },
   { id: "IndianFront7A", name: "Indian Front 7A", storyCount: 7 },
@@ -570,7 +578,7 @@ const getWizardTabForPortalPage = (page: PortalPagePlan): WizardTab => {
 // FRONT_PAGE_TEMPLATE_IDS[1] ("CliffFront11A") is excluded from batch mode's
 // automatic page-1 rotation on request -- left selectable from the manual
 // wizard design picker, just never auto-chosen for an unattended batch run.
-const BATCH_FRONT_PAGE_TEMPLATE_IDS = FRONT_PAGE_TEMPLATE_IDS.filter((_, index) => index !== 1);
+const BATCH_FRONT_PAGE_TEMPLATE_IDS = FRONT_PAGE_TEMPLATE_IDS.filter((templateId) => templateId !== "CliffFront11A");
 
 /**
  * Maps a publisher's page-section label (e.g. "Sports", "Business",
@@ -4774,20 +4782,28 @@ export function EditorCanvas() {
       pageSetupDraft.marginTop,
     ],
   );
+  const effectivePageSetupColumns = useMemo(
+    () =>
+      visibleStoryLayouts.reduce(
+        (max, { story }) => Math.max(max, story.columnStart + story.columnSpan - 1),
+        pageSetupDraft.columns,
+      ),
+    [pageSetupDraft.columns, visibleStoryLayouts],
+  );
   const columns = useMemo(
     () =>
       createColumnGrid({
         pageWidth: pageMaster.width,
         contentX: pageSetupDraft.marginLeft,
         contentWidth: Math.max(1, pageMaster.width - pageSetupDraft.marginLeft - pageSetupDraft.marginRight),
-        columnCount: pageSetupDraft.columns,
+        columnCount: effectivePageSetupColumns,
         gutter: pageSetupDraft.gutter,
       }).map((column) => ({
         ...column,
         x: toPoints(column.x),
         width: toPoints(column.width),
       })),
-    [pageSetupDraft.columns, pageSetupDraft.gutter, pageSetupDraft.marginLeft, pageSetupDraft.marginRight],
+    [effectivePageSetupColumns, pageSetupDraft.gutter, pageSetupDraft.marginLeft, pageSetupDraft.marginRight],
   );
   const frameLayoutContext = useMemo(
     () =>

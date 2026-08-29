@@ -121,6 +121,34 @@ export const WIZARD_FRONT_PAGE_DESIGNS: Array<{
   description: string;
 }> = [
   {
+    id: "CliffFrontEightColumn8A",
+    name: "8 Column Lead Mix",
+    storyCount: 8,
+    description:
+      "Fresh 8-column front layout with staggered 5/3, 2/6, 3/2/3, and full-width rows.",
+  },
+  {
+    id: "CliffFrontEightColumn8B",
+    name: "8 Column Right Lead Mix",
+    storyCount: 8,
+    description:
+      "Fresh 8-column front layout with a right-side 6-column lead, full-height 2-column boxes, and a full-width lower story.",
+  },
+  {
+    id: "CliffFrontEightColumn7C",
+    name: "8 Column Banner Mix",
+    storyCount: 7,
+    description:
+      "Fresh 8-column front layout with a full-width banner lead, 3/2/3 row, 6/2 row, and full-width footer.",
+  },
+  {
+    id: "CliffFrontEightColumn8D",
+    name: "8 Column Split Mix",
+    storyCount: 8,
+    description:
+      "Fresh 8-column front layout with 4/2/2, 5/3, 2/6, and full-width rows, all full-height.",
+  },
+  {
     id: "CliffFront8A",
     name: "द क्लिफ न्यूज़ फ्रंट पेज (8 बॉक्स)",
     storyCount: 8,
@@ -349,8 +377,8 @@ export const WIZARD_EDITORIAL_PAGE_DESIGNS: Array<{
 // every call rather than deciding once at module load.
 const getDefaultFrontLayout = () => getFrontPageDesigns()[0];
 const DEFAULT_EDITORIAL_LAYOUT = WIZARD_EDITORIAL_PAGE_DESIGNS[0];
-const DEFAULT_INSIDE_LAYOUT: TemplateId = "IndianFront6A";
-const DEFAULT_INSIDE_ARTICLE_COUNT = 6;
+const DEFAULT_INSIDE_LAYOUT: TemplateId = "CliffInsideEightColumn8A";
+const DEFAULT_INSIDE_ARTICLE_COUNT = 8;
 
 const INCHES_TO_CM = 2.54;
 const FRONT_HEADER_CM = FRONT_HEADER_HEIGHT_IN * INCHES_TO_CM;
@@ -372,6 +400,10 @@ export const WIZARD_LAYOUT_DESIGNS: Array<{
   storyCount: number;
   category: LayoutDesignCategory;
 }> = [
+  { id: "CliffInsideEightColumn8A", name: "8 Column Inside Banner Mix", storyCount: 8, category: "basic" },
+  { id: "CliffInsideEightColumn8B", name: "8 Column Inside City Mix", storyCount: 8, category: "basic" },
+  { id: "CliffInsideEightColumn7C", name: "8 Column Inside Anchor Mix", storyCount: 7, category: "basic" },
+  { id: "CliffInsideEightColumn8D", name: "8 Column Inside Lead Mix", storyCount: 8, category: "basic" },
   { id: "IndianFront6A", name: "इंडियन फ्रंट 6A", storyCount: 6, category: "basic" },
   { id: "IndianFront7A", name: "इंडियन फ्रंट 7A", storyCount: 6, category: "basic" },
   { id: "IndianFront7B", name: "इंडियन फ्रंट 7B", storyCount: 6, category: "basic" },

@@ -218,7 +218,9 @@ const MIN_BODY_HEIGHT = 42;
 // 8.64pt (which matched the page's column gutter) per an explicit request to
 // tighten spacing inside article boxes, horizontally as well as vertically.
 const COLUMN_GAP = 6.05;
+const EIGHT_COLUMN_BODY_COLUMN_GAP = 9.05;
 const MIN_BODY_COLUMN_WIDTH = 120;
+const EIGHT_COLUMN_MIN_BODY_COLUMN_WIDTH = 95;
 const HEADLINE_MEASUREMENT_SAFETY_RATIO = 1;
 const MM_TO_POINTS = 72 / 25.4;
 const DEFAULT_ARTICLE_END_BREATHING_SPACE_MM = 2;
@@ -558,12 +560,12 @@ const buildJustifiedRichSegments = (
   const renderWords = renderText.split(/(\s+)/u);
 
   let currentX = lineX;
-  let origCharCursor = 0;
+  let previousVisibleText = "";
+  let previousRelativeEnd = 0;
 
   return richLine.segments.map((seg) => {
-    const segStart = origCharCursor;
-    const segEnd = origCharCursor + seg.text.length;
-    origCharCursor = segEnd;
+    const segStart = Math.max(0, seg.start - richLine.start);
+    const segEnd = Math.max(segStart, seg.end - richLine.start);
 
     let segRenderText = seg.text;
     if (origWords.length === renderWords.length) {
@@ -591,16 +593,34 @@ const buildJustifiedRichSegments = (
       }
     }
 
-    const segWidth = measureRenderedTextWidth(segRenderText, seg.style);
-    const segX = currentX;
-    currentX += segWidth;
+    const hasVisiblePrevious = /\S/u.test(previousVisibleText);
+    const hasVisibleCurrent = /\S/u.test(segRenderText);
+    const originalBoundaryText = richLine.text.slice(previousRelativeEnd, segStart);
+    const currentStartsWithSpace = /^\s/u.test(segRenderText);
+    const needsProtectedBoundarySpace =
+      hasVisiblePrevious &&
+      hasVisibleCurrent &&
+      (/\s/u.test(originalBoundaryText) || currentStartsWithSpace);
+    const boundarySpaceWidth = needsProtectedBoundarySpace
+      ? Math.max(
+          measureRenderedTextWidth(" ", seg.style),
+          Math.round(seg.style.fontSize * 0.2 * 10) / 10,
+        )
+      : 0;
+    const visibleText = segRenderText.replace(/^\s+/u, "");
+    const drawableText = needsProtectedBoundarySpace ? visibleText : segRenderText;
+    const segWidth = measureRenderedTextWidth(drawableText, seg.style);
+    const segX = currentX + boundarySpaceWidth;
+    currentX = segX + segWidth;
+    previousVisibleText = drawableText;
+    previousRelativeEnd = segEnd;
 
     return {
       x: segX,
       y: lineY,
       width: segWidth,
       height: lineAdvance,
-      text: segRenderText,
+      text: drawableText,
       style: {
         ...seg.style,
         wrap: "none",
@@ -2203,11 +2223,12 @@ const getReadableColumnCount = (
   requestedColumnCount: number,
   contentWidth: number,
   columnGap: number,
+  minColumnWidth = MIN_BODY_COLUMN_WIDTH,
 ) => {
   for (let columnCount = requestedColumnCount; columnCount > 1; columnCount -= 1) {
     const columnWidth = (contentWidth - columnGap * Math.max(0, columnCount - 1)) / columnCount;
 
-    if (columnWidth >= MIN_BODY_COLUMN_WIDTH) {
+    if (columnWidth >= minColumnWidth) {
       return columnCount;
     }
   }
@@ -2219,12 +2240,13 @@ const getReadableImageColumnSpan = (
   requestedSpan: number,
   columnCount: number,
   columnWidth: number,
+  minColumnWidth = MIN_BODY_COLUMN_WIDTH,
 ) => {
-  if (columnCount <= 1 || columnWidth >= MIN_BODY_COLUMN_WIDTH) {
+  if (columnCount <= 1 || columnWidth >= minColumnWidth) {
     return requestedSpan;
   }
 
-  const readableColumnCount = Math.floor(columnCount * columnWidth / MIN_BODY_COLUMN_WIDTH);
+  const readableColumnCount = Math.floor(columnCount * columnWidth / minColumnWidth);
   const maxImageSpan = Math.max(1, columnCount - Math.max(1, readableColumnCount));
 
   return clamp(requestedSpan, 1, maxImageSpan);
@@ -2589,6 +2611,17 @@ function composeArticleBoxPass(
     wrapContourPoints: articleBox.wrapContourPoints ?? defaultStoryImageSettings.wrapContourPoints,
     wrapTextOffset: articleBox.wrapTextOffset ?? defaultStoryImageSettings.wrapTextOffset,
   };
+  const isEightColumnTemplate = settings.editorialTemplateId?.includes("EightColumn") ?? false;
+  const frameColumnSpan = Number((articleBox as { columnSpan?: number }).columnSpan);
+  if (isEightColumnTemplate && imageSettings.imageEnabled) {
+    imageSettings.imageColumnSpan = Math.max(1, Math.min(2, imageSettings.imageColumnSpan));
+    imageSettings.imageHeight = Math.max(
+      imageSettings.imageHeight,
+      articleBox.priority === "lead" ? 156 : articleBox.priority === "major" ? 132 : 112,
+    );
+    imageSettings.imageHeightMode = "fixed";
+    imageSettings.autoSizeImage = false;
+  }
 
   // If the article box is too short, disable the image to prevent the first column from being entirely consumed by the headline and image.
   if (articleBox.height < 220) {
@@ -2691,6 +2724,10 @@ function composeArticleBoxPass(
     articleBox.y > DEFAULT_PAGE_MASTER.height * 72 * 0.55;
   const isFrontPageTwoColumnBox =
     Boolean(settings.frontPageStyle) && storyColumnSpan === 2 && !isWideBottomFrontPackage;
+  const tightTwoColumnBylineToBodyGap =
+    Boolean(settings.tightTwoColumnBylineToBodyGap) &&
+    isEightColumnTemplate &&
+    Math.max(1, Math.round(frameColumnSpan)) <= 2;
   const isFrontPageThreeColumnBox =
     Boolean(settings.frontPageStyle) && storyColumnSpan === 3 && !isWideBottomFrontPackage;
   const isLowerFrontPagePackage =
@@ -2729,9 +2766,19 @@ function composeArticleBoxPass(
   const isSingleColumnBox = isSingleColumnHeadlineBox;
   const hasExplicitHeadlineMaxLines =
     settings.headlineMaxLines !== undefined || houseStyle?.headlineMaxLines !== undefined;
+  const roundedFrameColumnSpan = Number.isFinite(frameColumnSpan)
+    ? Math.max(1, Math.round(frameColumnSpan))
+    : storyColumnSpan;
+  const isShortEightColumnNarrowBox =
+    isEightColumnTemplate &&
+    roundedFrameColumnSpan >= 2 &&
+    roundedFrameColumnSpan <= 3 &&
+    articleBox.height < 260;
   const headlineMaxLines =
     settings.headlineMaxLines ??
     (isWideBottomFrontPackage
+      ? 2
+      : isShortEightColumnNarrowBox
       ? 2
       : priority === "brief" || priority === "filler" || isSingleColumnBox || isFrontPageTwoColumnBox
       ? 2
@@ -2781,7 +2828,7 @@ function composeArticleBoxPass(
           ? Math.min(hierarchyConfig.maxFontSize, 22)
           : hierarchyConfig.maxFontSize,
   );
-  const headlineMinFontSize = isSingleColumnBox ? 12 : 8;
+  const headlineMinFontSize = isShortEightColumnNarrowBox ? 6.5 : isSingleColumnBox ? 12 : 8;
   const subheadlineFontSize = clamp(
     Math.round(headlineMaxFontSize * hierarchyConfig.subheadlineSizeRatio),
     10,
@@ -2921,7 +2968,7 @@ function composeArticleBoxPass(
         // states its own ceiling does not get the extra line — the whole point
         // there is that the ceiling is hard.
         maxLines:
-          isFrontPageTwoColumnBox || hasExplicitHeadlineMaxLines
+          isFrontPageTwoColumnBox || hasExplicitHeadlineMaxLines || isShortEightColumnNarrowBox
             ? headlineMaxLines
             : headlineMaxLines + 1,
         fontFamily: headlineStyle.fontFamily,
@@ -2954,7 +3001,7 @@ function composeArticleBoxPass(
         fontFamily: headlineStyle.fontFamily,
         fontSize: headlineMetrics.fontSize,
         fontStyle: headlineStyle.fontStyle,
-        maxLines: isFrontPageTwoColumnBox || hasExplicitHeadlineMaxLines ? headlineMaxLines : headlineMaxLines + 1,
+        maxLines: isFrontPageTwoColumnBox || hasExplicitHeadlineMaxLines || isShortEightColumnNarrowBox ? headlineMaxLines : headlineMaxLines + 1,
         autoBalance: typographySettings.autoBalanceHeadline,
         enableHyphenation: typographySettings.enableHyphenation,
         forceFullWidth: headlineForceFullWidth,
@@ -2979,7 +3026,7 @@ function composeArticleBoxPass(
           fontFamily: headlineStyle.fontFamily,
           fontSize: safeSize,
           fontStyle: headlineStyle.fontStyle,
-          maxLines: isFrontPageTwoColumnBox || hasExplicitHeadlineMaxLines ? headlineMaxLines : headlineMaxLines + 1,
+          maxLines: isFrontPageTwoColumnBox || hasExplicitHeadlineMaxLines || isShortEightColumnNarrowBox ? headlineMaxLines : headlineMaxLines + 1,
           autoBalance: typographySettings.autoBalanceHeadline,
           enableHyphenation: typographySettings.enableHyphenation,
           forceFullWidth: headlineForceFullWidth,
@@ -3091,7 +3138,7 @@ function composeArticleBoxPass(
   const boxColumnSpan = Math.round(articleBox.width / PAGE_COLUMN_WIDTH_PT);
   const isLowHeightWideBox =
     boxColumnSpan >= 3 && boxColumnSpan <= 6 && articleBox.height < LOW_HEIGHT_BULLET_THRESHOLD_PT;
-  const shouldShowInlineSubheadline = !isTooLow && !isLowHeightWideBox && !fitOverrides.suppressInlineSubheadline && (articleData.inlineSubheadingEnabled ?? false) && isCompactStoryOrNoStrip && candidateBullets.length > 0;
+  const shouldShowInlineSubheadline = !settings.suppressInlineSubheadings && !isTooLow && !isLowHeightWideBox && !fitOverrides.suppressInlineSubheadline && (articleData.inlineSubheadingEnabled ?? false) && isCompactStoryOrNoStrip && candidateBullets.length > 0;
   const hasSubheadlineText = !isTooLow && !shouldShowInlineSubheadline && showSubheadline && subheadlineText.trim().length > 0;
 
   // ── Headline Trim for Oversized Non-Lead Headlines ────────────────────────
@@ -3853,14 +3900,17 @@ function composeArticleBoxPass(
       ? 0
       : (articleData.subheadlineBanner.padding ?? 5) + (articleData.subheadlineBanner.borderWidth ?? 0.8);
   const subheadlineMeasureWidth = Math.max(1, contentWidth - subheadlinePadding * 2);
-  // A front page sets the banner as a single ruled line. At two lines the black
-  // band reads as a block rather than a rule, and simply capping it at one line
-  // would drop the words that no longer fit. Step the size down until the whole
-  // line fits on its own instead, so nothing is cut.
-  const bannerSingleLine = Boolean(
+  // A front page sets the banner as a single ruled line. The 8-column layout
+  // also keeps wide plain subheadlines to one line, matching the screenshot
+  // review: the line may shrink, but it must not wrap or drop words.
+  const subheadlineSingleLine = Boolean(
     houseStyle?.subheadlineBannerSingleLine &&
       hasSubheadlineText &&
       articleData.subheadlineBanner.mode !== "none",
+  ) || Boolean(
+    isEightColumnTemplate &&
+      hasSubheadlineText &&
+      Math.max(1, Math.round(frameColumnSpan)) >= 6,
   );
   const measureSubheadline = (style: typeof subheadlineStyle, maxLines: number) =>
     measureArticleParagraph({
@@ -3872,11 +3922,14 @@ function composeArticleBoxPass(
     });
 
   let fittedSubheadlineStyle = subheadlineStyle;
-  let subheadlineMetrics = measureSubheadline(subheadlineStyle, bannerSingleLine ? 1 : 2);
-  if (bannerSingleLine) {
+  let subheadlineMetrics = measureSubheadline(subheadlineStyle, subheadlineSingleLine ? 1 : 2);
+  if (subheadlineSingleLine) {
     // Measure unbounded so the natural line count is visible; capping first
     // would report one line whether or not the text actually fits.
-    const minBannerFontSize = Math.max(5.5, subheadlineStyle.fontSize * 0.62);
+    const minBannerFontSize = Math.max(
+      isEightColumnTemplate ? 4.5 : 5.5,
+      subheadlineStyle.fontSize * (isEightColumnTemplate ? 0.5 : 0.62),
+    );
     let candidateSize = subheadlineStyle.fontSize;
     while (
       candidateSize > minBannerFontSize &&
@@ -4147,10 +4200,19 @@ function composeArticleBoxPass(
   //
   // The front page keeps COLUMN_GAP exactly — it carries no rules and is signed
   // off, and widening its gutter would re-break every line on the page.
-  const columnGap =
+  const baseColumnGap =
     settings.editorialPageStyle || settings.insidePageStyle ? EDITORIAL_COLUMN_GAP : COLUMN_GAP;
-  const requestedColumnCount = clamp(Math.round(articleData.columnCount), 1, 6);
-  const safeColumnCount = getReadableColumnCount(requestedColumnCount, contentWidth, columnGap);
+  const columnGap = isEightColumnTemplate
+    ? Math.max(baseColumnGap, EIGHT_COLUMN_BODY_COLUMN_GAP)
+    : baseColumnGap;
+  const requestedColumnSource = isEightColumnTemplate && Number.isFinite(frameColumnSpan)
+    ? Math.max(articleData.columnCount, frameColumnSpan)
+    : articleData.columnCount;
+  const requestedColumnCount = clamp(Math.round(requestedColumnSource), 1, 8);
+  const minReadableColumnWidth = isEightColumnTemplate
+    ? EIGHT_COLUMN_MIN_BODY_COLUMN_WIDTH
+    : MIN_BODY_COLUMN_WIDTH;
+  const safeColumnCount = getReadableColumnCount(requestedColumnCount, contentWidth, columnGap, minReadableColumnWidth);
   // On a front page a photo never spans every column of a multi-column box —
   // there is always a column of text running beside it, so a 2-column box gets a
   // 1-column photo rather than a full-width band across the top.
@@ -5098,7 +5160,7 @@ function composeArticleBoxPass(
             0,
             byline.y + byline.height + bylineDividerGap + bylineDividerToBody - rawLeadRegion.y,
           )
-        : forceBylineBelowFirstColumnImage || settings.tightBylineToBodyGap
+        : forceBylineBelowFirstColumnImage || settings.tightBylineToBodyGap || tightTwoColumnBylineToBodyGap
           ? // Measured off the byline's real ink, like every other branch here.
             // `bylineReserveHeight` is itself already ceil-snapped to the grid,
             // and `totalLeadConsumedHeight` below ceil-snaps whatever this
