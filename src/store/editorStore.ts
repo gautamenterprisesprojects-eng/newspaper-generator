@@ -1643,7 +1643,9 @@ const chooseLayoutFittedNewswireArticleData = ({
   // (`articleData = chooseLayoutFittedNewswireArticleData(...)` at its call
   // site), so a flag only on the discarded draft never reaches the printed
   // page. Confirmed live: the caption kept showing until this call got it too.
-  const disableCaption = options?.templateId === AKHAND_EDITORIAL_5A_TEMPLATE_ID;
+  const disableCaption =
+    options?.templateId === AKHAND_EDITORIAL_5A_TEMPLATE_ID ||
+    (options?.templateId?.includes("EightColumn") ?? false);
   const stripBodyDateline = options?.templateId === AKHAND_EDITORIAL_5A_TEMPLATE_ID;
   // Box 3 (मां बगलामुखी मंदिर) never carries a kicker on the printed page,
   // regardless of whether the fetched Dharma article happens to have kicker
@@ -4242,7 +4244,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           // Dharm-Sanskriti's photos are decorative page furniture (Ram
           // Darbar, Shiva, Tulsidas), not news photos needing a source/credit
           // caption underneath -- the printed page never captions them.
-          isAkhandEditorial5A,
+          isAkhandEditorial5A || isEightColumnTemplate,
           isAkhandEditorial5A,
           isAkhandEditorial5A && slot.storyNumber !== 5
             ? {

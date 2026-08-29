@@ -4513,7 +4513,7 @@ function composeArticleBoxPass(
       ? snapToBaseline(
           caption && captionConsumesVerticalSpace && articleData.caption.position === "below-image"
             ? caption.y + caption.height + spacing.captionToBody
-            : image.y + image.height + (tightWideEightColumnBylineToBodyGap ? 0 : spacing.imageToCaption),
+            : image.y + image.height + (isEightColumnTemplate ? 0 : spacing.imageToCaption),
           baselineGrid,
           "ceil",
         )
