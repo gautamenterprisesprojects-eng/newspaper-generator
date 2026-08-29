@@ -2724,10 +2724,17 @@ function composeArticleBoxPass(
     articleBox.y > DEFAULT_PAGE_MASTER.height * 72 * 0.55;
   const isFrontPageTwoColumnBox =
     Boolean(settings.frontPageStyle) && storyColumnSpan === 2 && !isWideBottomFrontPackage;
+  const roundedFrameColumnSpan = Number.isFinite(frameColumnSpan)
+    ? Math.max(1, Math.round(frameColumnSpan))
+    : storyColumnSpan;
   const tightTwoColumnBylineToBodyGap =
     Boolean(settings.tightTwoColumnBylineToBodyGap) &&
     isEightColumnTemplate &&
-    Math.max(1, Math.round(frameColumnSpan)) <= 2;
+    roundedFrameColumnSpan <= 2;
+  const tightWideEightColumnBylineToBodyGap =
+    isEightColumnTemplate && roundedFrameColumnSpan >= 6;
+  const isFullWidthEightColumnBox =
+    isEightColumnTemplate && roundedFrameColumnSpan >= 8;
   const isFrontPageThreeColumnBox =
     Boolean(settings.frontPageStyle) && storyColumnSpan === 3 && !isWideBottomFrontPackage;
   const isLowerFrontPagePackage =
@@ -2766,9 +2773,6 @@ function composeArticleBoxPass(
   const isSingleColumnBox = isSingleColumnHeadlineBox;
   const hasExplicitHeadlineMaxLines =
     settings.headlineMaxLines !== undefined || houseStyle?.headlineMaxLines !== undefined;
-  const roundedFrameColumnSpan = Number.isFinite(frameColumnSpan)
-    ? Math.max(1, Math.round(frameColumnSpan))
-    : storyColumnSpan;
   const isShortEightColumnNarrowBox =
     isEightColumnTemplate &&
     roundedFrameColumnSpan >= 2 &&
@@ -2776,7 +2780,9 @@ function composeArticleBoxPass(
     articleBox.height < 260;
   const headlineMaxLines =
     settings.headlineMaxLines ??
-    (isWideBottomFrontPackage
+    (isFullWidthEightColumnBox
+      ? 1
+      : isWideBottomFrontPackage
       ? 2
       : isShortEightColumnNarrowBox
       ? 2
@@ -2828,7 +2834,7 @@ function composeArticleBoxPass(
           ? Math.min(hierarchyConfig.maxFontSize, 22)
           : hierarchyConfig.maxFontSize,
   );
-  const headlineMinFontSize = isShortEightColumnNarrowBox ? 6.5 : isSingleColumnBox ? 12 : 8;
+  const headlineMinFontSize = isShortEightColumnNarrowBox || isFullWidthEightColumnBox ? 6.5 : isSingleColumnBox ? 12 : 8;
   const subheadlineFontSize = clamp(
     Math.round(headlineMaxFontSize * hierarchyConfig.subheadlineSizeRatio),
     10,
@@ -2968,7 +2974,7 @@ function composeArticleBoxPass(
         // states its own ceiling does not get the extra line — the whole point
         // there is that the ceiling is hard.
         maxLines:
-          isFrontPageTwoColumnBox || hasExplicitHeadlineMaxLines || isShortEightColumnNarrowBox
+          isFrontPageTwoColumnBox || hasExplicitHeadlineMaxLines || isShortEightColumnNarrowBox || isFullWidthEightColumnBox
             ? headlineMaxLines
             : headlineMaxLines + 1,
         fontFamily: headlineStyle.fontFamily,
@@ -3001,7 +3007,7 @@ function composeArticleBoxPass(
         fontFamily: headlineStyle.fontFamily,
         fontSize: headlineMetrics.fontSize,
         fontStyle: headlineStyle.fontStyle,
-        maxLines: isFrontPageTwoColumnBox || hasExplicitHeadlineMaxLines || isShortEightColumnNarrowBox ? headlineMaxLines : headlineMaxLines + 1,
+        maxLines: isFrontPageTwoColumnBox || hasExplicitHeadlineMaxLines || isShortEightColumnNarrowBox || isFullWidthEightColumnBox ? headlineMaxLines : headlineMaxLines + 1,
         autoBalance: typographySettings.autoBalanceHeadline,
         enableHyphenation: typographySettings.enableHyphenation,
         forceFullWidth: headlineForceFullWidth,
@@ -3026,7 +3032,7 @@ function composeArticleBoxPass(
           fontFamily: headlineStyle.fontFamily,
           fontSize: safeSize,
           fontStyle: headlineStyle.fontStyle,
-          maxLines: isFrontPageTwoColumnBox || hasExplicitHeadlineMaxLines || isShortEightColumnNarrowBox ? headlineMaxLines : headlineMaxLines + 1,
+          maxLines: isFrontPageTwoColumnBox || hasExplicitHeadlineMaxLines || isShortEightColumnNarrowBox || isFullWidthEightColumnBox ? headlineMaxLines : headlineMaxLines + 1,
           autoBalance: typographySettings.autoBalanceHeadline,
           enableHyphenation: typographySettings.enableHyphenation,
           forceFullWidth: headlineForceFullWidth,
@@ -4507,7 +4513,7 @@ function composeArticleBoxPass(
       ? snapToBaseline(
           caption && captionConsumesVerticalSpace && articleData.caption.position === "below-image"
             ? caption.y + caption.height + spacing.captionToBody
-            : image.y + image.height + spacing.imageToCaption,
+            : image.y + image.height + (tightWideEightColumnBylineToBodyGap ? 0 : spacing.imageToCaption),
           baselineGrid,
           "ceil",
         )
@@ -4794,7 +4800,7 @@ function composeArticleBoxPass(
   // reclaim is measured. Sampled with a capital because body copy opens with
   // one. Clamped to half an em so an unusual face cannot yank the column up.
   const bodyFirstLineCapGap = (() => {
-    if (!settings.tightBylineToBodyGap) return 0;
+    if (!settings.tightBylineToBodyGap && !tightWideEightColumnBylineToBodyGap) return 0;
     const ink = measureTextInkMetrics({
       text: "H",
       fontFamily: resolvedBodyStyle.fontFamily,
@@ -5160,7 +5166,7 @@ function composeArticleBoxPass(
             0,
             byline.y + byline.height + bylineDividerGap + bylineDividerToBody - rawLeadRegion.y,
           )
-        : forceBylineBelowFirstColumnImage || settings.tightBylineToBodyGap || tightTwoColumnBylineToBodyGap
+        : forceBylineBelowFirstColumnImage || settings.tightBylineToBodyGap || tightTwoColumnBylineToBodyGap || tightWideEightColumnBylineToBodyGap
           ? // Measured off the byline's real ink, like every other branch here.
             // `bylineReserveHeight` is itself already ceil-snapped to the grid,
             // and `totalLeadConsumedHeight` below ceil-snaps whatever this
@@ -5172,7 +5178,11 @@ function composeArticleBoxPass(
             // the baseline grid, so columns stay row-aligned.
             Math.max(
               0,
-              byline.y + byline.height + bylineDividerGap + bylineDividerToBody - rawLeadRegion.y,
+              byline.y +
+                byline.height +
+                bylineDividerGap +
+                (tightWideEightColumnBylineToBodyGap ? 0.5 : bylineDividerToBody) -
+                rawLeadRegion.y,
             )
           : bylineReserveHeight
       : bylineRegion && rawLeadRegion && byline.text
@@ -5182,11 +5192,13 @@ function composeArticleBoxPass(
           )
         : inlineConsumedHeight + bylineReserveHeight;
   const totalLeadConsumedHeight = rawTotalLeadHeight > 0
-    ? snapMeasurementToBaseline(
-        rawTotalLeadHeight,
-        settings.frontPageStyle && !isSingleColumnBox ? lineAdvanceGrid : baselineGrid,
-        "ceil",
-      )
+    ? tightWideEightColumnBylineToBodyGap
+      ? rawTotalLeadHeight
+      : snapMeasurementToBaseline(
+          rawTotalLeadHeight,
+          settings.frontPageStyle && !isSingleColumnBox ? lineAdvanceGrid : baselineGrid,
+          "ceil",
+        )
     : 0;
   const bodyRegions =
     totalLeadConsumedHeight > 0
