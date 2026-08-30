@@ -239,6 +239,27 @@ type ArticleFitOverrides = Partial<EditorialFitCandidateSettings> & {
 };
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+const LEADING_BODY_SEPARATOR_REGEX = /^[\s|¦:;.,!?\-\u2013\u2014\u0964\u0965\uFF1A]+/u;
+
+const stripLeadingBodySeparatorsFromRichText = (content: RichTextContent): RichTextContent => {
+  const normalized = normalizeRichText(content);
+  let isStillLeading = true;
+  const spans = normalized.spans.flatMap((span) => {
+    if (!isStillLeading || typeof span.text !== "string") {
+      return [span];
+    }
+
+    const text = span.text.replace(LEADING_BODY_SEPARATOR_REGEX, "");
+    if (text.length === 0) {
+      return [];
+    }
+
+    isStillLeading = false;
+    return [{ ...span, text }];
+  });
+
+  return { spans };
+};
 
 const applyOpticalTypographyToLayout = (
   layout: ArticleLayout,
@@ -453,6 +474,12 @@ export const composeArticleBox = (
         }
       }
     }
+  }
+  if (activeArticleData.body) {
+    activeArticleData = {
+      ...activeArticleData,
+      body: stripLeadingBodySeparatorsFromRichText(activeArticleData.body),
+    };
   }
 
   const isPureAd =
@@ -1097,6 +1124,8 @@ const createCaptionLayout = ({
   const imageHeight = image?.height ?? 0;
   const isOverlayPosition = caption.position.startsWith("overlay");
   const isSideOverlayPosition = caption.position === "overlay-left" || caption.position === "overlay-right";
+  const isBottomOverlayPosition =
+    caption.position === "overlay-bottom" || caption.position === "overlay-bottom-gradient";
   const hasCustomCaptionBackground =
     Boolean(caption.captionStyle.backgroundColor) && caption.captionStyle.backgroundColor !== "transparent";
   // Inside-image captions get their own dedicated light panel next to the
@@ -1133,7 +1162,8 @@ const createCaptionLayout = ({
   // has already carved out an exact strip (boxOverride), use that instead.
   const sideStripWidth = Math.min(170, Math.max(60, imageWidth * 0.4));
   const boxWidth = boxOverride?.width ?? (isSideOverlayPosition ? sideStripWidth : imageWidth);
-  const boxHeight = boxOverride?.height ?? null;
+  const bottomOverlayHeight = isBottomOverlayPosition ? Math.max(18, imageHeight * 0.2) : null;
+  const boxHeight = boxOverride?.height ?? bottomOverlayHeight;
   const boxX = boxOverride?.x ?? (!image
     ? 0
     : caption.position === "overlay-right"
@@ -1148,7 +1178,7 @@ const createCaptionLayout = ({
   const overlayFontScale = isSideOverlayPosition ? 0.85 : isOverlayPosition ? 0.93 : 1;
   const captionBaseStyle: ArticleTextStyle = {
     ...style,
-    align: "left",
+    align: isOverlayPosition ? "center" : "left",
     fill: isOverlayPosition ? overlayTextColor : caption.captionStyle.color,
     fontSize: Math.max(7, caption.captionStyle.fontSize * overlayFontScale),
     fontStyle: `italic ${caption.captionStyle.fontWeight}`,
@@ -1168,7 +1198,10 @@ const createCaptionLayout = ({
   const availableHeightForLines = boxHeight ?? imageHeight;
   const maxCaptionLines = isOverlayPosition
     ? clamp(
-        Math.floor(Math.max(0, availableHeightForLines - verticalPadding * 2) / Math.ceil(captionBaseStyle.fontSize * 1.2)),
+        Math.floor(
+          Math.max(0, availableHeightForLines - verticalPadding * 2) /
+            Math.ceil((isBottomOverlayPosition ? 4.6 : captionBaseStyle.fontSize) * 1.08),
+        ),
         1,
         isSideOverlayPosition ? 7 : 3,
       )
@@ -1243,11 +1276,11 @@ const createCaptionLayout = ({
       };
     }
 
-    for (const scale of [0.95, 0.9, 0.85, 0.8, 0.76, 0.72]) {
+    for (const scale of [0.95, 0.9, 0.85, 0.8, 0.76, 0.72, 0.66, 0.6, 0.54, 0.48]) {
       currentStyle = {
         ...baseStyle,
-        fontSize: Math.max(baseStyle.fontSize * scale, 6.8),
-        lineHeight: 1.08,
+        fontSize: Math.max(baseStyle.fontSize * scale, isOverlayPosition ? 4.6 : 6.8),
+        lineHeight: isOverlayPosition ? 1.02 : 1.08,
       };
       metrics = measure(contentStr, currentStyle);
 
@@ -1263,11 +1296,20 @@ const createCaptionLayout = ({
 
     currentStyle = {
       ...baseStyle,
-      fontSize: 6.8,
-      lineHeight: 1.04,
+      fontSize: isOverlayPosition ? 4.6 : 6.8,
+      lineHeight: isOverlayPosition ? 1 : 1.04,
     };
     metrics = measure(contentStr, currentStyle);
     if (metrics.lines.length <= maxLines) {
+      return {
+        metrics,
+        text: contentStr,
+        content: makePlainItalicContent(contentStr, currentStyle),
+        style: currentStyle,
+      };
+    }
+
+    if (isOverlayPosition) {
       return {
         metrics,
         text: contentStr,
@@ -1331,19 +1373,28 @@ const createCaptionLayout = ({
       ? Math.max(0, imageY - captionMetrics.consumedHeight - verticalPadding * 2 - 10) // gap before the image starts right below it
       : caption.position === "overlay-top"
         ? imageY + 14 // clearance so the badge doesn't sit flush against the photo's top edge
-        : caption.position === "overlay-bottom" || caption.position === "overlay-bottom-gradient"
-          ? Math.max(imageY, imageY + imageHeight - captionMetrics.consumedHeight - verticalPadding * 2)
+        : isBottomOverlayPosition
+          ? Math.max(
+              imageY,
+              imageY + imageHeight - (boxHeight ?? 0) + Math.max(0, ((boxHeight ?? 0) - (captionMetrics.consumedHeight + verticalPadding * 2)) / 2),
+            )
           : Math.max(imageY + imageHeight + 10, fallbackY); // below-image (the common case) — gap raised 6->10, still sitting close after 3 rounds of "still sticking" reports
   // The panel itself always fills the full reserved box (so the light
   // background covers the whole strip and stays put at the box's top-left),
   // even though the text inside is vertically centered and may be shorter.
-  const panelY = boxOverride ? boxOverride.y : initialY;
+  const panelY = boxOverride
+    ? boxOverride.y
+    : bottomOverlayHeight
+      ? Math.max(imageY, imageY + imageHeight - bottomOverlayHeight)
+      : initialY;
   // Devanagari matras and descenders (ी, ृ, ड़) paint below the nominal line
   // advance. The renderer hard-clips the caption to this frame, so without a
   // descender allowance the bottom of the last line gets shaved off.
   const captionDescenderAllowance = Math.ceil(fittedCaption.style.fontSize * 0.3);
   const captionFrameHeight = boxOverride
     ? boxOverride.height
+    : bottomOverlayHeight
+      ? bottomOverlayHeight
     : Math.ceil(
         captionMetrics.consumedHeight +
           captionContainerStyle.framePaddingTop +
@@ -2378,7 +2429,8 @@ function composeArticleBoxPass(
     ? ""
     : stripHeadingTerminator(richTextToPlainText(articleData.subheadline));
   const captionText = richTextToPlainText(articleData.caption.text);
-  const bodyText = richTextToPlainText(articleData.body);
+  const bodyRichContent = stripLeadingBodySeparatorsFromRichText(articleData.body);
+  const bodyText = richTextToPlainText(bodyRichContent);
 
   const isPureAd =
     (articleBox as any).role === "advertisement" ||
@@ -2612,8 +2664,10 @@ function composeArticleBoxPass(
     wrapTextOffset: articleBox.wrapTextOffset ?? defaultStoryImageSettings.wrapTextOffset,
   };
   const isEightColumnTemplate = settings.editorialTemplateId?.includes("EightColumn") ?? false;
+  const isCliffInsideSixColumnTemplate = settings.editorialTemplateId?.includes("CliffInsideSixColumn") ?? false;
+  const usesCompactInsideImageRules = isEightColumnTemplate || isCliffInsideSixColumnTemplate;
   const frameColumnSpan = Number((articleBox as { columnSpan?: number }).columnSpan);
-  if (isEightColumnTemplate && imageSettings.imageEnabled) {
+  if (usesCompactInsideImageRules && imageSettings.imageEnabled) {
     imageSettings.imageColumnSpan = Math.max(1, Math.min(2, imageSettings.imageColumnSpan));
     imageSettings.imageHeight = Math.max(
       imageSettings.imageHeight,
@@ -2621,6 +2675,10 @@ function composeArticleBoxPass(
     );
     imageSettings.imageHeightMode = "fixed";
     imageSettings.autoSizeImage = false;
+    if (isCliffInsideSixColumnTemplate) {
+      imageSettings.imageAlignment = "top-right";
+      imageSettings.imageWrapMode = "newspaper";
+    }
   }
 
   // If the article box is too short, disable the image to prevent the first column from being entirely consumed by the headline and image.
@@ -4211,9 +4269,12 @@ function composeArticleBoxPass(
   const columnGap = isEightColumnTemplate
     ? Math.max(baseColumnGap, EIGHT_COLUMN_BODY_COLUMN_GAP)
     : baseColumnGap;
-  const requestedColumnSource = isEightColumnTemplate && Number.isFinite(frameColumnSpan)
-    ? Math.max(articleData.columnCount, frameColumnSpan)
-    : articleData.columnCount;
+  const requestedColumnSource =
+    isEightColumnTemplate && roundedFrameColumnSpan <= 2
+      ? 1
+      : isEightColumnTemplate && Number.isFinite(frameColumnSpan) && roundedFrameColumnSpan > 2
+      ? Math.max(articleData.columnCount, frameColumnSpan)
+      : articleData.columnCount;
   const requestedColumnCount = clamp(Math.round(requestedColumnSource), 1, 8);
   const minReadableColumnWidth = isEightColumnTemplate
     ? EIGHT_COLUMN_MIN_BODY_COLUMN_WIDTH
@@ -5232,7 +5293,7 @@ function composeArticleBoxPass(
   });
   const bodyFlow = createBodyColumns(
     dropCapComposition.text,
-    enableBodyDropCap ? dropCapComposition.text : articleData.body,
+    enableBodyDropCap ? dropCapComposition.text : bodyRichContent,
     dropCapComposition.regions,
     regionUsabilityRules,
     baselineGrid,
@@ -5439,7 +5500,7 @@ function composeArticleBoxPass(
   // `containerStyles.article` is optional — fall back to the engine default so
   // the outline still applies on stories that carry no explicit article style.
   const baseArticleContainerStyle = containerStyles.article ?? defaultContainerStyles.article;
-  if (isNarrowKicker && kicker && baseArticleContainerStyle) {
+  if (!settings.suppressArticleContainerBorder && isNarrowKicker && kicker && baseArticleContainerStyle) {
     finalContainerStyles = {
       ...containerStyles,
       article: {
@@ -5449,7 +5510,7 @@ function composeArticleBoxPass(
         containerBorderRadius: 6,
       },
     };
-  } else if ((priority === "brief" || priority === "filler") && baseArticleContainerStyle) {
+  } else if (!settings.suppressArticleContainerBorder && (priority === "brief" || priority === "filler") && baseArticleContainerStyle) {
     // A brief/filler box reads as a distinct "boxed" item on a real
     // newspaper page — a plain hairline rule framing it, sharp corners (real
     // print boxes are never rounded, unlike the narrow-kicker badge above,

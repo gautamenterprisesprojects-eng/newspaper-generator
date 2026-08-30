@@ -377,8 +377,8 @@ export const WIZARD_EDITORIAL_PAGE_DESIGNS: Array<{
 // every call rather than deciding once at module load.
 const getDefaultFrontLayout = () => getFrontPageDesigns()[0];
 const DEFAULT_EDITORIAL_LAYOUT = WIZARD_EDITORIAL_PAGE_DESIGNS[0];
-const DEFAULT_INSIDE_LAYOUT: TemplateId = "CliffInsideEightColumn8A";
-const DEFAULT_INSIDE_ARTICLE_COUNT = 8;
+const DEFAULT_INSIDE_LAYOUT: TemplateId = "IndianFront6A";
+const DEFAULT_INSIDE_ARTICLE_COUNT = 6;
 
 const INCHES_TO_CM = 2.54;
 const FRONT_HEADER_CM = FRONT_HEADER_HEIGHT_IN * INCHES_TO_CM;
@@ -400,10 +400,14 @@ export const WIZARD_LAYOUT_DESIGNS: Array<{
   storyCount: number;
   category: LayoutDesignCategory;
 }> = [
-  { id: "CliffInsideEightColumn8A", name: "8 Column Inside Banner Mix", storyCount: 8, category: "basic" },
-  { id: "CliffInsideEightColumn8B", name: "8 Column Inside City Mix", storyCount: 8, category: "basic" },
-  { id: "CliffInsideEightColumn7C", name: "8 Column Inside Anchor Mix", storyCount: 7, category: "basic" },
-  { id: "CliffInsideEightColumn8D", name: "8 Column Inside Lead Mix", storyCount: 8, category: "basic" },
+  { id: "CliffInsideEightColumn8A", name: "8 Column Inside Banner Mix", storyCount: 8, category: "advanced" },
+  { id: "CliffInsideEightColumn8B", name: "8 Column Inside City Mix", storyCount: 8, category: "advanced" },
+  { id: "CliffInsideEightColumn7C", name: "8 Column Inside Anchor Mix", storyCount: 7, category: "advanced" },
+  { id: "CliffInsideEightColumn8D", name: "8 Column Inside Lead Mix", storyCount: 8, category: "advanced" },
+  { id: "CliffInsideSixColumn7A", name: "6 Column Inside Anchor Rail", storyCount: 7, category: "basic" },
+  { id: "CliffInsideSixColumn8B", name: "6 Column Inside City Stack", storyCount: 8, category: "basic" },
+  { id: "CliffInsideSixColumn7C", name: "6 Column Inside Offset Lead", storyCount: 7, category: "basic" },
+  { id: "CliffInsideSixColumn8D", name: "6 Column Inside Uneven Mosaic", storyCount: 8, category: "basic" },
   { id: "IndianFront6A", name: "इंडियन फ्रंट 6A", storyCount: 6, category: "basic" },
   { id: "IndianFront7A", name: "इंडियन फ्रंट 7A", storyCount: 6, category: "basic" },
   { id: "IndianFront7B", name: "इंडियन फ्रंट 7B", storyCount: 6, category: "basic" },
@@ -421,12 +425,12 @@ export const WIZARD_LAYOUT_DESIGNS: Array<{
   },
   { id: "Layout16", name: "लेआउट 16", storyCount: 6, category: "basic" },
   // ── एडवांस्ड डिज़ाइन — दैनिक भास्कर और टाइम्स ऑफ़ इंडिया से प्रेरित ──
-  { id: "AdvancedHeroRail7A", name: "एडवांस्ड हीरो रेल 7A", storyCount: 6, category: "advanced" },
-  { id: "AdvancedSidebarFeature9A", name: "एडवांस्ड साइडबार फ़ीचर 9A", storyCount: 9, category: "advanced" },
-  { id: "AdvancedMagazineCover6A", name: "एडवांस्ड मैगज़ीन कवर 6A", storyCount: 6, category: "advanced" },
-  { id: "AdvancedInfographicSplit7A", name: "एडवांस्ड इन्फोग्राफिक स्प्लिट 7A", storyCount: 6, category: "advanced" },
-  { id: "AdvancedEditorialColumn7A", name: "एडवांस्ड एडिटोरियल कॉलम 7A", storyCount: 6, category: "advanced" },
-  { id: "AdvancedQuadMosaic7A", name: "एडवांस्ड क्वाड मोज़ाइक 7A", storyCount: 6, category: "advanced" },
+  { id: "AdvancedHeroRail7A", name: "एडवांस्ड हीरो रेल 7A", storyCount: 6, category: "basic" },
+  { id: "AdvancedSidebarFeature9A", name: "एडवांस्ड साइडबार फ़ीचर 9A", storyCount: 9, category: "basic" },
+  { id: "AdvancedMagazineCover6A", name: "एडवांस्ड मैगज़ीन कवर 6A", storyCount: 6, category: "basic" },
+  { id: "AdvancedInfographicSplit7A", name: "एडवांस्ड इन्फोग्राफिक स्प्लिट 7A", storyCount: 6, category: "basic" },
+  { id: "AdvancedEditorialColumn7A", name: "एडवांस्ड एडिटोरियल कॉलम 7A", storyCount: 6, category: "basic" },
+  { id: "AdvancedQuadMosaic7A", name: "एडवांस्ड क्वाड मोज़ाइक 7A", storyCount: 6, category: "basic" },
 ];
 
 const WIZARD_ACCENT_PRESETS = NEWSWIRE_SUBHEADING_PRESETS.filter(
@@ -1291,7 +1295,7 @@ function LayoutPickerScreen({
           className={`layout-category-tab${state.layoutDesignCategory === "basic" ? " active" : ""}`}
           onClick={() => dispatch({ type: "SET_LAYOUT_DESIGN_CATEGORY", layoutDesignCategory: "basic" })}
         >
-          बेसिक डिज़ाइन
+          6 Column Layouts
         </button>
         <button
           type="button"
@@ -1300,11 +1304,11 @@ function LayoutPickerScreen({
           className={`layout-category-tab${state.layoutDesignCategory === "advanced" ? " active" : ""}`}
           onClick={() => dispatch({ type: "SET_LAYOUT_DESIGN_CATEGORY", layoutDesignCategory: "advanced" })}
         >
-          एडवांस्ड डिज़ाइन
+          8 Column Layouts
         </button>
       </div>
       <p className="generation-wizard-note">
-        {visibleLayouts.length} {state.layoutDesignCategory === "basic" ? "बेसिक" : "एडवांस्ड"} लेआउट
+        {visibleLayouts.length} {state.layoutDesignCategory === "basic" ? "6 column" : "8 column"} लेआउट
         टेम्पलेट दिखाए जा रहे हैं। चुनी गई लेख संख्या: {state.articleCount}.
       </p>
       <div className="generation-byline-card">

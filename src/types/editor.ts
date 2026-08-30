@@ -1001,6 +1001,8 @@ export type ArticleCompositionSettings = {
    * before body flow begins.
    */
   tightTwoColumnBylineToBodyGap?: boolean;
+  /** Keep automatic article box outlines off for templates that use fill-only tints. */
+  suppressArticleContainerBorder?: boolean;
   /**
    * Editorial-page house style. Present only on stories composed for an
    * editorial page, so every rule it carries is scoped to that page.

@@ -61,6 +61,10 @@ export type TemplateId =
   | "CliffInsideEightColumn8B"
   | "CliffInsideEightColumn7C"
   | "CliffInsideEightColumn8D"
+  | "CliffInsideSixColumn7A"
+  | "CliffInsideSixColumn8B"
+  | "CliffInsideSixColumn7C"
+  | "CliffInsideSixColumn8D"
   // Dedicated editorial/comment page
   | "CliffEditorial8A"
   | "CliffEditorial9A"

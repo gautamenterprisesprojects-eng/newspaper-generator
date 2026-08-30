@@ -1515,6 +1515,96 @@ const CLIFF_INSIDE_EIGHT_COLUMN_8D: TemplateDefinition = {
   ],
 };
 
+const CLIFF_INSIDE_SIX_COLUMN_7A: TemplateDefinition = {
+  id: "CliffInsideSixColumn7A",
+  name: "6 Column Inside Anchor Rail",
+  storyCount: 7,
+  columnCount: 6,
+  rowRhythm: [
+    { row: 1, baseRatio: 0.31, receivesRemainingSpace: false, minimumHeight: 250 },
+    { row: 2, baseRatio: 0.26, receivesRemainingSpace: false, minimumHeight: 215 },
+    { row: 3, baseRatio: 0.22, receivesRemainingSpace: false, minimumHeight: 195 },
+    { row: 4, baseRatio: 0.21, receivesRemainingSpace: true, minimumHeight: 200 },
+  ],
+  slots: [
+    { storyNumber: 1, row: 1, columnStart: 1, columnSpan: 4, priority: "lead" },
+    { storyNumber: 2, row: 1, columnStart: 5, columnSpan: 2, priority: "secondary" },
+    { storyNumber: 3, row: 2, columnStart: 1, columnSpan: 2, priority: "secondary" },
+    { storyNumber: 4, row: 2, columnStart: 3, columnSpan: 4, priority: "major" },
+    { storyNumber: 5, row: 3, columnStart: 1, columnSpan: 3, priority: "major" },
+    { storyNumber: 6, row: 3, columnStart: 4, columnSpan: 3, priority: "secondary" },
+    { storyNumber: 7, row: 4, columnStart: 1, columnSpan: 6, priority: "secondary" },
+  ],
+};
+
+const CLIFF_INSIDE_SIX_COLUMN_8B: TemplateDefinition = {
+  id: "CliffInsideSixColumn8B",
+  name: "6 Column Inside City Stack",
+  storyCount: 8,
+  columnCount: 6,
+  rowRhythm: [
+    { row: 1, baseRatio: 0.28, receivesRemainingSpace: false, minimumHeight: 230 },
+    { row: 2, baseRatio: 0.27, receivesRemainingSpace: false, minimumHeight: 220 },
+    { row: 3, baseRatio: 0.24, receivesRemainingSpace: false, minimumHeight: 200 },
+    { row: 4, baseRatio: 0.21, receivesRemainingSpace: true, minimumHeight: 200 },
+  ],
+  slots: [
+    { storyNumber: 1, row: 1, columnStart: 1, columnSpan: 6, priority: "lead" },
+    { storyNumber: 2, row: 2, columnStart: 1, columnSpan: 2, priority: "secondary" },
+    { storyNumber: 3, row: 2, columnStart: 3, columnSpan: 2, priority: "major" },
+    { storyNumber: 4, row: 2, columnStart: 5, columnSpan: 2, priority: "secondary" },
+    { storyNumber: 5, row: 3, columnStart: 1, columnSpan: 3, priority: "major" },
+    { storyNumber: 6, row: 3, columnStart: 4, columnSpan: 3, priority: "secondary" },
+    { storyNumber: 7, row: 4, columnStart: 1, columnSpan: 4, priority: "secondary" },
+    { storyNumber: 8, row: 4, columnStart: 5, columnSpan: 2, priority: "secondary" },
+  ],
+};
+
+const CLIFF_INSIDE_SIX_COLUMN_7C: TemplateDefinition = {
+  id: "CliffInsideSixColumn7C",
+  name: "6 Column Inside Offset Lead",
+  storyCount: 7,
+  columnCount: 6,
+  rowRhythm: [
+    { row: 1, baseRatio: 0.26, receivesRemainingSpace: false, minimumHeight: 215 },
+    { row: 2, baseRatio: 0.3, receivesRemainingSpace: false, minimumHeight: 245 },
+    { row: 3, baseRatio: 0.23, receivesRemainingSpace: false, minimumHeight: 200 },
+    { row: 4, baseRatio: 0.21, receivesRemainingSpace: true, minimumHeight: 200 },
+  ],
+  slots: [
+    { storyNumber: 1, row: 1, columnStart: 1, columnSpan: 2, priority: "secondary" },
+    { storyNumber: 2, row: 1, columnStart: 3, columnSpan: 4, priority: "lead" },
+    { storyNumber: 3, row: 2, columnStart: 1, columnSpan: 3, priority: "major" },
+    { storyNumber: 4, row: 2, columnStart: 4, columnSpan: 3, priority: "secondary" },
+    { storyNumber: 5, row: 3, columnStart: 1, columnSpan: 4, priority: "major" },
+    { storyNumber: 6, row: 3, columnStart: 5, columnSpan: 2, priority: "secondary" },
+    { storyNumber: 7, row: 4, columnStart: 1, columnSpan: 6, priority: "secondary" },
+  ],
+};
+
+const CLIFF_INSIDE_SIX_COLUMN_8D: TemplateDefinition = {
+  id: "CliffInsideSixColumn8D",
+  name: "6 Column Inside Uneven Mosaic",
+  storyCount: 8,
+  columnCount: 6,
+  rowRhythm: [
+    { row: 1, baseRatio: 0.3, receivesRemainingSpace: false, minimumHeight: 245 },
+    { row: 2, baseRatio: 0.24, receivesRemainingSpace: false, minimumHeight: 200 },
+    { row: 3, baseRatio: 0.25, receivesRemainingSpace: false, minimumHeight: 210 },
+    { row: 4, baseRatio: 0.21, receivesRemainingSpace: true, minimumHeight: 200 },
+  ],
+  slots: [
+    { storyNumber: 1, row: 1, columnStart: 1, columnSpan: 3, priority: "lead" },
+    { storyNumber: 2, row: 1, columnStart: 4, columnSpan: 3, priority: "major" },
+    { storyNumber: 3, row: 2, columnStart: 1, columnSpan: 2, priority: "secondary" },
+    { storyNumber: 4, row: 2, columnStart: 3, columnSpan: 4, priority: "major" },
+    { storyNumber: 5, row: 3, columnStart: 1, columnSpan: 4, priority: "secondary" },
+    { storyNumber: 6, row: 3, columnStart: 5, columnSpan: 2, priority: "secondary" },
+    { storyNumber: 7, row: 4, columnStart: 1, columnSpan: 3, priority: "secondary" },
+    { storyNumber: 8, row: 4, columnStart: 4, columnSpan: 3, priority: "secondary" },
+  ],
+};
+
 /**
  * CliffEditorial8A
  * The Cliff News editorial/comment page — अभिव्यक्ति — traced off page 8 of the
@@ -2346,6 +2436,10 @@ export const TEMPLATE_REGISTRY: Record<TemplateId, TemplateDefinition> = {
   CliffInsideEightColumn8B: CLIFF_INSIDE_EIGHT_COLUMN_8B,
   CliffInsideEightColumn7C: CLIFF_INSIDE_EIGHT_COLUMN_7C,
   CliffInsideEightColumn8D: CLIFF_INSIDE_EIGHT_COLUMN_8D,
+  CliffInsideSixColumn7A: CLIFF_INSIDE_SIX_COLUMN_7A,
+  CliffInsideSixColumn8B: CLIFF_INSIDE_SIX_COLUMN_8B,
+  CliffInsideSixColumn7C: CLIFF_INSIDE_SIX_COLUMN_7C,
+  CliffInsideSixColumn8D: CLIFF_INSIDE_SIX_COLUMN_8D,
   // Editorial page
   CliffEditorial8A: CLIFF_EDITORIAL_8A,
   CliffEditorial9A: CLIFF_EDITORIAL_9A,

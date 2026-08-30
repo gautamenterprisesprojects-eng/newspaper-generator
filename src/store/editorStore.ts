@@ -435,6 +435,54 @@ const CLIFF_EIGHT_COLUMN_SLOT_STYLE_SEQUENCE = [
   AKHAND_EDITORIAL_5A_SLOT_STYLES[3],
 ] as const;
 
+const CLIFF_INSIDE_SIX_COLUMN_TEMPLATE_IDS = new Set<TemplateId>([
+  "CliffInsideSixColumn7A",
+  "CliffInsideSixColumn8B",
+  "CliffInsideSixColumn7C",
+  "CliffInsideSixColumn8D",
+]);
+
+const CLIFF_INSIDE_SIX_COLUMN_FILL_SEQUENCES: Record<string, readonly string[]> = {
+  CliffInsideSixColumn7A: [
+    "#fff5f2",
+    "#eff9fc",
+    "#fff5cd",
+    "#f9e7fd",
+    "#f3fae9",
+    "#fff5f2",
+    "#eff9fc",
+  ],
+  CliffInsideSixColumn8B: [
+    "#eff9fc",
+    "#fff5cd",
+    "#f3fae9",
+    "#fff5f2",
+    "#f9e7fd",
+    "#eff9fc",
+    "#fff5cd",
+    "#f3fae9",
+  ],
+  CliffInsideSixColumn7C: [
+    "#f3fae9",
+    "#fff5f2",
+    "#eff9fc",
+    "#fff5cd",
+    "#f9e7fd",
+    "#f3fae9",
+    "#fff5f2",
+  ],
+  CliffInsideSixColumn8D: [
+    "#f9e7fd",
+    "#f3fae9",
+    "#fff5f2",
+    "#eff9fc",
+    "#fff5cd",
+    "#f9e7fd",
+    "#f3fae9",
+    "#eff9fc",
+  ],
+};
+
 const AKHAND_VICHAR_MANTHAN_6A_TEMPLATE_ID: TemplateId = "AkhandVicharManthan6A";
 // Story 1 (मप्र) and 2/5 (the two author-rail pieces) keep the page's plain
 // ground -- only the boxes that print with their own tint on the real page
@@ -474,6 +522,35 @@ const createAkhandEditorialContainerStyle = (fill: string, border: string) => ({
   containerBorderRadius: 5,
   containerBorderWidth: 1.5,
   containerBorderColor: border,
+  containerBackgroundColor: fill,
+  containerOpacity: 1,
+});
+
+const createFillOnlyArticleContainerStyle = (fill: string) => ({
+  mode: "frame" as const,
+  frameMode: "frame" as const,
+  contentHorizontalAlignment: "left" as const,
+  contentVerticalAlignment: "top" as const,
+  minimumFrameHeight: 0,
+  minimumFrameWidth: 0,
+  autoFrameHeight: true,
+  framePaddingTop: 0,
+  framePaddingBottom: 0,
+  framePaddingLeft: 0,
+  framePaddingRight: 0,
+  frameBorderWidth: 0,
+  frameBorderColor: "transparent",
+  frameBorderStyle: "solid" as const,
+  frameBackgroundColor: fill,
+  frameRadius: 0,
+  frameOpacity: 1,
+  containerPaddingTop: 0,
+  containerPaddingBottom: 0,
+  containerPaddingLeft: 0,
+  containerPaddingRight: 0,
+  containerBorderRadius: 5,
+  containerBorderWidth: 0,
+  containerBorderColor: "transparent",
   containerBackgroundColor: fill,
   containerOpacity: 1,
 });
@@ -1072,11 +1149,16 @@ const extractNewswireDatelinePlace = (...values: Array<string | undefined>) => {
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+const stripLeadingBodySeparators = (value: string) =>
+  value
+    .replace(/^[\s|¦:;.,!?\-\u2013\u2014\u0964\u0965\uFF1A]+/u, "")
+    .trimStart();
+
 const stripLeadingNewswireDateline = (
   body: string,
   places: Array<string | undefined>,
 ) => {
-  const text = body.trimStart();
+  const text = stripLeadingBodySeparators(body);
   const uniquePlaces = Array.from(
     new Set(
       places
@@ -1089,7 +1171,7 @@ const stripLeadingNewswireDateline = (
     const pattern = new RegExp(`^${escapeRegExp(place)}\\s*(?:[.:,;|\\-\\u0964\\uFF1A])\\s*`, "iu");
     const stripped = text.replace(pattern, "");
     if (stripped !== text) {
-      return stripped.trimStart();
+      return stripLeadingBodySeparators(stripped);
     }
   }
 
@@ -1101,7 +1183,7 @@ const stripLeadingNewswireDateline = (
   const candidate = cleanNewswireText(genericDateline[1]);
   const candidateWordCount = candidate.split(/\s+/u).filter(Boolean).length;
   if (candidateWordCount <= 4 && !/[0-9!?]/u.test(candidate)) {
-    return text.slice(genericDateline[0].length).trimStart();
+    return stripLeadingBodySeparators(text.slice(genericDateline[0].length));
   }
 
   return text;
@@ -1264,6 +1346,7 @@ const createArticleDataFromNewswireStory = (
       item.place,
     ]);
   }
+  sanitizedBodyText = stripLeadingBodySeparators(sanitizedBodyText);
   // A small image (<= 1 internal image-column) tucked at the start of a
   // narrow (2-3 col) box has no real room for a caption to sit underneath
   // or beside it without looking cramped — always skip the caption for this
@@ -3797,7 +3880,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         const isAkhandEditorial5A = options?.templateId === AKHAND_EDITORIAL_5A_TEMPLATE_ID;
         const isAkhandVicharManthan6A = options?.templateId === AKHAND_VICHAR_MANTHAN_6A_TEMPLATE_ID;
         const isEightColumnTemplate = options?.templateId?.includes("EightColumn") ?? false;
+        const isCliffInsideSixColumnTemplate = options?.templateId
+          ? CLIFF_INSIDE_SIX_COLUMN_TEMPLATE_IDS.has(options.templateId)
+          : false;
         const isEightColumnTwoColumnSlot = isEightColumnTemplate && slot.columnSpan <= 2;
+        const isCliffInsideSixColumnTwoColumnSlot = isCliffInsideSixColumnTemplate && slot.columnSpan <= 2;
         const isEightColumnThreeColumnSlot = isEightColumnTemplate && slot.columnSpan === 3;
         const isShortEightColumnNarrowSlot =
           isEightColumnTemplate &&
@@ -3808,7 +3895,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         const youthUpdateInsideCompactSlot = isYouthUpdateInsideStory && slot.columnSpan <= 2;
         const resolvedImageEnabled = isAkhandEditorial5A || isAkhandVicharManthanImageSlot
           ? true
-          : priorityForbidsImage || verySmallImageDenied || youthUpdateInsideCompactSlot || isEightColumnTwoColumnSlot
+          : priorityForbidsImage ||
+            verySmallImageDenied ||
+            youthUpdateInsideCompactSlot ||
+            isEightColumnTwoColumnSlot ||
+            isCliffInsideSixColumnTwoColumnSlot
           ? false
           : isProfessional10A
             ? imageAllowed && (Boolean(item?.imageUrl) || hasAnyNewswireImage)
@@ -3820,7 +3911,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         // prominent, centred top image instead, with no side wrap (text
         // starts cleanly below it rather than trying to wrap around a
         // centred image, which only makes sense for a side-aligned one).
-        const isFullWidthBox = slot.columnSpan >= 6;
+        const isFullWidthBox = slot.columnSpan >= 6 && !isCliffInsideSixColumnTemplate;
         const frontPageTwoColumnImageAlignment =
           options?.pageKind === "front" && slot.columnSpan === 2 && resolvedImageEnabled
             ? hashStringToInt(`${item?.id ?? "no-item"}-${storyNumberOffset + slot.storyNumber}-image-side`) % 2 === 0
@@ -3897,6 +3988,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
                 : getEditorialTextColumnCount(slot.columnSpan);
         }
         if (isYouthUpdateShortNewsSlot) {
+          resolvedColumnCount = 1;
+        }
+        if (isEightColumnTwoColumnSlot) {
           resolvedColumnCount = 1;
         }
 
@@ -4010,6 +4104,21 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
                       : 112,
                 imageHeightMode: "fixed" as const,
                 autoSizeImage: false,
+              }
+            : {}),
+          ...(isCliffInsideSixColumnTemplate && resolvedImageEnabled
+            ? {
+                imageAlignment: "top-right" as const,
+                imageColumnSpan: Math.min(2, slot.columnSpan) as StoryColumnSpan,
+                imageHeight:
+                  slot.priority === "lead"
+                    ? 156
+                    : slot.priority === "major"
+                      ? 132
+                      : 112,
+                imageHeightMode: "fixed" as const,
+                autoSizeImage: false,
+                imageWrapMode: "newspaper" as const,
               }
             : {}),
           ...(isYouthUpdateInsideStory && resolvedImageEnabled
@@ -4157,6 +4266,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             ...(isEightColumnTwoColumnSlot ? { tightTwoColumnBylineToBodyGap: true } : {}),
             ...(isShortEightColumnNarrowSlot ? { suppressSubheadline: true } : {}),
             ...(isEightColumnThreeColumnSlot ? { suppressInlineSubheadings: true } : {}),
+            ...(isCliffInsideSixColumnTemplate ? { suppressArticleContainerBorder: true } : {}),
             ...(options?.pageKind === "front" ? { frontPageStyle: FRONT_PAGE_ARTICLE_STYLE } : {}),
             // Inside pages take the same typography through their own field, so
             // the front page's band geometry stays off. Editorial pages take
@@ -4244,7 +4354,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           // Dharm-Sanskriti's photos are decorative page furniture (Ram
           // Darbar, Shiva, Tulsidas), not news photos needing a source/credit
           // caption underneath -- the printed page never captions them.
-          isAkhandEditorial5A || isEightColumnTemplate,
+          isAkhandEditorial5A || isEightColumnTemplate || isCliffInsideSixColumnTemplate,
           isAkhandEditorial5A,
           isAkhandEditorial5A && slot.storyNumber !== 5
             ? {
@@ -4449,6 +4559,20 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           finalContainerStyles = normalizeContainerStyles({
             ...initialArticleData.containerStyles,
             article: createAkhandEditorialContainerStyle(style.fill, style.border),
+          });
+        }
+        if (isCliffInsideSixColumnTemplate && options?.templateId) {
+          const fillSequence = CLIFF_INSIDE_SIX_COLUMN_FILL_SEQUENCES[options.templateId] ?? [
+            "#fff5f2",
+            "#eff9fc",
+            "#fff5cd",
+            "#f9e7fd",
+            "#f3fae9",
+          ];
+          const fill = fillSequence[(slot.storyNumber - 1) % fillSequence.length];
+          finalContainerStyles = normalizeContainerStyles({
+            ...initialArticleData.containerStyles,
+            article: createFillOnlyArticleContainerStyle(fill),
           });
         }
 
