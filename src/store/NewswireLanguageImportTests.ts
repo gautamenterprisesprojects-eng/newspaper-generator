@@ -281,7 +281,10 @@ assert(
 );
 
 stories = importArticles(6, "hindi", "THE CLIFF NEWS");
-assert(stories.every((story) => story.articleData.author === "सिटी रिपोर्टर"), "Hindi stories use Hindi byline label when wizard label is English");
+assert(
+  stories.every((story) => story.articleData.author === useEditorStore.getState().document.metadata.newspaperName),
+  "Hindi stories with no real byline credit the paper's own name, not the generic city-desk tag",
+);
 
 stories = importArticles(6, "bilingual");
 assert.deepEqual(stories.map((story) => String(story.articleData.headline).includes("English") ? "english" : "hindi"), [

@@ -1193,7 +1193,14 @@ const resolveNewswireBylineName = (value: string, language: ArticleLanguage) => 
   const cleaned = value.replace(/\s+/gu, " ").trim();
 
   if (language === "hindi") {
-    return cleaned && /[\u0900-\u097F]/u.test(cleaned) ? cleaned : "सिटी रिपोर्टर";
+    if (cleaned && /[ऀ-ॿ]/u.test(cleaned)) {
+      return cleaned;
+    }
+    // No real byline on the source item: credit the paper itself rather than
+    // the generic "सिटी रिपोर्टर" desk tag, so every publisher's own name
+    // prints here instead of one shared placeholder credit.
+    const newspaperName = useEditorStore.getState().document.metadata.newspaperName.trim();
+    return newspaperName || "सिटी रिपोर्टर";
   }
 
   return cleaned || "Agency";
