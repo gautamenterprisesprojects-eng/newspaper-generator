@@ -4287,14 +4287,16 @@ export function EditorCanvas() {
       }
 
       // PortalLaunchBootstrap's own publisher-profile fetch (which fills
-      // usePublisherEditorialAuthorStore) runs independently of this effect
-      // and can still be in flight the moment this batch run reaches its
-      // first editorial page -- an interactive user always takes longer to
-      // open the editorial panel than that fetch takes, but an unattended
-      // batch run starts as soon as the page count is resized, so it can
-      // win the race and print an editorial page with no author portrait
-      // at all even though the publisher has one configured. Wait (up to
-      // 8s) for that fetch to settle before generating anything.
+      // usePublisherEditorialAuthorStore AND applies the publisher's own
+      // front/inside header artwork -- see `hydrated`'s doc comment there)
+      // runs independently of this effect and can still be in flight the
+      // moment this batch run starts -- an interactive user always takes
+      // longer to open a panel or switch pages than that fetch takes, but
+      // an unattended batch run starts as soon as the page count is
+      // resized, so it can win the race and generate several pages with no
+      // author portrait and/or the wrong inside header artwork even though
+      // the publisher has both configured. Wait (up to 8s) for that fetch
+      // to settle before generating anything.
       const authorStoreDeadline = Date.now() + 8000;
       while (!usePublisherEditorialAuthorStore.getState().hydrated && Date.now() < authorStoreDeadline) {
         await sleep(150);

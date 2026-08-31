@@ -17,14 +17,24 @@ type PublisherEditorialAuthorStore = {
     PublisherEditorialAuthorDefaults | null,
   ];
   /**
-   * True once PortalLaunchBootstrap's publisher-profile fetch has settled
-   * (success, failure, or skipped for lack of launch params) -- the batch
-   * "generate all pages" flow starts its own editorial page as soon as the
-   * document is resized to the right page count, which can easily win the
-   * race against this profile fetch, printing an editorial page with no
-   * author portrait/name even though the publisher has one configured. The
-   * interactive single-page wizard never hit this because a person always
-   * takes longer to open the editorial panel than this fetch takes.
+   * True once PortalLaunchBootstrap's publisher-profile fetch has fully
+   * settled -- not just the editorial-author fields this store owns, but
+   * also the publisher's front/inside header artwork it applies straight
+   * onto the document afterward in the same fetch (see its own doc comment
+   * where this is set). Living here (rather than a flag of its own on the
+   * header system) is a shortcut, not a design statement -- this is really
+   * "has the whole profile bootstrap finished", reused because the batch
+   * flow already needed exactly this signal for the author-rail race
+   * below.
+   *
+   * The batch "generate all pages" flow starts generating its first page as
+   * soon as the document is resized to the right page count, which can
+   * easily win the race against this profile fetch -- printing an
+   * editorial page with no author portrait/name, or an inside page with
+   * the wrong (default/stale) header artwork, even though the publisher
+   * has both configured. The interactive single-page wizard never hit this
+   * because a person always takes longer to open a panel or switch pages
+   * than this fetch takes.
    */
   hydrated: boolean;
   setDefaults: (defaults: PublisherEditorialAuthorDefaults | null) => void;

@@ -251,9 +251,14 @@ export function PortalLaunchBootstrap() {
               : null,
           );
         }
-        usePublisherEditorialAuthorStore.getState().setHydrated();
 
-        if (!profileId) return;
+        if (!profileId) {
+          // No header set to apply front/inside artwork onto -- nothing
+          // else in this function will run, so this IS the fully-settled
+          // point for this launch.
+          usePublisherEditorialAuthorStore.getState().setHydrated();
+          return;
+        }
 
         const startYear = Number(profile.publication_start_year);
         const establishedText = Number.isFinite(startYear) && startYear > 0
@@ -304,6 +309,19 @@ export function PortalLaunchBootstrap() {
         // same as the header images just above.
         if (profile.theme_color && !cancelled) {
           state.setHeaderAccentColor(profile.theme_color);
+        }
+        if (!cancelled) {
+          // Only now -- after the publisher's own front/inside header
+          // artwork has actually been applied, not merely requested -- is
+          // this launch's profile bootstrap really finished. Batch mode
+          // waits on this flag before generating anything (see its own doc
+          // comment in EditorCanvas.tsx); it used to fire right after the
+          // editorial-author fields above, well before the two
+          // sampleImageColorsAt() awaits for front/inside headers resolved,
+          // so an unattended run could render its first several inside
+          // pages before setHeaderBannerImage("inside", ...) ever ran,
+          // printing the wrong (default/stale) inside header artwork.
+          usePublisherEditorialAuthorStore.getState().setHydrated();
         }
       } catch {
         // No publisher profile reachable — the default/current header keeps
