@@ -1379,8 +1379,14 @@ const createArticleDataFromNewswireStory = (
   // only stands in where the desk is genuinely unknown.
   const hasExplicitByline = bylineName.replace(/\s+/gu, " ").trim().length > 0;
   const agencyByline = language === "hindi" ? "एजेंसी" : "Agency";
+  // The newspaper's-own-name fallback (inside resolveNewswireBylineName) is
+  // only correct for the local desk -- Madhya Pradesh/National copy really
+  // is this paper's own reporting. A Business/Sports/International/Health/
+  // Entertainment wire story with no explicit byline is credited to the
+  // agency it actually came from, even when it carries a dateline place
+  // (a place alone doesn't make it local-desk copy).
   const resolvedBylineName =
-    hasExplicitByline || suppliedPlace || datelinePlace || isLocalDeskCategory
+    hasExplicitByline || isLocalDeskCategory
       ? resolveNewswireBylineName(bylineName, language)
       : agencyByline;
 
