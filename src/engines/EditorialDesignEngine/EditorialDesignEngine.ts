@@ -53,8 +53,9 @@ const STORY_COUNT_TEMPLATE_MAP: Record<number, TemplateId[]> = {
     "IndianFront8A",
     "IndianFront8B",
   ],
-  9: ["IndianFront9A", "IndianCity5A", "ProfessionalNews10A"],
+  9: ["IndianFront9A", "ProfessionalNews10A"],
   10: ["IndianFront10A", "ProfessionalNews10A"],
+  11: ["IndianCity5A"],
 };
 
 const FALLBACK_TEMPLATE: TemplateId = "FrontPage5A";

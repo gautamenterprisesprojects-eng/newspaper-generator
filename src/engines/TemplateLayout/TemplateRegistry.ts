@@ -285,33 +285,39 @@ const INDIAN_FRONT_8B: TemplateDefinition = {
 
 /**
  * IndianCity5A
- * Professional Hindi-newspaper city page: a full-height 1-column news-in-brief
- * rail down the left (4 short items) beside a proper hierarchy on the
- * remaining 5 columns (lead, major, two mid-size, one more major) -- 9
- * stories total. Every non-rail box stays 2+ columns wide (no narrow boxes),
- * and the tapering row rhythm (32/26/26/16, same rhythm already proven on
- * IndianFront9A) keeps every row a real height rather than a thin sliver.
+ * Professional Hindi-newspaper city page: a full-height 1-column
+ * "सार-समाचार" (news-in-brief) rail down the left, 4 EQUAL-height boxes so
+ * the rail reads as one clean stacked column rather than mismatched slivers
+ * -- the section label is a hardcoded kicker forced onto story 1 only (see
+ * its override in editorStore.ts, keyed off this template id), not repeated
+ * on every rail box. All 4 rows share the same ratio for exactly that
+ * reason. The remaining 5 columns hold one dominant full-width lead
+ * (row 1) and three rows of paired boxes below it -- only ONE box on the
+ * page is ever full width, so the page reads as a real hierarchy instead of
+ * three identical stacked bars. Every non-rail box stays 2+ columns wide.
  */
 const INDIAN_CITY_5A: TemplateDefinition = {
   id: "IndianCity5A",
   name: "Indian City 5A",
-  storyCount: 9,
+  storyCount: 11,
   rowRhythm: [
-    { row: 1, baseRatio: 0.32, receivesRemainingSpace: false },
-    { row: 2, baseRatio: 0.26, receivesRemainingSpace: false },
-    { row: 3, baseRatio: 0.26, receivesRemainingSpace: false },
-    { row: 4, baseRatio: 0.16, receivesRemainingSpace: true },
+    { row: 1, baseRatio: 0.25, receivesRemainingSpace: false },
+    { row: 2, baseRatio: 0.25, receivesRemainingSpace: false },
+    { row: 3, baseRatio: 0.25, receivesRemainingSpace: false },
+    { row: 4, baseRatio: 0.25, receivesRemainingSpace: true },
   ],
   slots: [
     { storyNumber: 1, row: 1, columnStart: 1, columnSpan: 1, priority: "brief" },
     { storyNumber: 2, row: 1, columnStart: 2, columnSpan: 5, priority: "lead" },
     { storyNumber: 3, row: 2, columnStart: 1, columnSpan: 1, priority: "brief" },
-    { storyNumber: 4, row: 2, columnStart: 2, columnSpan: 5, priority: "major" },
-    { storyNumber: 5, row: 3, columnStart: 1, columnSpan: 1, priority: "brief" },
-    { storyNumber: 6, row: 3, columnStart: 2, columnSpan: 3, priority: "secondary" },
-    { storyNumber: 7, row: 3, columnStart: 5, columnSpan: 2, priority: "secondary" },
-    { storyNumber: 8, row: 4, columnStart: 1, columnSpan: 1, priority: "brief" },
-    { storyNumber: 9, row: 4, columnStart: 2, columnSpan: 5, priority: "major" },
+    { storyNumber: 4, row: 2, columnStart: 2, columnSpan: 3, priority: "major" },
+    { storyNumber: 5, row: 2, columnStart: 5, columnSpan: 2, priority: "secondary" },
+    { storyNumber: 6, row: 3, columnStart: 1, columnSpan: 1, priority: "brief" },
+    { storyNumber: 7, row: 3, columnStart: 2, columnSpan: 2, priority: "secondary" },
+    { storyNumber: 8, row: 3, columnStart: 4, columnSpan: 3, priority: "major" },
+    { storyNumber: 9, row: 4, columnStart: 1, columnSpan: 1, priority: "brief" },
+    { storyNumber: 10, row: 4, columnStart: 2, columnSpan: 3, priority: "major" },
+    { storyNumber: 11, row: 4, columnStart: 5, columnSpan: 2, priority: "secondary" },
   ],
 };
 

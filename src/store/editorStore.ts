@@ -1287,6 +1287,11 @@ const createArticleDataFromNewswireStory = (
   headlineOverride?: { fontSize: number; lineHeight: number; lineHeightMode: "percentage" },
   stripBodyDateline?: boolean,
   preferSecondaryHeadlineAsHeadline?: boolean,
+  // A section label ("सार-समाचार") printed above IndianCity5A's left rail --
+  // a hardcoded label for that one box, not real story content, so it's
+  // forced here rather than sourced from the wire item like every other
+  // kicker. Undefined for every other caller/story.
+  kickerOverrideText?: string,
 ): ArticleData => {
   const baseCapacity = capacity ?? estimateStoryWordCapacity(story);
   const targetTier = selectOptimisticNewswireWordTier(baseCapacity);
@@ -1509,11 +1514,13 @@ const createArticleDataFromNewswireStory = (
           headlineLineHeightMode: headlineOverride.lineHeightMode,
         }
       : {}),
-    kicker: {
-      ...story.articleData.kicker,
-      enabled: wantsKicker,
-      text: wantsKicker ? normalizeRichText(kickerText) : story.articleData.kicker.text,
-    },
+    kicker: kickerOverrideText
+      ? { ...story.articleData.kicker, enabled: true, text: normalizeRichText(kickerOverrideText) }
+      : {
+          ...story.articleData.kicker,
+          enabled: wantsKicker,
+          text: wantsKicker ? normalizeRichText(kickerText) : story.articleData.kicker.text,
+        },
     strap: {
       ...story.articleData.strap,
       enabled: wantsStrap,
@@ -1777,6 +1784,13 @@ const chooseLayoutFittedNewswireArticleData = ({
           lineHeightMode: baseStory.headlineLineHeightMode as "percentage",
         }
       : undefined;
+  // IndianCity5A's left rail is a single "सार-समाचार" (news-in-brief) section,
+  // not 4 separately-labelled boxes -- the label is a hardcoded kicker on the
+  // rail's first (topmost) box only, printing once above the whole stack.
+  const kickerOverrideText =
+    options?.templateId === "IndianCity5A" && baseStory.templateStoryNumber === 1
+      ? "सार-समाचार"
+      : undefined;
 
   for (const requestedWords of requestedTiers) {
     const candidateData = transformTypography(
@@ -1796,6 +1810,7 @@ const chooseLayoutFittedNewswireArticleData = ({
             headlineOverride,
             stripBodyDateline,
             preferSecondaryHeadlineAsHeadline,
+            kickerOverrideText,
           ),
           headlineColor: finalHeadlineColor,
           subheadlineBanner: finalSubheadlineBanner,
@@ -1855,6 +1870,7 @@ const chooseLayoutFittedNewswireArticleData = ({
         headlineOverride,
         stripBodyDateline,
         preferSecondaryHeadlineAsHeadline,
+        kickerOverrideText,
       ),
       language,
       options,

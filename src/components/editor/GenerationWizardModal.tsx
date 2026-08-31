@@ -413,7 +413,7 @@ export const WIZARD_LAYOUT_DESIGNS: Array<{
   { id: "IndianFront7B", name: "इंडियन फ्रंट 7B", storyCount: 6, category: "basic" },
   { id: "IndianMixed7A", name: "इंडियन मिक्स्ड 7A", storyCount: 6, category: "basic" },
   { id: "IndianFront8B", name: "इंडियन फ्रंट 8B", storyCount: 8, category: "basic" },
-  { id: "IndianCity5A", name: "इंडियन सिटी 5A", storyCount: 9, category: "basic" },
+  { id: "IndianCity5A", name: "इंडियन सिटी 5A", storyCount: 11, category: "basic" },
   { id: "IndianCity6A", name: "इंडियन सिटी 6A", storyCount: 6, category: "basic" },
   { id: "IndianColumn5A", name: "इंडियन कॉलम 5A", storyCount: 5, category: "basic" },
   { id: "IndianBalance6A", name: "इंडियन बैलेंस 6A", storyCount: 6, category: "basic" },
