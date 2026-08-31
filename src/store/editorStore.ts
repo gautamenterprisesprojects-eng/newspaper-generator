@@ -1541,9 +1541,13 @@ const createArticleDataFromNewswireStory = (
     summaryBullets: suppressSubheadline
       ? []
       : (item.summary && item.summary.length > 0 ? item.summary : [cleanedSubheadline]).filter(Boolean).slice(0, 2),
-    inlineSubheadingEnabled: (suppressSubheadline || suppressInlineSubheadings)
-      ? false
-      : (inlineSubheadings ?? true),
+    // Disabled outright, per the publisher-facing "normal" (inline bulleted)
+    // subheadline style being turned off -- only the coloured border-box
+    // banner style (subheadlineBanner, just above) still renders. The
+    // `inlineSubheadings` param/option and its UI toggle are left in place
+    // rather than ripped out, since suppressSubheadline/suppressInlineSubheadings
+    // still legitimately gate other things.
+    inlineSubheadingEnabled: false,
     inlineSubheadingColor: item.inlineSubheadingColor ?? inlineSubheadingColor ?? "#18181b",
     badgeKickerEnabled: item.badgeKickerEnabled ?? story.articleData.badgeKickerEnabled,
     // Compact box: blank out author and location so byline row is not rendered.
