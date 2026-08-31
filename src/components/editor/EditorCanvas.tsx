@@ -287,7 +287,7 @@ const wizardLayoutDesigns: Array<{ id: TemplateId; name: string; storyCount: num
   { id: "IndianMixed7A", name: "Indian Mixed 7A", storyCount: 7 },
   { id: "IndianFront8A", name: "Indian Front 8A", storyCount: 8 },
   { id: "IndianFront8B", name: "Indian Front 8B", storyCount: 8 },
-  { id: "IndianCity5A", name: "Indian City 5A", storyCount: 5 },
+  { id: "IndianCity5A", name: "Indian City 5A", storyCount: 9 },
   { id: "IndianCity6A", name: "Indian City 6A", storyCount: 6 },
   { id: "IndianSports5A", name: "Indian Sports 5A", storyCount: 5 },
   { id: "IndianFront9A", name: "Indian Front 9A", storyCount: 9 },

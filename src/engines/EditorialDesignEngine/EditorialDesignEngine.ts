@@ -34,9 +34,9 @@ import { scoreTemplate, type ScoredTemplate } from "./LayoutScorer";
 const STORY_COUNT_TEMPLATE_MAP: Record<number, TemplateId[]> = {
   1: ["FrontPage5A"],
   2: ["FrontPage5A"],
-  3: ["IndianCity5A"],
-  4: ["IndianCity5A"],
-  5: ["IndianCity5A", "IndianSports5A", "IndianColumn5A", "FrontPage5A"],
+  3: ["FrontPage5A"],
+  4: ["FrontPage5A"],
+  5: ["IndianSports5A", "IndianColumn5A", "FrontPage5A"],
   6: [
     "IndianFront6A",
     "IndianFront6B",
@@ -53,7 +53,7 @@ const STORY_COUNT_TEMPLATE_MAP: Record<number, TemplateId[]> = {
     "IndianFront8A",
     "IndianFront8B",
   ],
-  9: ["IndianFront9A", "ProfessionalNews10A"],
+  9: ["IndianFront9A", "IndianCity5A", "ProfessionalNews10A"],
   10: ["IndianFront10A", "ProfessionalNews10A"],
 };
 

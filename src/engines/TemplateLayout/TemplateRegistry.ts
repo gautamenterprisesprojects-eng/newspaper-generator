@@ -285,24 +285,33 @@ const INDIAN_FRONT_8B: TemplateDefinition = {
 
 /**
  * IndianCity5A
- * Standard Indian city-page 5-story layout.
- * 3-col lead left + 3-col major right → 3 supporting below.
- * Row rhythm: 42% / 58%.
+ * Professional Hindi-newspaper city page: a full-height 1-column news-in-brief
+ * rail down the left (4 short items) beside a proper hierarchy on the
+ * remaining 5 columns (lead, major, two mid-size, one more major) -- 9
+ * stories total. Every non-rail box stays 2+ columns wide (no narrow boxes),
+ * and the tapering row rhythm (32/26/26/16, same rhythm already proven on
+ * IndianFront9A) keeps every row a real height rather than a thin sliver.
  */
 const INDIAN_CITY_5A: TemplateDefinition = {
   id: "IndianCity5A",
   name: "Indian City 5A",
-  storyCount: 5,
+  storyCount: 9,
   rowRhythm: [
-    { row: 1, baseRatio: 0.44, receivesRemainingSpace: false },
-    { row: 2, baseRatio: 0.56, receivesRemainingSpace: true },
+    { row: 1, baseRatio: 0.32, receivesRemainingSpace: false },
+    { row: 2, baseRatio: 0.26, receivesRemainingSpace: false },
+    { row: 3, baseRatio: 0.26, receivesRemainingSpace: false },
+    { row: 4, baseRatio: 0.16, receivesRemainingSpace: true },
   ],
   slots: [
-    { storyNumber: 1, row: 1, columnStart: 1, columnSpan: 3, priority: "lead" },
-    { storyNumber: 2, row: 1, columnStart: 4, columnSpan: 3, priority: "major" },
-    { storyNumber: 3, row: 2, columnStart: 1, columnSpan: 2, priority: "secondary" },
-    { storyNumber: 4, row: 2, columnStart: 3, columnSpan: 2, priority: "secondary" },
-    { storyNumber: 5, row: 2, columnStart: 5, columnSpan: 2, priority: "secondary" },
+    { storyNumber: 1, row: 1, columnStart: 1, columnSpan: 1, priority: "brief" },
+    { storyNumber: 2, row: 1, columnStart: 2, columnSpan: 5, priority: "lead" },
+    { storyNumber: 3, row: 2, columnStart: 1, columnSpan: 1, priority: "brief" },
+    { storyNumber: 4, row: 2, columnStart: 2, columnSpan: 5, priority: "major" },
+    { storyNumber: 5, row: 3, columnStart: 1, columnSpan: 1, priority: "brief" },
+    { storyNumber: 6, row: 3, columnStart: 2, columnSpan: 3, priority: "secondary" },
+    { storyNumber: 7, row: 3, columnStart: 5, columnSpan: 2, priority: "secondary" },
+    { storyNumber: 8, row: 4, columnStart: 1, columnSpan: 1, priority: "brief" },
+    { storyNumber: 9, row: 4, columnStart: 2, columnSpan: 5, priority: "major" },
   ],
 };
 
