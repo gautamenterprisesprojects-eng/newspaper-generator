@@ -323,24 +323,29 @@ const INDIAN_CITY_5A: TemplateDefinition = {
 
 /**
  * IndianCity6A
- * City page with 6 stories: 4-col + 2-col top, then 4 below.
- * Row rhythm: 40% / 60%.
+ * Image-dominant city page: a wide, tall lead box (48% of the page height,
+ * 4 of 6 columns) carries the page's photo entirely through the existing
+ * generic image rule (columnSpan >= 3 -> wantsImage, see editorStore.ts) --
+ * no template-specific image logic. The other 5 stories sit in two 3-column
+ * rows below, each a generous 26/22 wedge of the page height rather than a
+ * single narrow row split five ways, and nothing spans the full 6 columns.
  */
 const INDIAN_CITY_6A: TemplateDefinition = {
   id: "IndianCity6A",
   name: "Indian City 6A",
   storyCount: 6,
   rowRhythm: [
-    { row: 1, baseRatio: 0.40, receivesRemainingSpace: false },
-    { row: 2, baseRatio: 0.60, receivesRemainingSpace: true },
+    { row: 1, baseRatio: 0.48, receivesRemainingSpace: false },
+    { row: 2, baseRatio: 0.28, receivesRemainingSpace: false },
+    { row: 3, baseRatio: 0.24, receivesRemainingSpace: true },
   ],
   slots: [
     { storyNumber: 1, row: 1, columnStart: 1, columnSpan: 4, priority: "lead" },
     { storyNumber: 2, row: 1, columnStart: 5, columnSpan: 2, priority: "major" },
-    { storyNumber: 3, row: 2, columnStart: 1, columnSpan: 2, priority: "secondary" },
-    { storyNumber: 4, row: 2, columnStart: 3, columnSpan: 2, priority: "secondary" },
-    { storyNumber: 5, row: 2, columnStart: 5, columnSpan: 1, priority: "brief" },
-    { storyNumber: 6, row: 2, columnStart: 6, columnSpan: 1, priority: "brief" },
+    { storyNumber: 3, row: 2, columnStart: 1, columnSpan: 3, priority: "secondary" },
+    { storyNumber: 4, row: 2, columnStart: 4, columnSpan: 3, priority: "secondary" },
+    { storyNumber: 5, row: 3, columnStart: 1, columnSpan: 3, priority: "secondary" },
+    { storyNumber: 6, row: 3, columnStart: 4, columnSpan: 3, priority: "secondary" },
   ],
 };
 
