@@ -292,16 +292,28 @@ export function PortalLaunchBootstrap() {
         // Each publisher's own artwork uses its own accent colour for the
         // same date-block/issue-bar zones Cliff News's is white/red for —
         // sample their actual pixels there rather than assuming ours.
-        if (frontHeaderUrl) {
-          const maskColors = await sampleImageColorsAt(frontHeaderUrl, getHeaderMaskSamplePoints("front"));
-          if (!cancelled) {
-            state.setHeaderBannerImage("front", frontHeaderUrl, maskColors ?? undefined);
+        //
+        // Sampled concurrently, not front-then-inside sequentially: batch
+        // mode runs this whole component inside a hidden iframe rather than
+        // a normal page navigation (see EditorCanvas.tsx's own doc comment
+        // on the batch wait), and if this effect's cleanup ever fires mid-
+        // flight (a remount, or `searchParams` changing identity) the two
+        // awaits used to resolve at different times -- front's `cancelled`
+        // check could still pass while inside's, awaited after it, saw
+        // `cancelled` flip true in between, so the front banner got applied
+        // and the inside one silently never did. Awaiting both together
+        // means they now share the exact same cancellation window: whatever
+        // happens to one happens to both.
+        const [frontMaskColors, insideMaskColors] = await Promise.all([
+          frontHeaderUrl ? sampleImageColorsAt(frontHeaderUrl, getHeaderMaskSamplePoints("front")) : Promise.resolve(null),
+          insideHeaderUrl ? sampleImageColorsAt(insideHeaderUrl, getHeaderMaskSamplePoints("inside")) : Promise.resolve(null),
+        ]);
+        if (!cancelled) {
+          if (frontHeaderUrl) {
+            state.setHeaderBannerImage("front", frontHeaderUrl, frontMaskColors ?? undefined);
           }
-        }
-        if (insideHeaderUrl) {
-          const maskColors = await sampleImageColorsAt(insideHeaderUrl, getHeaderMaskSamplePoints("inside"));
-          if (!cancelled) {
-            state.setHeaderBannerImage("inside", insideHeaderUrl, maskColors ?? undefined);
+          if (insideHeaderUrl) {
+            state.setHeaderBannerImage("inside", insideHeaderUrl, insideMaskColors ?? undefined);
           }
         }
         // One-time theme colour, seeded as the inside header's starting
