@@ -578,7 +578,14 @@ const getWizardTabForPortalPage = (page: PortalPagePlan): WizardTab => {
 // FRONT_PAGE_TEMPLATE_IDS[1] ("CliffFront11A") is excluded from batch mode's
 // automatic page-1 rotation on request -- left selectable from the manual
 // wizard design picker, just never auto-chosen for an unattended batch run.
-const BATCH_FRONT_PAGE_TEMPLATE_IDS = FRONT_PAGE_TEMPLATE_IDS.filter((templateId) => templateId !== "CliffFront11A");
+// An unattended "generate all pages" run is also restricted to 6-column
+// layouts only (publisher request) -- a template with no declared
+// columnCount defaults to 6 here (matches every plain front/inside design),
+// so this only actually drops the handful of templates that explicitly
+// declare something else (the 8-column front designs).
+const BATCH_FRONT_PAGE_TEMPLATE_IDS = FRONT_PAGE_TEMPLATE_IDS.filter(
+  (templateId) => templateId !== "CliffFront11A" && getTemplateColumnCount(templateId, 6) === 6,
+);
 
 /**
  * Maps a publisher's page-section label (e.g. "Sports", "Business",
@@ -627,28 +634,49 @@ const getPortalOrigin = () => {
  * upstream backend failed, substituting built-in stories and flagging it only
  * via meta.baseUrl.
  */
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/**
+ * A single live-newswire request, retried a couple of times with a short
+ * backoff before giving up. Batch mode is the only caller of this function
+ * (an unattended, whole-issue run with no user watching a spinner) and is
+ * explicitly meant to take its time rather than concede a page's live
+ * content over one transient network hiccup — the interactive wizard's own
+ * fetch path is separate and untouched by this.
+ */
 const fetchLiveNewswireOnce = async (
   category: string,
   languageMode: PageLanguageMode,
   limit: number,
 ): Promise<NewswireStory[] | null> => {
-  const response = await fetch(
-    `/api/newswire?category=${encodeURIComponent(category)}&language=${languageMode}&limit=${limit}`,
-  );
-  const payload = (await response.json().catch(() => null)) as {
-    success?: boolean;
-    data?: NewswireStory[];
-    meta?: { baseUrl?: string };
-  } | null;
+  const attempts = 3;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      const response = await fetch(
+        `/api/newswire?category=${encodeURIComponent(category)}&language=${languageMode}&limit=${limit}`,
+      );
+      const payload = (await response.json().catch(() => null)) as {
+        success?: boolean;
+        data?: NewswireStory[];
+        meta?: { baseUrl?: string };
+      } | null;
 
-  if (
-    response.ok &&
-    payload?.success !== false &&
-    Array.isArray(payload?.data) &&
-    payload.data.length > 0 &&
-    payload.meta?.baseUrl !== "fallback"
-  ) {
-    return payload.data;
+      if (
+        response.ok &&
+        payload?.success !== false &&
+        Array.isArray(payload?.data) &&
+        payload.data.length > 0 &&
+        payload.meta?.baseUrl !== "fallback"
+      ) {
+        return payload.data;
+      }
+    } catch {
+      // Network hiccup -- fall through to the retry below rather than
+      // surfacing it as an immediate failure.
+    }
+    if (attempt < attempts - 1) {
+      await sleep(800 * (attempt + 1));
+    }
   }
   return null;
 };
@@ -906,13 +934,19 @@ const fetchEditorialStoriesForPage = async (excludeIds?: Set<string>): Promise<N
 
 // WIZARD_LAYOUT_DESIGNS is the wizard's own inside-page catalogue (one entry
 // per template, tagged "basic" or "advanced") — deriving these two pools
-// from it directly means the batch loop and the interactive wizard can never
-// drift apart over which templates exist or how they're categorized.
+// from it directly means these categorizations can never drift apart from
+// the wizard's own. Only pickInsideTemplateId (batch mode) reads these pools;
+// the interactive single-page wizard picks straight from WIZARD_LAYOUT_DESIGNS
+// itself, so this 6-column filter is batch-only.
+// Batch mode restricts inside pages to 6-column layouts only (publisher
+// request, same rule as BATCH_FRONT_PAGE_TEMPLATE_IDS above) -- the
+// interactive wizard's own picker is unaffected, since it reads
+// WIZARD_LAYOUT_DESIGNS directly rather than through these two pools.
 const ADVANCED_INSIDE_TEMPLATE_IDS: TemplateId[] = WIZARD_LAYOUT_DESIGNS.filter(
-  (design) => design.category === "advanced",
+  (design) => design.category === "advanced" && getTemplateColumnCount(design.id, 6) === 6,
 ).map((design) => design.id);
 const BASIC_INSIDE_TEMPLATE_IDS: TemplateId[] = WIZARD_LAYOUT_DESIGNS.filter(
-  (design) => design.category === "basic",
+  (design) => design.category === "basic" && getTemplateColumnCount(design.id, 6) === 6,
 ).map((design) => design.id);
 
 /**
@@ -4234,6 +4268,23 @@ export function EditorCanvas() {
         fullLedger.normalizedHeadlines.forEach((headline) => batchUsedHeadlinesRef.current.add(headline));
       }
 
+      // PortalLaunchBootstrap's own publisher-profile fetch (which fills
+      // usePublisherEditorialAuthorStore) runs independently of this effect
+      // and can still be in flight the moment this batch run reaches its
+      // first editorial page -- an interactive user always takes longer to
+      // open the editorial panel than that fetch takes, but an unattended
+      // batch run starts as soon as the page count is resized, so it can
+      // win the race and print an editorial page with no author portrait
+      // at all even though the publisher has one configured. Wait (up to
+      // 8s) for that fetch to settle before generating anything.
+      const authorStoreDeadline = Date.now() + 8000;
+      while (!usePublisherEditorialAuthorStore.getState().hydrated && Date.now() < authorStoreDeadline) {
+        await sleep(150);
+      }
+      if (cancelled) {
+        return;
+      }
+
       const buildOptions = (templateId: TemplateId, pageKind: NewswireImportOptions["pageKind"]): NewswireImportOptions => ({
         templateId,
         pageKind,
@@ -4254,6 +4305,7 @@ export function EditorCanvas() {
         editorialAuthorSelections: pageKind === "editorial"
           ? usePublisherEditorialAuthorStore.getState().selectedAuthors
           : undefined,
+        isBatchGeneration: true,
       });
 
       for (let index = 0; index < initialPages.length; index += 1) {
@@ -4342,6 +4394,15 @@ export function EditorCanvas() {
               batchUsedArticleIdsRef.current.add(article.id);
               batchUsedHeadlinesRef.current.add(normalizeHeadlineKey(article.headline));
             }
+            // Same per-issue ledger the news branch below writes to — without
+            // this, an editorial page's सम्पादकीय/राशिफल picks were only ever
+            // remembered for the rest of THIS batch run, so a page later
+            // regenerated individually via the single-page wizard could repeat
+            // them, and vice versa.
+            void saveIssueUsedArticles(
+              buildPortalIssueArticleSession(index + 1, planned?.section || pageModel.sectionName || `Page ${index + 1}`),
+              mergedEditorialStories,
+            );
           } catch (error) {
             lastError = error;
           }

@@ -199,7 +199,13 @@ export function PortalLaunchBootstrap() {
     const authToken = searchParams.get("authToken")?.trim() || "";
     const apiBase = searchParams.get("apiBase")?.trim() || "http://localhost:8080/api/v1";
 
-    if (!publisherId || !authToken) return;
+    if (!publisherId || !authToken) {
+      // No profile to fetch on this launch -- nothing will ever set
+      // editorialAuthors, so mark it settled immediately rather than
+      // leaving anything waiting on `hydrated` stuck forever.
+      usePublisherEditorialAuthorStore.getState().setHydrated();
+      return;
+    }
 
     const key = `${apiBase}|${publisherId}|${authToken}`;
     if (appliedProfileFetchKey.current === key) return;
@@ -213,7 +219,10 @@ export function PortalLaunchBootstrap() {
           headers: { Authorization: `Bearer ${authToken}` },
         });
 
-        if (!response.ok || cancelled) return;
+        if (!response.ok || cancelled) {
+          if (!cancelled) usePublisherEditorialAuthorStore.getState().setHydrated();
+          return;
+        }
 
         const profile: PublisherProfileResponse = await response.json();
 
@@ -242,6 +251,7 @@ export function PortalLaunchBootstrap() {
               : null,
           );
         }
+        usePublisherEditorialAuthorStore.getState().setHydrated();
 
         if (!profileId) return;
 
@@ -298,6 +308,7 @@ export function PortalLaunchBootstrap() {
       } catch {
         // No publisher profile reachable — the default/current header keeps
         // rendering rather than the page breaking.
+        if (!cancelled) usePublisherEditorialAuthorStore.getState().setHydrated();
       }
     })();
 

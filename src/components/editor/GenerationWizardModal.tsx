@@ -1020,6 +1020,13 @@ export type NewswireImportOptions = {
   pageKind?: PageKind;
   /** Advertisements to embed within this page (front/inside/editorial) — see PageAdvertisementPlacement. */
   pageAdvertisements?: PageAdvertisement[];
+  /**
+   * Set only by the unattended "generate all pages" batch flow in
+   * EditorCanvas.tsx, never by this interactive wizard — see its doc
+   * comment on the matching field in editorStore.ts's own (unexported)
+   * NewswireImportOptions for why.
+   */
+  isBatchGeneration?: boolean;
 };
 
 export type WizardPageSummary = {

@@ -16,8 +16,20 @@ type PublisherEditorialAuthorStore = {
     PublisherEditorialAuthorDefaults | null,
     PublisherEditorialAuthorDefaults | null,
   ];
+  /**
+   * True once PortalLaunchBootstrap's publisher-profile fetch has settled
+   * (success, failure, or skipped for lack of launch params) -- the batch
+   * "generate all pages" flow starts its own editorial page as soon as the
+   * document is resized to the right page count, which can easily win the
+   * race against this profile fetch, printing an editorial page with no
+   * author portrait/name even though the publisher has one configured. The
+   * interactive single-page wizard never hit this because a person always
+   * takes longer to open the editorial panel than this fetch takes.
+   */
+  hydrated: boolean;
   setDefaults: (defaults: PublisherEditorialAuthorDefaults | null) => void;
   setAuthors: (authors: PublisherEditorialAuthorDefaults[]) => void;
+  setHydrated: () => void;
   selectAuthor: (id: string) => void;
   selectAuthorForRail: (railIndex: 0 | 1, id: string) => void;
 };
@@ -32,6 +44,8 @@ export const usePublisherEditorialAuthorStore = create<PublisherEditorialAuthorS
   defaults: null,
   authors: [],
   selectedAuthors: [null, null],
+  hydrated: false,
+  setHydrated: () => set({ hydrated: true }),
   setDefaults: (defaults) => set({
     defaults,
     authors: defaults ? [normalizeAuthor(defaults, 0)] : [],

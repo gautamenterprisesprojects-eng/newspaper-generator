@@ -1869,6 +1869,16 @@ type NewswireImportOptions = {
   pageKind?: PageKind;
   languageMode?: PageLanguageMode;
   bylineName?: string;
+  /**
+   * Set only by the unattended "generate all pages" batch flow
+   * (EditorCanvas.tsx), never by the interactive single-page wizard —
+   * the editorial live feed carries no real photos, and on an unattended
+   * run there's no one to notice or fix a stray image, so batch-generated
+   * editorial pages suppress every inside image and print only the
+   * publisher's own signed author portraits. The interactive wizard's
+   * existing editorial image behavior is untouched by this flag.
+   */
+  isBatchGeneration?: boolean;
   editorialAuthorDefaults?: {
     name: string;
     imageUrl: string;
@@ -4905,11 +4915,21 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       const reserveAkhandEditorialImageFields =
         options?.templateId === AKHAND_EDITORIAL_5A_TEMPLATE_ID ||
         options?.templateId === AKHAND_VICHAR_MANTHAN_6A_TEMPLATE_ID;
-      const fallbackImageUrl = reserveAkhandEditorialImageFields
+      // Batch-generated editorial pages never borrow one slot's image for
+      // another, and never show an inside image at all except the publisher's
+      // own signed author portraits (see isBatchGeneration's doc comment
+      // above) -- the interactive single-page wizard's own editorial image
+      // behavior (including the generic fallback below, which exists for
+      // news pages: a page-representative photo reused where a story has
+      // none) is untouched.
+      const isBatchEditorialPage = options?.pageKind === "editorial" && options?.isBatchGeneration === true;
+      const fallbackImageUrl = reserveAkhandEditorialImageFields || isBatchEditorialPage
         ? ""
         : assignedArticles.find((a: NewswireStory) => a.imageUrl)?.imageUrl ?? "";
       const effectiveImageUrls = assignedArticles.map((a: NewswireStory, index: number) =>
-        a.imageUrl ||
+        (isBatchEditorialPage
+          ? (isEditorialAuthorSlot(layoutSlots[index]?.storyNumber, options?.templateId) ? a.imageUrl : "")
+          : a.imageUrl) ||
         (reserveAkhandEditorialImageFields && newStories[index]?.imageEnabled
           ? AKHAND_EDITORIAL_IMAGE_PLACEHOLDER_URL
           : fallbackImageUrl),
