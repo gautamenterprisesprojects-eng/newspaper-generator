@@ -1310,14 +1310,6 @@ const createArticleDataFromNewswireStory = (
   const cleanedSubheadline = ensureEndsWithFullStop(
     preferSecondaryHeadlineAsHeadline ? "" : secondaryHeadlineText,
   );
-  // The newswire's subheadings endpoint returns three per story, shortest last.
-  // A one-column box titles itself with the third — it is the only one of the
-  // title-length fields that lands complete in two lines of so narrow a
-  // measure. Falls back to the subheadline for any story that ships fewer than
-  // three (older records carry only two summary lines).
-  const thirdSubheading = ensureEndsWithFullStop(
-    cleanSubheadlineText(localized.subheadings[2] ?? ""),
-  );
   const fullText = localized.body || localized.longBody || localized.mediumBody || localized.shortBody || "";
   // Use 1.5x buffer so we always supply more text than the frame needs.
   // The layout engine stops naturally at the frame's printable bottom edge.
@@ -1527,24 +1519,11 @@ const createArticleDataFromNewswireStory = (
       text: wantsStrap ? normalizeRichText(strapText) : story.articleData.strap.text,
     },
     headline: headlineText,
-    // Compact box: clear subheadline text and disable subheadline banner + inline sub-heads.
-    subheadline: suppressSubheadline
-      ? ""
-      : keepSubheadlineAsNarrowTitle && thirdSubheading
-        ? thirdSubheading
-        : cleanedSubheadline,
-    subheadlineBanner: suppressSubheadline
-      ? { mode: "none" as const, backgroundColor: subheadingStyle.backgroundColor, textColor: subheadingStyle.textColor, borderColor: subheadingStyle.borderColor, backgroundOpacity: 0, borderWidth: 0, borderRadius: 0, padding: 0 }
-      : {
-          mode: "rounded",
-          backgroundColor: subheadingStyle.backgroundColor,
-          textColor: subheadingStyle.textColor,
-          borderColor: subheadingStyle.borderColor,
-          backgroundOpacity: subheadingStyle.backgroundOpacity,
-          borderWidth: 0.8,
-          borderRadius: 3,
-          padding: 5,
-        },
+    // The plain subheadline line under the headline is disabled outright,
+    // per publisher request -- the kicker banner above the headline (a
+    // separate field, untouched here) is the one that stays.
+    subheadline: "",
+    subheadlineBanner: { mode: "none" as const, backgroundColor: subheadingStyle.backgroundColor, textColor: subheadingStyle.textColor, borderColor: subheadingStyle.borderColor, backgroundOpacity: 0, borderWidth: 0, borderRadius: 0, padding: 0 },
     summaryBullets: suppressSubheadline
       ? []
       : (item.summary && item.summary.length > 0 ? item.summary : [cleanedSubheadline]).filter(Boolean).slice(0, 2),
