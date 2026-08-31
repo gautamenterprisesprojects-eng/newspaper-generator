@@ -122,6 +122,7 @@ import {
   type NewswireCategory,
   type NewswireStory,
   type NewswireSubheadingPreset,
+  type NewswireSubheadingPresetId,
   type NewswireTintPreset,
 } from "@/lib/newswire";
 import { computeEvenCategoryTargets, computeWeightedCategoryTargets, shuffleNewswireStories } from "@/lib/newswireCategoryMix";
@@ -4240,7 +4241,24 @@ export function EditorCanvas() {
     let cancelled = false;
     const plannedPages = parseBatchPlannedPages(getPortalLaunchParam("pageSections"));
     const languageMode: PageLanguageMode = "hindi";
-    const preset = NEWSWIRE_SUBHEADING_PRESETS[0];
+    // Every page in a batch run used to share NEWSWIRE_SUBHEADING_PRESETS[0]
+    // (the same black "Classic Daily" palette on every single page) --
+    // publisher request is a different palette per page instead, each at
+    // 60% background weight rather than a full-strength block colour. Same
+    // "pick unused, reuse only once the whole pool is spent" pattern as
+    // pickInsideTemplateId's template rotation just below. "custom" is
+    // excluded: it has no real palette of its own, only placeholder colours
+    // meant for manual editing in the interactive wizard.
+    const batchPaletteRotationPool = NEWSWIRE_SUBHEADING_PRESETS.filter((p) => p.id !== "custom");
+    const batchUsedPaletteIdsRef = new Set<NewswireSubheadingPresetId>();
+    const pickBatchPalette = (): NewswireSubheadingPreset => {
+      const unused = batchPaletteRotationPool.filter((p) => !batchUsedPaletteIdsRef.has(p.id));
+      const pool = unused.length > 0 ? unused : batchPaletteRotationPool;
+      const picked = pool[Math.floor(Math.random() * pool.length)];
+      batchUsedPaletteIdsRef.add(picked.id);
+      return picked;
+    };
+    const BATCH_PALETTE_BACKGROUND_OPACITY = 0.6;
 
     (async () => {
       const initialPages = useEditorStore.getState().document.pages;
@@ -4285,28 +4303,31 @@ export function EditorCanvas() {
         return;
       }
 
-      const buildOptions = (templateId: TemplateId, pageKind: NewswireImportOptions["pageKind"]): NewswireImportOptions => ({
-        templateId,
-        pageKind,
-        languageMode,
-        bylineName: "",
-        colouredHeadings: false,
-        tintedStoryBackground: true,
-        tintColor: getPaletteTintColor(preset),
-        inlineColumnSubheadings: true,
-        inlineSubheadingColor: getPaletteInlineAccent(preset),
-        palettePreset: preset,
-        subheadingStyle: getPaletteSubheadingStyle(preset, 1),
-        bodyAlignment: "justify",
-        professionalJustification: true,
-        editorialAuthorDefaults: pageKind === "editorial"
-          ? usePublisherEditorialAuthorStore.getState().defaults
-          : null,
-        editorialAuthorSelections: pageKind === "editorial"
-          ? usePublisherEditorialAuthorStore.getState().selectedAuthors
-          : undefined,
-        isBatchGeneration: true,
-      });
+      const buildOptions = (templateId: TemplateId, pageKind: NewswireImportOptions["pageKind"]): NewswireImportOptions => {
+        const preset = pickBatchPalette();
+        return {
+          templateId,
+          pageKind,
+          languageMode,
+          bylineName: "",
+          colouredHeadings: false,
+          tintedStoryBackground: true,
+          tintColor: getPaletteTintColor(preset),
+          inlineColumnSubheadings: true,
+          inlineSubheadingColor: getPaletteInlineAccent(preset),
+          palettePreset: preset,
+          subheadingStyle: getPaletteSubheadingStyle(preset, BATCH_PALETTE_BACKGROUND_OPACITY),
+          bodyAlignment: "justify",
+          professionalJustification: true,
+          editorialAuthorDefaults: pageKind === "editorial"
+            ? usePublisherEditorialAuthorStore.getState().defaults
+            : null,
+          editorialAuthorSelections: pageKind === "editorial"
+            ? usePublisherEditorialAuthorStore.getState().selectedAuthors
+            : undefined,
+          isBatchGeneration: true,
+        };
+      };
 
       for (let index = 0; index < initialPages.length; index += 1) {
         if (cancelled) {
@@ -4504,8 +4525,14 @@ export function EditorCanvas() {
               // Still short — pull the remainder from whatever categories
               // haven't already been drained on this page. Still entirely
               // live content either way; nothing here ever touches the
-              // deterministic preloaded pool.
-              if (!specificCategory && freshLive.length < remaining) {
+              // deterministic preloaded pool. Applies even when the page has
+              // its own specificCategory (e.g. Sports): a thin or already-
+              // exhausted (see the per-issue used-articles ledger seeded
+              // above) category used to leave a shortfall with nowhere to
+              // come from, and importNewswireStories would then throw "Not
+              // enough Hindi articles" outright instead of finishing the
+              // page with a few cross-category live stories mixed in.
+              if (freshLive.length < remaining) {
                 const stillNeeded = remaining - freshLive.length;
                 const mixedIn = await fetchLiveArticlesFromOtherCategories(
                   specificCategory ?? "",
