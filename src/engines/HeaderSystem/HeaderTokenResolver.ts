@@ -30,11 +30,11 @@ const formatMastheadDate = (date: string, monthFormat: "long" | "short") => {
   return `${parsed.getDate()} ${month}-${parsed.getFullYear()}`;
 };
 
-/** Just the day-of-month number ("13") — the front masthead's date block draws this on its own, apart from the month/year line. */
+/** Just the day-of-month number ("13", or "01" for the 1st) — the front masthead's date block draws this on its own, apart from the month/year line. Zero-padded per Indian-press convention, same as every other consumer of this digit (page number, day-of-month inside a worded dateline). */
 const formatDayOfMonth = (date: string) => {
   const parsed = new Date(`${date}T00:00:00`);
 
-  return Number.isNaN(parsed.getTime()) ? "" : String(parsed.getDate());
+  return Number.isNaN(parsed.getTime()) ? "" : String(parsed.getDate()).padStart(2, "0");
 };
 
 /** "August 2026" — month + year with no day-of-month and no dash, matching the masthead's own separate month/year line. */

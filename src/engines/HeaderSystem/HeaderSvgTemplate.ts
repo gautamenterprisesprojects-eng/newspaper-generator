@@ -469,7 +469,7 @@ export const applyAkhandInsideHeaderDynamicValues = (
     const original = stripXmlTags(body);
     const next =
       index === 0
-        ? values.pageNumber || original
+        ? (values.pageNumber ? values.pageNumber.padStart(2, "0") : original)
         : index === 1
           ? formatAkhandInsidePlaceAndDate(values.placeAndDate) || original
           : index === 2
@@ -658,10 +658,17 @@ const applyNamedTextSubstitution = (
   return result;
 };
 
-/** Zero-pads a live digit string to match the original field's own digit width (a "08"-style field shouldn't suddenly read as a bare "8"). */
-const padToOriginalWidth = (original: string, digits: string): string => {
+/**
+ * Zero-pads a live digit string to match the original field's own digit
+ * width (a "08"-style field shouldn't suddenly read as a bare "8"), with an
+ * optional floor for fields (page numbers) that are always shown padded by
+ * convention even when the placeholder example itself wasn't -- a "2"-style
+ * design placeholder shouldn't make a real page 2 print unpadded.
+ */
+const padToOriginalWidth = (original: string, digits: string, minWidth = 1): string => {
   const originalDigits = original.replace(/\D/g, "");
-  return originalDigits.length > digits.length ? digits.padStart(originalDigits.length, "0") : digits;
+  const width = Math.max(originalDigits.length, minWidth);
+  return digits.length < width ? digits.padStart(width, "0") : digits;
 };
 
 export const applyNamedFrontHeaderDynamicValues = (svgText: string, values: FrontHeaderDynamicValues): string | null => {
@@ -710,7 +717,7 @@ export const applyNamedInsideHeaderDynamicValues = (svgText: string, values: Ins
       case "date":
         return original ? wrapReplacementPreservingTspanStyle(element.body, substituteDateWords(original, dateParts)) : null;
       case "pagenumber":
-        return pageNumberDigits ? wrapReplacementPreservingTspanStyle(element.body, padToOriginalWidth(original, pageNumberDigits)) : null;
+        return pageNumberDigits ? wrapReplacementPreservingTspanStyle(element.body, padToOriginalWidth(original, pageNumberDigits, 2)) : null;
       case "category":
         return values.category ? wrapReplacementPreservingTspanStyle(element.body, values.category) : null;
       default:
@@ -829,6 +836,11 @@ const namedOrNumericDateContextPattern = new RegExp(
 );
 const numericDatePattern = /\b(\d{1,2})([/\-.])(\d{1,2})\2(\d{2,4})\b/;
 const pureDigitsPattern = /^\d{1,4}$/;
+/** A trailing comma/danda-style delimiter is how every dateline in this
+    app's inside-header templates separates the city from what follows it
+    -- see applyGenericInsideHeaderDynamicValues's own place-vs-category
+    check. */
+const insideStandalonePlacePattern = /[,،]\s*$/u;
 
 type LiveDateParts = { weekday: string; dayOfMonth: string; monthName: string; year: string };
 
@@ -899,7 +911,12 @@ const substituteDateWords = (text: string, live: LiveDateParts): string => {
     result = result.replace(monthWordPattern, (matched) => liveMonthForMatch(matched, live));
   }
   if (live.dayOfMonth) {
-    result = result.replace(dayOfMonthPattern, live.dayOfMonth);
+    // Indian press convention zero-pads the day-of-month in a dateline
+    // ("01 सितंबर", not "1 सितंबर") regardless of what digit width the
+    // publisher's own placeholder example happened to use -- unlike the
+    // slash-numeric branch above, which deliberately mirrors the
+    // template's own chosen width instead.
+    result = result.replace(dayOfMonthPattern, live.dayOfMonth.padStart(2, "0"));
   }
   return result;
 };
@@ -965,11 +982,11 @@ const insideLiveDateParts = (placeAndDate: string): LiveDateParts => {
  * whatever label the publisher's OWN artwork already has, like "अंक-",
  * instead of pasting a second, English "Volume-" label over it).
  */
-const substitutePureDigitField = (original: string, year: string, badgeDigits: string): string | null => {
+const substitutePureDigitField = (original: string, year: string, badgeDigits: string, minWidth = 1): string | null => {
   if (year && yearShapedPattern.test(original)) {
     return year;
   }
-  return badgeDigits || null;
+  return badgeDigits ? badgeDigits.padStart(minWidth, "0") : null;
 };
 
 /**
@@ -1044,7 +1061,11 @@ export const applyHindiKeFoolInsideHeaderDynamicValues = (
         return match;
       }
       const centeredOpen = withCenterAnchor(rewriteTransformX(open, HINDI_KE_FOOL_PAGE_NUMBER_CENTER_X));
-      return `${centeredOpen}${wrapReplacementPreservingTspanStyle(body, pageNumberDigits)}${close}`;
+      // Zero-padded to 2 digits, same convention as the Adage patcher below
+      // and the generic/named matchers -- a page number is always shown
+      // padded regardless of how many digits this file's own placeholder
+      // example used.
+      return `${centeredOpen}${wrapReplacementPreservingTspanStyle(body, pageNumberDigits.padStart(2, "0"))}${close}`;
     }
     if (namedOrNumericDateContextPattern.test(original)) {
       return `${open}${wrapReplacementPreservingTspanStyle(body, substituteDateWords(original, dateParts))}${close}`;
@@ -1140,7 +1161,12 @@ export const applyGenericInsideHeaderDynamicValues = (
       return match;
     }
     if (pureDigitsPattern.test(original)) {
-      const next = substitutePureDigitField(original, dateParts.year, pageNumberDigits);
+      // Page numbers get a 2-digit floor ("02", not "2") -- unlike the
+      // ank/volume badge (applyGenericFrontHeaderDynamicValues's own call,
+      // which leaves that width alone), a page number is always shown
+      // zero-padded by convention regardless of how many digits the
+      // publisher's own placeholder example used.
+      const next = substitutePureDigitField(original, dateParts.year, pageNumberDigits, 2);
       return next ? `${open}${wrapReplacementPreservingTspanStyle(body, next)}${close}` : match;
     }
     if (namedOrNumericDateContextPattern.test(original)) {
@@ -1148,6 +1174,22 @@ export const applyGenericInsideHeaderDynamicValues = (
     }
     if (publicationName && original.trim().toLowerCase() === publicationName) {
       return match;
+    }
+    // A standalone place text layer (the file has "भोपाल," as its own node
+    // rather than folded into one placeAndDate string) has nothing else in
+    // this classifier to recognise it by, so without this check it falls
+    // through to the category branch below and gets overwritten with the
+    // page's category ("Sports") instead of staying the city -- confirmed
+    // live on Navneet Express's inside header. Every dateline convention
+    // this app's templates use puts a trailing comma after the city (the
+    // same file's own day text also ends in one), and no category label
+    // ever does, so that trailing delimiter is what tells the two apart.
+    if (insideStandalonePlacePattern.test(original.trim())) {
+      const city = values.placeAndDate.split(",")[0]?.trim();
+      if (city) {
+        const delimiter = /،\s*$/u.test(original.trim()) ? "،" : ",";
+        return `${open}${wrapReplacementPreservingTspanStyle(body, `${city}${delimiter}`)}${close}`;
+      }
     }
     return values.category ? `${open}${wrapReplacementPreservingTspanStyle(body, values.category)}${close}` : match;
   });
