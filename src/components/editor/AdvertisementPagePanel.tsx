@@ -356,6 +356,44 @@ function computeRemainingRects(
 
 const PT_PER_INCH = 72;
 
+// Redesigned as fully inline-styled markup -- no globals.css classes at all
+// for this card, so there is zero dependency on external stylesheet cascade,
+// specificity, or caching for it to render correctly. Same props/handlers
+// and the same AdItem state shape as before; only the presentation layer
+// changed. Also drops the old IntersectionObserver-based lazy image load
+// (unnecessary for a list that only ever holds a handful of ads) so the
+// image always renders immediately rather than waiting on a visibility
+// callback that depends on the surrounding scroll container behaving
+// exactly as expected.
+const cardOuterStyle = (locked: boolean): React.CSSProperties => ({
+  border: `1.5px solid ${locked ? "#e8a000" : "#d9d4cc"}`,
+  borderRadius: 7,
+  overflow: "hidden",
+  background: "#fff",
+  display: "flex",
+  flexDirection: "column",
+});
+const cardPreviewStyle: React.CSSProperties = {
+  position: "relative",
+  width: "100%",
+  height: 90,
+  background: "#f0ede8",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+};
+const cardActionButtonStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: 24,
+  height: 24,
+  border: "1px solid #d9d4cc",
+  borderRadius: 5,
+  background: "#fff",
+  cursor: "pointer",
+};
+
 const AdCard = memo(function AdCard({
   ad,
   onDelete,
@@ -371,9 +409,6 @@ const AdCard = memo(function AdCard({
   onToggleLock: (id: string) => void;
   onUpdate: (id: string, patch: Partial<AdItem>) => void;
 }) {
-  const [visible, setVisible] = useState(false);
-  const ref = useRef<HTMLDivElement | null>(null);
-
   // Inline inch size fields -- visible on the ad card itself rather than
   // only inside the "बदलें" edit window, since a publisher setting a fixed
   // size for the ad expects to do it right here, on the upload list, not
@@ -412,41 +447,46 @@ const AdCard = memo(function AdCard({
     onUpdate(ad.id, patch);
   };
 
-  // Lazy-load preview via IntersectionObserver
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => { if (entry?.isIntersecting) setVisible(true); },
-      { threshold: 0.1 },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-
   return (
-    <div ref={ref} className={`promo-card${ad.locked ? " locked" : ""}`}>
-      <div className="promo-card-preview">
-        {visible ? (
-          <img src={ad.dataUrl} alt={ad.filename} style={{ objectFit: "contain", width: "100%", height: "100%" }} />
-        ) : (
-          <div className="promo-card-placeholder">
-            <ImageIcon size={24} />
-          </div>
-        )}
+    <div style={cardOuterStyle(ad.locked)}>
+      <div style={cardPreviewStyle}>
+        <img
+          src={ad.dataUrl}
+          alt={ad.filename}
+          style={{ objectFit: "contain", maxWidth: "100%", maxHeight: "100%", display: "block" }}
+        />
         {ad.locked ? (
-          <div className="promo-card-lock-badge">
+          <div
+            style={{
+              position: "absolute",
+              top: 4,
+              left: 4,
+              display: "flex",
+              alignItems: "center",
+              gap: 3,
+              background: "rgba(0,0,0,0.65)",
+              color: "#fff",
+              fontSize: 10,
+              padding: "2px 6px",
+              borderRadius: 4,
+            }}
+          >
             <Lock size={10} /> लॉक्ड
           </div>
         ) : null}
       </div>
-      <div className="promo-card-meta">
-        <span className="promo-card-filename" title={ad.filename}>{ad.filename}</span>
-        <span className="promo-card-dims">
+      <div style={{ display: "flex", flexDirection: "column", gap: 2, padding: "6px 8px 2px" }}>
+        <span
+          title={ad.filename}
+          style={{ fontSize: 11, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+        >
+          {ad.filename}
+        </span>
+        <span style={{ fontSize: 10, color: "#8a8478" }}>
           {Math.round(ad.originalWidth)} × {Math.round(ad.originalHeight)}px
         </span>
       </div>
-      <div className="promo-card-size-row" style={{ display: "flex", gap: 6, alignItems: "center", padding: "4px 6px" }}>
+      <div style={{ display: "flex", gap: 6, alignItems: "center", padding: "4px 8px" }}>
         <label style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11 }}>
           चौड़ाई (इंच)
           <input
@@ -470,13 +510,20 @@ const AdCard = memo(function AdCard({
           />
         </label>
       </div>
-      <div className="promo-card-actions">
-        <button type="button" title="बदलें" onClick={() => onEdit(ad.id)}><Edit size={12} /></button>
-        <button type="button" title="कॉपी बनाएं" onClick={() => onDuplicate(ad.id)}><Copy size={12} /></button>
-        <button type="button" title={ad.locked ? "अनलॉक करें" : "लॉक करें"} onClick={() => onToggleLock(ad.id)}>
+      <div style={{ display: "flex", gap: 4, padding: "4px 8px 8px" }}>
+        <button type="button" title="बदलें" onClick={() => onEdit(ad.id)} style={cardActionButtonStyle}><Edit size={12} /></button>
+        <button type="button" title="कॉपी बनाएं" onClick={() => onDuplicate(ad.id)} style={cardActionButtonStyle}><Copy size={12} /></button>
+        <button type="button" title={ad.locked ? "अनलॉक करें" : "लॉक करें"} onClick={() => onToggleLock(ad.id)} style={cardActionButtonStyle}>
           {ad.locked ? <Unlock size={12} /> : <Lock size={12} />}
         </button>
-        <button type="button" className="danger" title="हटाएं" onClick={() => onDelete(ad.id)}><Trash2 size={12} /></button>
+        <button
+          type="button"
+          title="हटाएं"
+          onClick={() => onDelete(ad.id)}
+          style={{ ...cardActionButtonStyle, color: "#c62828", borderColor: "#f5b8b8" }}
+        >
+          <Trash2 size={12} />
+        </button>
       </div>
     </div>
   );
@@ -1226,20 +1273,30 @@ export const AdvertisementPagePanel = memo(function AdvertisementPagePanel({
         {/* Ad Library */}
         {ads.length > 0 ? (
           <>
-            <div className="promo-library-header">
+            <div style={{ fontSize: 12, fontWeight: 600, color: "#5a5548", padding: "2px 0" }}>
               <span>{ads.length} विज्ञापन अपलोड किए गए</span>
             </div>
-            <div className="promo-library-grid">
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 10,
+                maxHeight: 320,
+                overflowY: "auto",
+                padding: 4,
+              }}
+            >
               {ads.map((ad) => (
-                <AdCard
-                  key={ad.id}
-                  ad={ad}
-                  onDelete={deleteAd}
-                  onDuplicate={duplicateAd}
-                  onEdit={(id) => setEditingAdId(id)}
-                  onToggleLock={toggleLock}
-                  onUpdate={updateAd}
-                />
+                <div key={ad.id} style={{ width: 160, flex: "0 0 auto" }}>
+                  <AdCard
+                    ad={ad}
+                    onDelete={deleteAd}
+                    onDuplicate={duplicateAd}
+                    onEdit={(id) => setEditingAdId(id)}
+                    onToggleLock={toggleLock}
+                    onUpdate={updateAd}
+                  />
+                </div>
               ))}
             </div>
 
