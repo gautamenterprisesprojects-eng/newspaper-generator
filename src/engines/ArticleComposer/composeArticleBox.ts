@@ -1192,9 +1192,15 @@ const createCaptionLayout = ({
 
   // Side strips are narrow but tall, and bottom/top strips are short but
   // wide — let the caption wrap across as many lines as the reserved box can
-  // actually hold instead of a flat cap. Non-overlay captions get 3 lines
-  // (was 2) — the live API's real captions regularly ran past 2 lines' worth
-  // of text and were hitting the word-by-word ellipsis fallback below.
+  // actually hold instead of a flat cap. Non-overlay captions are capped at
+  // 2 lines -- publisher request. This was raised to 3 once before because
+  // long real captions were hitting the word-by-word ellipsis fallback
+  // below at 2 lines, but that traded a subtler problem (font shrinking
+  // more) for a more visible one (an extra caption row, inconsistent with
+  // every 2-line caption elsewhere on the page). fitCaptionToTwoLines
+  // already shrinks the font in ten steps down to 6.8pt before it ever
+  // reaches the word-truncating fallback, so a 2-line cap should only rely
+  // on that fallback for a genuinely extreme caption.
   const availableHeightForLines = boxHeight ?? imageHeight;
   const maxCaptionLines = isOverlayPosition
     ? clamp(
@@ -1205,7 +1211,7 @@ const createCaptionLayout = ({
         1,
         isSideOverlayPosition ? 7 : 3,
       )
-    : 3;
+    : 2;
 
   const fullText = captionText;
 
