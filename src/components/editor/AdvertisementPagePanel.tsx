@@ -1276,10 +1276,21 @@ export const AdvertisementPagePanel = memo(function AdvertisementPagePanel({
             <div style={{ fontSize: 12, fontWeight: 600, color: "#5a5548", padding: "2px 0" }}>
               <span>{ads.length} विज्ञापन अपलोड किए गए</span>
             </div>
+            {/*
+              CSS Grid, not flexbox, for this wrapping container.
+              flex-wrap + overflow-y:auto on a container whose children are
+              themselves flex columns hit a real, reproducible bug on the
+              publisher's machine: the container's own computed height came
+              back as a literal 0px (confirmed directly via DevTools' box
+              model -- "701 x 0") despite its child card having real,
+              correctly-sized content, clipping every card down to a sliver.
+              Grid's row-sizing doesn't share that failure mode for this
+              "wrap fixed-width cards, auto-size the rows" shape.
+            */}
             <div
               style={{
-                display: "flex",
-                flexWrap: "wrap",
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
                 gap: 10,
                 maxHeight: 320,
                 overflowY: "auto",
@@ -1287,16 +1298,15 @@ export const AdvertisementPagePanel = memo(function AdvertisementPagePanel({
               }}
             >
               {ads.map((ad) => (
-                <div key={ad.id} style={{ width: 160, flex: "0 0 auto" }}>
-                  <AdCard
-                    ad={ad}
-                    onDelete={deleteAd}
-                    onDuplicate={duplicateAd}
-                    onEdit={(id) => setEditingAdId(id)}
-                    onToggleLock={toggleLock}
-                    onUpdate={updateAd}
-                  />
-                </div>
+                <AdCard
+                  key={ad.id}
+                  ad={ad}
+                  onDelete={deleteAd}
+                  onDuplicate={duplicateAd}
+                  onEdit={(id) => setEditingAdId(id)}
+                  onToggleLock={toggleLock}
+                  onUpdate={updateAd}
+                />
               ))}
             </div>
 
