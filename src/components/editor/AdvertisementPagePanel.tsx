@@ -421,6 +421,11 @@ const cardOuterStyle = (locked: boolean): React.CSSProperties => ({
   background: "#fff",
   display: "flex",
   flexDirection: "column",
+  // overflow:hidden above is only there to clip the preview to the rounded
+  // border -- it must never be the thing that hides the card's own text and
+  // controls. min-content stops any parent from sizing the card below what
+  // it actually contains.
+  minHeight: "min-content",
 });
 const cardPreviewStyle: React.CSSProperties = {
   position: "relative",
@@ -1351,9 +1356,25 @@ export const AdvertisementPagePanel = memo(function AdvertisementPagePanel({
                 display: "grid",
                 gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
                 gap: 10,
-                maxHeight: 320,
-                overflowY: "auto",
                 padding: 4,
+                // No maxHeight / overflow-y here, and no stretching: this is a
+                // grid item of .generation-wizard-screen, which is itself a
+                // grid with a definite height. A grid item whose overflow is
+                // anything but `visible` gets an automatic minimum size of 0,
+                // so the old `overflowY: "auto"` made this the ONE row the
+                // wizard screen was allowed to squeeze when the panel ran out
+                // of vertical room -- and it squeezed it from its natural
+                // ~205px down to 96px, leaving each card clipped by its own
+                // overflow:hidden to just the image strip, with the filename,
+                // the inch resizer fields and the action buttons all cut off.
+                // That only bit on short screens (a 768px-tall laptop, where
+                // the panel caps at ~691px); on a tall viewport there was
+                // spare room and nothing was squeezed, which is why the very
+                // same page looked fine on a phone in desktop mode.
+                // min-content keeps that automatic minimum honest even if
+                // someone re-introduces an overflow value here later.
+                minHeight: "min-content",
+                alignSelf: "start",
               }}
             >
               {ads.map((ad) => (
