@@ -354,21 +354,63 @@ function computeRemainingRects(
 
 // ─── Ad Card ──────────────────────────────────────────────────────────────────
 
+const PT_PER_INCH = 72;
+
 const AdCard = memo(function AdCard({
   ad,
   onDelete,
   onDuplicate,
   onEdit,
   onToggleLock,
+  onUpdate,
 }: {
   ad: AdItem;
   onDelete: (id: string) => void;
   onDuplicate: (id: string) => void;
   onEdit: (id: string) => void;
   onToggleLock: (id: string) => void;
+  onUpdate: (id: string, patch: Partial<AdItem>) => void;
 }) {
   const [visible, setVisible] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
+
+  // Inline inch size fields -- visible on the ad card itself rather than
+  // only inside the "बदलें" edit window, since a publisher setting a fixed
+  // size for the ad expects to do it right here, on the upload list, not
+  // hidden behind an extra click. Kept in sync with ad.displayWidthPt/
+  // displayHeightPt exactly the way AdEditWindow's own pt/cm/inch fields
+  // are, including the same aspect-lock behavior.
+  const [widthInStr, setWidthInStr] = useState((ad.displayWidthPt / PT_PER_INCH).toFixed(2));
+  const [heightInStr, setHeightInStr] = useState((ad.displayHeightPt / PT_PER_INCH).toFixed(2));
+  useEffect(() => {
+    setWidthInStr((ad.displayWidthPt / PT_PER_INCH).toFixed(2));
+    setHeightInStr((ad.displayHeightPt / PT_PER_INCH).toFixed(2));
+  }, [ad.displayWidthPt, ad.displayHeightPt]);
+  const aspectRatio = ad.originalWidth / Math.max(1, ad.originalHeight);
+
+  const handleWidthInInput = (valStr: string) => {
+    setWidthInStr(valStr);
+    const inches = Number(valStr);
+    if (isNaN(inches) || inches <= 0) return;
+    const widthPt = Math.max(10, Math.round(inches * PT_PER_INCH));
+    const patch: Partial<AdItem> = { displayWidthPt: widthPt };
+    if (ad.aspectLocked) {
+      patch.displayHeightPt = Math.max(10, Math.round(widthPt / aspectRatio));
+    }
+    onUpdate(ad.id, patch);
+  };
+
+  const handleHeightInInput = (valStr: string) => {
+    setHeightInStr(valStr);
+    const inches = Number(valStr);
+    if (isNaN(inches) || inches <= 0) return;
+    const heightPt = Math.max(10, Math.round(inches * PT_PER_INCH));
+    const patch: Partial<AdItem> = { displayHeightPt: heightPt };
+    if (ad.aspectLocked) {
+      patch.displayWidthPt = Math.max(10, Math.round(heightPt * aspectRatio));
+    }
+    onUpdate(ad.id, patch);
+  };
 
   // Lazy-load preview via IntersectionObserver
   useEffect(() => {
@@ -404,6 +446,30 @@ const AdCard = memo(function AdCard({
           {Math.round(ad.originalWidth)} × {Math.round(ad.originalHeight)}px
         </span>
       </div>
+      <div className="ad-card-size-row" style={{ display: "flex", gap: 6, alignItems: "center", padding: "4px 6px" }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11 }}>
+          चौड़ाई (इंच)
+          <input
+            type="number"
+            step="0.01"
+            min="0.1"
+            value={widthInStr}
+            onChange={(e) => handleWidthInInput(e.target.value)}
+            style={{ width: 48 }}
+          />
+        </label>
+        <label style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11 }}>
+          ऊँचाई (इंच)
+          <input
+            type="number"
+            step="0.01"
+            min="0.1"
+            value={heightInStr}
+            onChange={(e) => handleHeightInInput(e.target.value)}
+            style={{ width: 48 }}
+          />
+        </label>
+      </div>
       <div className="ad-card-actions">
         <button type="button" title="बदलें" onClick={() => onEdit(ad.id)}><Edit size={12} /></button>
         <button type="button" title="कॉपी बनाएं" onClick={() => onDuplicate(ad.id)}><Copy size={12} /></button>
@@ -417,8 +483,6 @@ const AdCard = memo(function AdCard({
 });
 
 // ─── Ad Edit Window ───────────────────────────────────────────────────────────
-
-const PT_PER_INCH = 72;
 
 const AdEditWindow = memo(function AdEditWindow({
   ad,
@@ -1174,6 +1238,7 @@ export const AdvertisementPagePanel = memo(function AdvertisementPagePanel({
                   onDuplicate={duplicateAd}
                   onEdit={(id) => setEditingAdId(id)}
                   onToggleLock={toggleLock}
+                  onUpdate={updateAd}
                 />
               ))}
             </div>
