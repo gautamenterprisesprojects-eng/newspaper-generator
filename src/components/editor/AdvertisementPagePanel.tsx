@@ -110,6 +110,55 @@ const AD_PRESETS: Record<string, { widthPt: number; heightPt: number; label: str
 const WHITESPACE_TRIM_BRIGHTNESS = 245; // 0-255 — pixels this bright (or more transparent) count as blank margin
 const WHITESPACE_TRIM_MIN_KEEP_FRACTION = 0.05; // never trim more than 95% off either side — guards a mostly-blank ad from collapsing to nothing
 
+/**
+ * Ad artwork routinely arrives as a CMYK JPEG straight from a press/printer
+ * workflow -- a real file the publisher confirmed uploading here. Browsers'
+ * native JPEG decoders are inconsistent about CMYK: the file's dimensions
+ * always parse correctly (they live in the header), but the actual pixels
+ * can come back blank/invisible on some platforms while decoding fine on
+ * others, which is exactly the "correct size, nothing visible" symptom this
+ * session spent a long time chasing as a CSS bug before finding the real
+ * cause. `<canvas>` draws through the same native decoder as `<img>`, so
+ * nothing already in this file's canvas-based pipeline (trimImageWhitespace
+ * below) can work around it either.
+ *
+ * This decodes the JPEG bytes with a pure-JS decoder instead (jpeg-js,
+ * which performs the Adobe CMYK-to-RGB conversion itself), and hands back a
+ * PNG data URL built from those correctly-converted RGBA pixels -- PNG has
+ * no CMYK ambiguity, so every downstream consumer (the <img> preview here,
+ * canvas-based whitespace trimming, the final printed page) sees a normal
+ * RGB image regardless of what the original file's color space was.
+ * Returns null (falls back to the original file's own data URL) for
+ * anything that isn't a JPEG, or that this decoder can't parse -- a normal
+ * RGB JPEG never needed this and is left exactly as it always rendered.
+ */
+async function decodeJpegSafely(file: File): Promise<string | null> {
+  if (file.type !== "image/jpeg" && !/\.jpe?g$/i.test(file.name)) {
+    return null;
+  }
+  try {
+    const buffer = await file.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8) {
+      return null; // Not actually a JPEG despite the extension/MIME type.
+    }
+    const { decode } = await import("jpeg-js");
+    const decoded = decode(bytes, { useTArray: true, formatAsRGBA: true });
+    if (!decoded.width || !decoded.height) return null;
+    const canvas = document.createElement("canvas");
+    canvas.width = decoded.width;
+    canvas.height = decoded.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    const imageData = ctx.createImageData(decoded.width, decoded.height);
+    imageData.data.set(decoded.data);
+    ctx.putImageData(imageData, 0, 0);
+    return canvas.toDataURL("image/png");
+  } catch {
+    return null;
+  }
+}
+
 function trimImageWhitespace(img: HTMLImageElement): { dataUrl: string; width: number; height: number } {
   const width = img.naturalWidth;
   const height = img.naturalHeight;
@@ -864,9 +913,20 @@ export const AdvertisementPagePanel = memo(function AdvertisementPagePanel({
   const handleFilesSelected = useCallback((files: FileList | null) => {
     if (!files) return;
     for (const file of Array.from(files)) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const dataUrl = e.target?.result as string;
+      void (async () => {
+        // CMYK JPEGs (common for press-ready ad artwork) can decode to a
+        // blank image through the browser's native decoder on some
+        // platforms -- see decodeJpegSafely's own doc comment. Try that
+        // path first; every other file type (and any JPEG it can't
+        // parse) falls straight through to the normal FileReader read
+        // exactly as before.
+        const safeJpegDataUrl = await decodeJpegSafely(file);
+        const dataUrl = safeJpegDataUrl ?? (await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => resolve(e.target?.result as string);
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(file);
+        }));
         const img = new window.Image();
         img.onload = () => {
           const id = `ad-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -915,8 +975,7 @@ export const AdvertisementPagePanel = memo(function AdvertisementPagePanel({
           ]);
         };
         img.src = dataUrl;
-      };
-      reader.readAsDataURL(file);
+      })();
     }
   }, [contentBounds]);
 
