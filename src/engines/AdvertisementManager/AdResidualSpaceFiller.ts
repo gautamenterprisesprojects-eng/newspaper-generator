@@ -25,8 +25,16 @@
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 const PT_PER_CM = 72 / 2.54;           // ≈ 28.3465 pt per cm
-const MIN_ARTICLE_H = 60;              // minimum article frame height (pt)
-const MIN_ARTICLE_W = 60;              // minimum article frame width (pt)
+// Both floors matched to MIN_SUBDIV_COL_W below -- publisher feedback was
+// that generated ad-adjacent boxes came out too narrow/short to read
+// comfortably. Raising these means a residual zone smaller than either
+// floor gets no article box at all rather than an undersized one (checked
+// wherever a rect/slot is admitted: computeAdResidualRects's freeW/bandH
+// test, applyPattern's colW/bandHeight test, and splitAdResidualRect's own
+// MIN_ARTICLE_H checks) -- a bit of unfilled space beside the ad reads
+// better than a sliver box no one can read.
+const MIN_ARTICLE_H = 140;             // minimum article frame height (pt)
+const MIN_ARTICLE_W = 160;             // minimum article frame width (pt)
 const TALL_RECT_THRESHOLD = 380;       // split into bands above this height (pt)
 const GUTTER = 14;                     // standard newspaper gutter (pt)
 /**
@@ -178,12 +186,11 @@ const PROFESSIONAL_PATTERNS: LayoutPattern[] = [
     minWidth: 220,
     maxSlots: 2,
   },
-  {
-    name: "Half-Half (equal, wider zones only)",
-    fractions: [0.5, 0.5],
-    minWidth: 240,
-    maxSlots: 2,
-  },
+  // Deliberately no equal-split (50/50) pattern -- publisher feedback was
+  // that box widths should always read as an asymmetric lead+secondary
+  // composition, the way a real newspaper page is laid out, never a plain
+  // even split. "Lead-2/3 + Brief-1/3" just above is this library's
+  // closest-to-equal pattern, and it's still a real 67/33 asymmetry.
   // ── Narrow zones (1–2 standard columns wide) ───────────────────────────────
   {
     name: "Single full-width",

@@ -418,6 +418,8 @@ const AdCard = memo(function AdCard({
 
 // ─── Ad Edit Window ───────────────────────────────────────────────────────────
 
+const PT_PER_INCH = 72;
+
 const AdEditWindow = memo(function AdEditWindow({
   ad,
   onUpdate,
@@ -431,8 +433,10 @@ const AdEditWindow = memo(function AdEditWindow({
   const [heightPt, setHeightPt] = useState(Math.round(ad.displayHeightPt));
   const [widthPtStr, setWidthPtStr] = useState(String(Math.round(ad.displayWidthPt)));
   const [widthCmStr, setWidthCmStr] = useState((ad.displayWidthPt / 28.3465).toFixed(2));
+  const [widthInStr, setWidthInStr] = useState((ad.displayWidthPt / PT_PER_INCH).toFixed(2));
   const [heightPtStr, setHeightPtStr] = useState(String(Math.round(ad.displayHeightPt)));
   const [heightCmStr, setHeightCmStr] = useState((ad.displayHeightPt / 28.3465).toFixed(2));
+  const [heightInStr, setHeightInStr] = useState((ad.displayHeightPt / PT_PER_INCH).toFixed(2));
 
   const [aspectLocked, setAspectLocked] = useState(ad.aspectLocked);
   const [rotation, setRotation] = useState<0 | 90 | 180 | 270>(ad.rotation);
@@ -445,11 +449,13 @@ const AdEditWindow = memo(function AdEditWindow({
     setWidthPt(w);
     setWidthPtStr(String(w));
     setWidthCmStr((w / 28.3465).toFixed(2));
+    setWidthInStr((w / PT_PER_INCH).toFixed(2));
     if (aspectLocked) {
       const h = Math.max(10, Math.round(w / aspectRatio));
       setHeightPt(h);
       setHeightPtStr(String(h));
       setHeightCmStr((h / 28.3465).toFixed(2));
+      setHeightInStr((h / PT_PER_INCH).toFixed(2));
     }
   };
 
@@ -458,11 +464,13 @@ const AdEditWindow = memo(function AdEditWindow({
     setHeightPt(h);
     setHeightPtStr(String(h));
     setHeightCmStr((h / 28.3465).toFixed(2));
+    setHeightInStr((h / PT_PER_INCH).toFixed(2));
     if (aspectLocked) {
       const w = Math.max(10, Math.round(h * aspectRatio));
       setWidthPt(w);
       setWidthPtStr(String(w));
       setWidthCmStr((w / 28.3465).toFixed(2));
+      setWidthInStr((w / PT_PER_INCH).toFixed(2));
     }
   };
 
@@ -482,6 +490,14 @@ const AdEditWindow = memo(function AdEditWindow({
     }
   };
 
+  const handleWidthInInput = (valStr: string) => {
+    setWidthInStr(valStr);
+    const num = Number(valStr);
+    if (!isNaN(num) && num > 0) {
+      updateWidth(num * PT_PER_INCH);
+    }
+  };
+
   const handleHeightPtInput = (valStr: string) => {
     setHeightPtStr(valStr);
     const num = Number(valStr);
@@ -495,6 +511,14 @@ const AdEditWindow = memo(function AdEditWindow({
     const num = Number(valStr);
     if (!isNaN(num) && num > 0) {
       updateHeight(num * 28.3465);
+    }
+  };
+
+  const handleHeightInInput = (valStr: string) => {
+    setHeightInStr(valStr);
+    const num = Number(valStr);
+    if (!isNaN(num) && num > 0) {
+      updateHeight(num * PT_PER_INCH);
     }
   };
 
@@ -552,6 +576,15 @@ const AdEditWindow = memo(function AdEditWindow({
           />
         </div>
         <div className="ad-edit-row">
+          <label>चौड़ाई (इंच)</label>
+          <input
+            type="number"
+            step="0.01"
+            value={widthInStr}
+            onChange={(e) => handleWidthInInput(e.target.value)}
+          />
+        </div>
+        <div className="ad-edit-row">
           <label>ऊँचाई (pt)</label>
           <input
             type="number"
@@ -568,6 +601,15 @@ const AdEditWindow = memo(function AdEditWindow({
             step="0.1"
             value={heightCmStr}
             onChange={(e) => handleHeightCmInput(e.target.value)}
+          />
+        </div>
+        <div className="ad-edit-row">
+          <label>ऊँचाई (इंच)</label>
+          <input
+            type="number"
+            step="0.01"
+            value={heightInStr}
+            onChange={(e) => handleHeightInInput(e.target.value)}
           />
         </div>
         <label className="ad-edit-lock">
@@ -910,16 +952,18 @@ export const AdvertisementPagePanel = memo(function AdvertisementPagePanel({
       //  this uncapped doesn't manufacture extra slots — it just lets every
       //  zone that legitimately benefits get its one appropriate split.
       //
-      // For the category-sourced path this used to be a flat 12, unrelated to
-      // the ads' actual footprint: on a page with few zones it forced
-      // subdivision the zones didn't need (needlessly narrow boxes); on a
-      // page with one large zone it could just as easily starve it below
-      // what a good pattern would give it. Capping at the raw zone count
-      // instead (a fix tried and reverted) went too far the other way — it
-      // blocked Pass 2 entirely, so a single tall zone stayed one oversized,
-      // mostly-empty box instead of splitting into a proper lead+brief
-      // pattern. Uncapped lets the zones decide.
-      const maxArticleSlots = articleSource === "manual" ? manualArticleCount : Infinity;
+      // For the category-sourced path this used to be uncapped (Infinity),
+      // unrelated to the ads' actual footprint: on a page with few zones it
+      // forced subdivision the zones didn't need (needlessly narrow boxes);
+      // on a page with one large zone it could just as easily starve it
+      // below what a good pattern would give it. The "बची हुई जगह में लेख"
+      // input is shown regardless of articleSource, so a publisher typing 5
+      // there reasonably expects 5 boxes back, not to have that number
+      // silently ignored because they picked "मौजूदा श्रेणी से लें" instead
+      // of "खुद लिखें" -- capping both paths at manualArticleCount instead
+      // fixes that mismatch without touching how ads themselves are placed
+      // (arrangeAds, above, is untouched).
+      const maxArticleSlots = manualArticleCount;
       const adResidualSlots = buildAdResidualSlots(
         remainingRects.map((r) => ({ x: r.x, y: r.y, width: r.width, height: r.height })),
         CONTENT_X,
@@ -931,7 +975,7 @@ export const AdvertisementPagePanel = memo(function AdvertisementPagePanel({
       const customLayoutSlots: any[] = [];
       let slotIndex = 1;
       for (const slot of adResidualSlots) {
-        if (articleSource === "manual" && customLayoutSlots.length >= manualArticleCount) break;
+        if (customLayoutSlots.length >= manualArticleCount) break;
         customLayoutSlots.push({
           storyNumber: slotIndex,
           priority: slotIndex === 1 ? "lead" : "secondary",
@@ -948,15 +992,20 @@ export const AdvertisementPagePanel = memo(function AdvertisementPagePanel({
         });
         slotIndex++;
       }
-      const customLayout = { slots: customLayoutSlots };
-
       let articles: NewswireStory[];
       const needed = Math.max(1, customLayoutSlots.length);
 
       if (usePreloaded) {
+        // Explicit "तैयार खबरें" choice -- a deliberate publisher pick, not
+        // an automatic fallback, so it's untouched by the no-fallback rule
+        // below.
         articles = getFallbackNewswireStories(state.category, needed);
       } else if (articleSource === "category") {
-        // Use existing category engine
+        // Live category content only -- no fallback padding. A page
+        // proceeds with however many real live articles were actually
+        // found, even if that's fewer than the boxes already laid out
+        // around the ad; the slots array is trimmed to match just below,
+        // same "thin page beats fake content" rule batch generation uses.
         try {
           const response = await fetch(
             `/api/newswire?category=${encodeURIComponent(state.category)}&language=${state.languageMode}&limit=${needed + 4}`,
@@ -965,25 +1014,28 @@ export const AdvertisementPagePanel = memo(function AdvertisementPagePanel({
             success?: boolean;
             data?: NewswireStory[];
           } | null;
-          if (Array.isArray(payload?.data) && payload.data.length > 0) {
-            articles = payload.data.slice(0, needed);
-            if (articles.length < needed) {
-              const extraNeeded = needed - articles.length;
-              const fallbacks = getFallbackNewswireStories(state.category, extraNeeded);
-              articles = [...articles, ...fallbacks];
-            }
-          } else {
-            articles = getFallbackNewswireStories(state.category, needed);
-          }
+          articles = Array.isArray(payload?.data) ? payload.data.slice(0, needed) : [];
         } catch {
-          articles = getFallbackNewswireStories(state.category, needed);
+          articles = [];
         }
       } else {
-        // Manual stories — fill nulls with fallback
-        articles = manualStories.map(
-          (s, i) => s ?? getFallbackNewswireStories(state.category, 1)[0]!,
-        );
+        // Manual stories -- only the slots the publisher actually wrote
+        // content for; an unfilled slot is dropped rather than padded with
+        // unrelated fallback copy.
+        articles = manualStories.filter((s): s is NewswireStory => Boolean(s));
       }
+
+      if (articles.length === 0) {
+        throw new Error("कोई लेख नहीं मिला — कृपया कोई और श्रेणी चुनें या लेख खुद लिखें।");
+      }
+
+      // No fallback padding: trim the already-built slots to however many
+      // real articles are actually available, rather than leaving a slot
+      // with no article behind it.
+      if (articles.length < customLayoutSlots.length) {
+        customLayoutSlots.length = articles.length;
+      }
+      const customLayout = { slots: customLayoutSlots };
 
       // Force language to match the generator setting to prevent "Not enough articles" errors
       articles = articles.map((a) => ({ ...a, language: state.languageMode as any }));
