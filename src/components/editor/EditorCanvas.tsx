@@ -4739,7 +4739,20 @@ export function EditorCanvas() {
     window.addEventListener("message", handleParentMessage);
 
     return () => window.removeEventListener("message", handleParentMessage);
-  }, [isBatchMode, document.metadata.newspaperName]);
+    // `document` (not just its newspaperName) is a real dependency here:
+    // `exportDocumentPdf`/`addPageToPdf` close over this render's `document`,
+    // including headerSystem. This effect used to depend only on
+    // newspaperName, which never changes during a batch run, so it
+    // subscribed exactly once -- at mount, before PortalLaunchBootstrap's
+    // profile fetch ever applied the publisher's own header artwork, and
+    // before any page's content existed. "trigger-download" (sent only
+    // after the whole batch finishes) was still handled by that first,
+    // permanently-stale closure, exporting whatever headerSystem/pages
+    // looked like at mount -- the default/fallback header -- even though
+    // the live preview (which re-renders normally on every document
+    // update) already showed the publisher's own header correctly.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isBatchMode, document]);
 
   const closePagePreview = () => setPagePreview(null);
 
