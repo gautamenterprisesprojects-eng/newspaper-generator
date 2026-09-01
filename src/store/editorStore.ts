@@ -1310,6 +1310,16 @@ const createArticleDataFromNewswireStory = (
   const cleanedSubheadline = ensureEndsWithFullStop(
     preferSecondaryHeadlineAsHeadline ? "" : secondaryHeadlineText,
   );
+  // The newswire's subheadings endpoint returns three per story, shortest last.
+  // A one-column box titles itself with the third — it is the only one of the
+  // title-length fields that lands complete in two lines of so narrow a
+  // measure. This is the ONE case the plain-subheadline removal below still
+  // exempts: a 1-column box has no separate room for a full headline AND a
+  // second line, so this text is effectively that box's real title, not a
+  // decorative subheadline underneath one.
+  const thirdSubheading = ensureEndsWithFullStop(
+    cleanSubheadlineText(localized.subheadings[2] ?? ""),
+  );
   const fullText = localized.body || localized.longBody || localized.mediumBody || localized.shortBody || "";
   // Use 1.5x buffer so we always supply more text than the frame needs.
   // The layout engine stops naturally at the frame's printable bottom edge.
@@ -1521,9 +1531,25 @@ const createArticleDataFromNewswireStory = (
     headline: headlineText,
     // The plain subheadline line under the headline is disabled outright,
     // per publisher request -- the kicker banner above the headline (a
-    // separate field, untouched here) is the one that stays.
-    subheadline: "",
-    subheadlineBanner: { mode: "none" as const, backgroundColor: subheadingStyle.backgroundColor, textColor: subheadingStyle.textColor, borderColor: subheadingStyle.borderColor, backgroundOpacity: 0, borderWidth: 0, borderRadius: 0, padding: 0 },
+    // separate field, untouched here) is the one that stays. The one
+    // exemption is a 1-column box's own narrow title (see thirdSubheading
+    // above): that text isn't a decorative subheadline, it's the only title
+    // that actually fits the box, so it keeps printing exactly as before.
+    subheadline: !suppressSubheadline && keepSubheadlineAsNarrowTitle && thirdSubheading
+      ? thirdSubheading
+      : "",
+    subheadlineBanner: !suppressSubheadline && keepSubheadlineAsNarrowTitle && thirdSubheading
+      ? {
+          mode: "rounded",
+          backgroundColor: subheadingStyle.backgroundColor,
+          textColor: subheadingStyle.textColor,
+          borderColor: subheadingStyle.borderColor,
+          backgroundOpacity: subheadingStyle.backgroundOpacity,
+          borderWidth: 0.8,
+          borderRadius: 3,
+          padding: 5,
+        }
+      : { mode: "none" as const, backgroundColor: subheadingStyle.backgroundColor, textColor: subheadingStyle.textColor, borderColor: subheadingStyle.borderColor, backgroundOpacity: 0, borderWidth: 0, borderRadius: 0, padding: 0 },
     summaryBullets: suppressSubheadline
       ? []
       : (item.summary && item.summary.length > 0 ? item.summary : [cleanedSubheadline]).filter(Boolean).slice(0, 2),
