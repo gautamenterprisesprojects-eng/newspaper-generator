@@ -421,11 +421,6 @@ const cardOuterStyle = (locked: boolean): React.CSSProperties => ({
   background: "#fff",
   display: "flex",
   flexDirection: "column",
-  // overflow:hidden above is only there to clip the preview to the rounded
-  // border -- it must never be the thing that hides the card's own text and
-  // controls. min-content stops any parent from sizing the card below what
-  // it actually contains.
-  minHeight: "min-content",
 });
 const cardPreviewStyle: React.CSSProperties = {
   position: "relative",
@@ -1371,10 +1366,12 @@ export const AdvertisementPagePanel = memo(function AdvertisementPagePanel({
                 // the panel caps at ~691px); on a tall viewport there was
                 // spare room and nothing was squeezed, which is why the very
                 // same page looked fine on a phone in desktop mode.
-                // min-content keeps that automatic minimum honest even if
-                // someone re-introduces an overflow value here later.
-                minHeight: "min-content",
-                alignSelf: "start",
+                // Nothing else is needed here, and two things must NOT be
+                // added back: `minHeight: "min-content"` does not protect the
+                // track (measured live -- the row still collapsed to 96px),
+                // and `alignSelf: "start"` only lets the full-height cards
+                // spill out of the squeezed track and overlap the placement
+                // controls below. Removing the overflow is the whole fix.
               }}
             >
               {ads.map((ad) => (
