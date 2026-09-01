@@ -45,6 +45,80 @@ const GUTTER = 14;                     // standard newspaper gutter (pt)
  */
 const MIN_SUBDIV_COL_W = 160;          // pt — 2 standard columns minimum per subdivided slot
 
+/**
+ * Width-dependent height floor — Advertisement Page only, opt-in.
+ *
+ * MIN_ARTICLE_H is a flat floor, and that is the wrong shape of rule: what
+ * makes a box unreadable is being NARROW, not being short. Page 3 of the
+ * 07 Aug 2026 edition carries a Basavaraj Horatti box roughly 4 columns wide
+ * and well under 140pt deep, and it reads perfectly well -- a wide, shallow,
+ * image-less run of dense type is standard newspaper furniture, used exactly
+ * to absorb the band left between an editorial block and an ad block.
+ *
+ * With a flat 140pt floor any such band is instead discarded and prints as
+ * white space. These ramps let a band go shallower the wider it is, so the
+ * leftover gets a real filler box rather than nothing. MIN_ARTICLE_W stays
+ * hard at 160pt -- narrow boxes remain banned either way.
+ *
+ * Opt-in via AdResidualOptions because computeAdResidualRects is shared with
+ * PageAdvertisementPlacement (front/inside/editorial ad embedding), which
+ * must keep its existing behaviour untouched.
+ */
+/**
+ * Floors are "a headline plus two lines of body, and its padding":
+ *   4+ columns (>=590pt) — the headline fits on one line:
+ *                          24pt headline + 2 x 16.5pt leading + 16pt pad = 73
+ *   3 columns  (>=440pt) — the headline wraps to two lines: +24pt  = 97 -> 104
+ * Anything narrower keeps the full flat floor.
+ */
+const WIDE_FILLER_FLOORS: ReadonlyArray<{ minWidth: number; minHeight: number }> = [
+  { minWidth: 590, minHeight: 74 },  // 4–6 columns
+  { minWidth: 440, minHeight: 104 }, // 3 columns
+];
+
+export type AdResidualOptions = {
+  /**
+   * Allow wide bands to fall below MIN_ARTICLE_H, per WIDE_FILLER_FLOORS.
+   * Advertisement Page only. Omitted/false reproduces the previous behaviour
+   * exactly.
+   */
+  wideShortFillers?: boolean;
+};
+
+/**
+ * Width floor — Advertisement Page only, opt-in, same reasoning as the height
+ * ramp above.
+ *
+ * MIN_ARTICLE_W is 160pt, described in MIN_SUBDIV_COL_W's comment as "2
+ * standard columns". That arithmetic does not hold on this page master: a
+ * standard column is 144.96pt, so 160pt is about 1.1 columns -- a number that
+ * happens to sit just above one column and just below two. The practical
+ * effect is that a single leftover column (145pt) is always ~15pt too narrow
+ * to be filled, and prints blank down the whole page. A 3-column ad beside a
+ * 2-column one leaves exactly that.
+ *
+ * One full column is not a "narrow box" by the page's own grid -- it is one of
+ * the six columns, and the reference page carries exactly such a rail down its
+ * left edge. So a zone one full column wide is admitted here, but only when it
+ * is tall enough to read as a rail rather than a stub. Subdivision still uses
+ * the hard MIN_SUBDIV_COL_W, so no pattern ever *splits* a zone this narrow.
+ */
+const FULL_COLUMN_W = 144;
+const COLUMN_RAIL_MIN_H = 400;
+
+function minArticleWidthFor(heightPt: number, options?: AdResidualOptions): number {
+  if (!options?.wideShortFillers) return MIN_ARTICLE_W;
+  return heightPt >= COLUMN_RAIL_MIN_H ? FULL_COLUMN_W : MIN_ARTICLE_W;
+}
+
+function minArticleHeightFor(widthPt: number, options?: AdResidualOptions): number {
+  if (!options?.wideShortFillers) return MIN_ARTICLE_H;
+  for (const floor of WIDE_FILLER_FLOORS) {
+    if (widthPt >= floor.minWidth) return floor.minHeight;
+  }
+  return MIN_ARTICLE_H;
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type AdResidualRect = {
@@ -346,6 +420,7 @@ export function computeAdResidualRects(
   contentY: number,
   contentW: number,
   contentH: number,
+  options?: AdResidualOptions,
 ): AdResidualRect[] {
   const contentRight = contentX + contentW;
   const contentBottom = contentY + contentH;
@@ -420,20 +495,37 @@ export function computeAdResidualRects(
 
     for (const [fl, fr] of freeIntervals) {
       const freeW = fr - fl;
-      if (freeW >= MIN_ARTICLE_W && bandH >= MIN_ARTICLE_H) {
+      if (options?.wideShortFillers) {
+        // Admit the slice on width alone and let mergeVerticalRects join the
+        // slices into a full-height column before anything is judged on size.
+        //
+        // Bands are cut at every ad edge, so a tall zone beside a stack of ads
+        // arrives here as a run of short slices. Applying the height floor per
+        // slice threw the whole column away one 108pt slice at a time -- the
+        // merge step never saw it. Measured on the reference page's own ad
+        // shape, that alone was 13% of the page left blank down the left
+        // margin. The real floors are applied once, after merging, at the
+        // bottom of mergeVerticalRects.
+        if (freeW >= FULL_COLUMN_W) {
+          rawRects.push({ x: fl, y: bandTop, width: freeW, height: bandH });
+        }
+      } else if (freeW >= MIN_ARTICLE_W && bandH >= MIN_ARTICLE_H) {
         rawRects.push({ x: fl, y: bandTop, width: freeW, height: bandH });
       }
     }
   }
 
-  return mergeVerticalRects(rawRects);
+  return mergeVerticalRects(rawRects, options);
 }
 
 /**
  * Merges vertically adjacent rects sharing the same x and width.
  * Collapses thin stacked bands into tall, clean editorial zones.
  */
-function mergeVerticalRects(rects: AdResidualRect[]): AdResidualRect[] {
+function mergeVerticalRects(
+  rects: AdResidualRect[],
+  options?: AdResidualOptions,
+): AdResidualRect[] {
   if (rects.length === 0) return [];
 
   const groups = new Map<string, AdResidualRect[]>();
@@ -455,12 +547,22 @@ function mergeVerticalRects(rects: AdResidualRect[]): AdResidualRect[] {
       if (Math.abs(next.y - currentBottom) <= 2) {
         current = { ...current, height: next.y + next.height - current.y };
       } else {
-        if (current.width >= MIN_ARTICLE_W && current.height >= MIN_ARTICLE_H) merged.push(current);
+        if (
+          current.width >= minArticleWidthFor(current.height, options) &&
+          current.height >= minArticleHeightFor(current.width, options)
+        ) {
+          merged.push(current);
+        }
         current = { ...next };
       }
     }
 
-    if (current.width >= MIN_ARTICLE_W && current.height >= MIN_ARTICLE_H) merged.push(current);
+    if (
+      current.width >= minArticleWidthFor(current.height, options) &&
+      current.height >= minArticleHeightFor(current.width, options)
+    ) {
+      merged.push(current);
+    }
   }
 
   merged.sort((a, b) => (a.y !== b.y ? a.y - b.y : a.x - b.x));

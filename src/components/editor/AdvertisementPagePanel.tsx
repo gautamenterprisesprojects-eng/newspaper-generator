@@ -60,6 +60,7 @@ import {
   computeAdResidualRects,
   buildAdResidualSlots,
 } from "@/engines/AdvertisementManager/AdResidualSpaceFiller";
+import { arrangeAdShelf } from "@/engines/AdvertisementManager/AdShelfArrangement";
 import { FRONT_HEADER_HEIGHT_PT, INSIDE_HEADER_HEIGHT_PT } from "@/engines/HeaderSystem/HeaderGeometry";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -271,87 +272,40 @@ function arrangeAds(
   style: PlacementStyle,
   bounds: { y: number; height: number } = { y: CONTENT_Y, height: CONTENT_H },
 ): AdItem[] {
-  const sorted = [...ads].sort(
-    (a, b) => b.displayWidthPt * b.displayHeightPt - a.displayWidthPt * a.displayHeightPt,
-  );
-
   const boundsY = bounds.y;
   const boundsBottom = bounds.y + bounds.height;
 
-  let cursorX = CONTENT_X + CONTENT_W;
-  let cursorY = boundsBottom;
-  // Tallest ad placed in the current row so far — the row above starts flush
-  // against it, not against whichever ad happened to be placed last. Without
-  // this, ads of differing heights in the same row left the next row's
-  // baseline set by the shorter one, opening a gap under the taller ad.
-  let rowHeight = 0;
-  const gutterSize = 0; // ZERO gap — ads must touch each other; article frames fill the rest exactly
+  // Geometry lives in AdShelfArrangement: same-width vertical stacks, bottom
+  // anchored, running right to left. Stacking rather than rowing is what
+  // removes the ragged top edge that unequal ad heights used to leave -- see
+  // that module's own doc comment for why, and for the reference page it is
+  // modelled on. Locked ads keep the exact position the publisher pinned them
+  // to and are not passed to the arranger at all.
+  const placements = arrangeAdShelf(
+    ads.map((ad) => ({
+      id: ad.id,
+      widthPt: ad.displayWidthPt,
+      heightPt: ad.displayHeightPt,
+      locked: ad.locked,
+    })),
+    { x: CONTENT_X, y: boundsY, width: CONTENT_W, height: boundsBottom - boundsY },
+  );
+  const byId = new Map(placements.map((p) => [p.id, p]));
 
-  const placed: AdItem[] = [];
-  // Indices into `placed` for the row currently being filled — used to find
-  // and close a leftover sliver once the row is done (see closeRowGap below).
-  let currentRowIndices: number[] = [];
-
-  // Ads in a row rarely sum to exactly the content width — three 296pt ads
-  // leave a 12pt remainder out of 900pt, for instance. That remainder is
-  // narrower than the residual-space engine's own minimum article width, so
-  // no article box ever claims it — it just sits there as dead white space
-  // at the page's left margin. Below this threshold there's no way to fill
-  // it with real content, so the only two options are a bare gap or growing
-  // the row's leftmost ad by a few points to close it; a snap this small
-  // (never more than this threshold, typically far less) reads as sizing the
-  // banner to the column, not stretching it to a different shape.
-  const ROW_GAP_SNAP_THRESHOLD = 40;
-  const closeRowGap = () => {
-    if (currentRowIndices.length === 0) return;
-    let leftmostIdx = currentRowIndices[0]!;
-    for (const idx of currentRowIndices) {
-      if (placed[idx]!.placedX < placed[leftmostIdx]!.placedX) leftmostIdx = idx;
-    }
-    const leftmost = placed[leftmostIdx]!;
-    const gap = leftmost.placedX - CONTENT_X;
-    if (gap > 0 && gap <= ROW_GAP_SNAP_THRESHOLD) {
-      placed[leftmostIdx] = {
-        ...leftmost,
-        placedX: CONTENT_X,
-        displayWidthPt: leftmost.displayWidthPt + gap,
-      };
-    }
-    currentRowIndices = [];
-  };
-
-  for (const ad of sorted) {
-    if (ad.locked) {
-      placed.push({ ...ad, placed: true });
-      continue;
-    }
-
-    // Decide fit using THIS ad's own width, before placing it — checking with
-    // the previous ad's width (the old approach) wrapped a narrower ad to a
-    // new row even when it would have fit beside a wider one, leaving the two
-    // ads on different rows instead of sharing the same bottom edge.
-    if (cursorX - ad.displayWidthPt < CONTENT_X) {
-      closeRowGap();
-      cursorX = CONTENT_X + CONTENT_W;
-      cursorY -= rowHeight + gutterSize;
-      rowHeight = 0;
-    }
-
-    let adX = cursorX - ad.displayWidthPt;
-    let adY = cursorY - ad.displayHeightPt;
-
-    // Clamp to content area
-    adX = Math.max(CONTENT_X, Math.min(adX, CONTENT_X + CONTENT_W - ad.displayWidthPt));
-    adY = Math.max(boundsY, Math.min(adY, boundsBottom - ad.displayHeightPt));
-
-    placed.push({ ...ad, placedX: adX, placedY: adY, placed: true });
-    currentRowIndices.push(placed.length - 1);
-
-    // Advance cursor: move left within the row; track the row's tallest ad.
-    cursorX = adX - gutterSize;
-    rowHeight = Math.max(rowHeight, ad.displayHeightPt);
-  }
-  closeRowGap();
+  const placed: AdItem[] = ads.map((ad) => {
+    if (ad.locked) return { ...ad, placed: true };
+    const p = byId.get(ad.id);
+    if (!p) return { ...ad, placed: true };
+    return {
+      ...ad,
+      placedX: p.x,
+      placedY: p.y,
+      // Width can come back larger than it went in when the arranger closed a
+      // sub-threshold remainder at the left margin; height is never touched.
+      displayWidthPt: p.widthPt,
+      placed: true,
+    };
+  });
 
   // Adjust Y position based on placement style
   if (style === "नीचे भारी" || style === "प्रोफेशनल न्यूज़पेपर") {
@@ -398,6 +352,10 @@ function computeRemainingRects(
     bounds.y,
     CONTENT_W,
     bounds.height,
+    // Advertisement Page only: let a wide band be shallower than the flat
+    // 140pt floor so the strip left over beside/above the ad block gets a
+    // real filler article instead of being discarded as white space.
+    { wideShortFillers: true },
   );
 }
 
