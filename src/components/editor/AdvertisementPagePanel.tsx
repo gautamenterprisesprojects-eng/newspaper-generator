@@ -425,28 +425,28 @@ const AdCard = memo(function AdCard({
   }, []);
 
   return (
-    <div ref={ref} className={`ad-card${ad.locked ? " locked" : ""}`}>
-      <div className="ad-card-preview">
+    <div ref={ref} className={`promo-card${ad.locked ? " locked" : ""}`}>
+      <div className="promo-card-preview">
         {visible ? (
           <img src={ad.dataUrl} alt={ad.filename} style={{ objectFit: "contain", width: "100%", height: "100%" }} />
         ) : (
-          <div className="ad-card-placeholder">
+          <div className="promo-card-placeholder">
             <ImageIcon size={24} />
           </div>
         )}
         {ad.locked ? (
-          <div className="ad-card-lock-badge">
+          <div className="promo-card-lock-badge">
             <Lock size={10} /> लॉक्ड
           </div>
         ) : null}
       </div>
-      <div className="ad-card-meta">
-        <span className="ad-card-filename" title={ad.filename}>{ad.filename}</span>
-        <span className="ad-card-dims">
+      <div className="promo-card-meta">
+        <span className="promo-card-filename" title={ad.filename}>{ad.filename}</span>
+        <span className="promo-card-dims">
           {Math.round(ad.originalWidth)} × {Math.round(ad.originalHeight)}px
         </span>
       </div>
-      <div className="ad-card-size-row" style={{ display: "flex", gap: 6, alignItems: "center", padding: "4px 6px" }}>
+      <div className="promo-card-size-row" style={{ display: "flex", gap: 6, alignItems: "center", padding: "4px 6px" }}>
         <label style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11 }}>
           चौड़ाई (इंच)
           <input
@@ -470,7 +470,7 @@ const AdCard = memo(function AdCard({
           />
         </label>
       </div>
-      <div className="ad-card-actions">
+      <div className="promo-card-actions">
         <button type="button" title="बदलें" onClick={() => onEdit(ad.id)}><Edit size={12} /></button>
         <button type="button" title="कॉपी बनाएं" onClick={() => onDuplicate(ad.id)}><Copy size={12} /></button>
         <button type="button" title={ad.locked ? "अनलॉक करें" : "लॉक करें"} onClick={() => onToggleLock(ad.id)}>
@@ -605,8 +605,8 @@ const AdEditWindow = memo(function AdEditWindow({
   };
 
   return (
-    <div className="ad-edit-window">
-      <div className="ad-edit-preview">
+    <div className="promo-edit-window">
+      <div className="promo-edit-preview">
         <img
           src={ad.dataUrl}
           alt={ad.filename}
@@ -619,8 +619,8 @@ const AdEditWindow = memo(function AdEditWindow({
         />
       </div>
 
-      <div className="ad-edit-controls">
-        <div className="ad-edit-row">
+      <div className="promo-edit-controls">
+        <div className="promo-edit-row">
           <label>चौड़ाई (pt)</label>
           <input
             type="number"
@@ -630,7 +630,7 @@ const AdEditWindow = memo(function AdEditWindow({
             onChange={(e) => handleWidthPtInput(e.target.value)}
           />
         </div>
-        <div className="ad-edit-row">
+        <div className="promo-edit-row">
           <label>चौड़ाई (सेमी)</label>
           <input
             type="number"
@@ -639,7 +639,7 @@ const AdEditWindow = memo(function AdEditWindow({
             onChange={(e) => handleWidthCmInput(e.target.value)}
           />
         </div>
-        <div className="ad-edit-row">
+        <div className="promo-edit-row">
           <label>चौड़ाई (इंच)</label>
           <input
             type="number"
@@ -648,7 +648,7 @@ const AdEditWindow = memo(function AdEditWindow({
             onChange={(e) => handleWidthInInput(e.target.value)}
           />
         </div>
-        <div className="ad-edit-row">
+        <div className="promo-edit-row">
           <label>ऊँचाई (pt)</label>
           <input
             type="number"
@@ -658,7 +658,7 @@ const AdEditWindow = memo(function AdEditWindow({
             onChange={(e) => handleHeightPtInput(e.target.value)}
           />
         </div>
-        <div className="ad-edit-row">
+        <div className="promo-edit-row">
           <label>ऊँचाई (सेमी)</label>
           <input
             type="number"
@@ -667,7 +667,7 @@ const AdEditWindow = memo(function AdEditWindow({
             onChange={(e) => handleHeightCmInput(e.target.value)}
           />
         </div>
-        <div className="ad-edit-row">
+        <div className="promo-edit-row">
           <label>ऊँचाई (इंच)</label>
           <input
             type="number"
@@ -676,7 +676,7 @@ const AdEditWindow = memo(function AdEditWindow({
             onChange={(e) => handleHeightInInput(e.target.value)}
           />
         </div>
-        <label className="ad-edit-lock">
+        <label className="promo-edit-lock">
           <input
             type="checkbox"
             checked={aspectLocked}
@@ -686,8 +686,8 @@ const AdEditWindow = memo(function AdEditWindow({
         </label>
       </div>
 
-      <div className="ad-edit-section-label">क्रॉप मोड</div>
-      <div className="ad-mode-row">
+      <div className="promo-edit-section-label">क्रॉप मोड</div>
+      <div className="promo-mode-row">
         {(["fit", "fill", "crop"] as const).map((mode) => (
           <button
             key={mode}
@@ -700,8 +700,8 @@ const AdEditWindow = memo(function AdEditWindow({
         ))}
       </div>
 
-      <div className="ad-edit-section-label">घुमाव</div>
-      <div className="ad-mode-row">
+      <div className="promo-edit-section-label">घुमाव</div>
+      <div className="promo-mode-row">
         {([0, 90, 180, 270] as const).map((deg) => (
           <button
             key={deg}
@@ -714,8 +714,8 @@ const AdEditWindow = memo(function AdEditWindow({
         ))}
       </div>
 
-      <div className="ad-edit-section-label">तयशुदा आकार</div>
-      <div className="ad-presets-grid">
+      <div className="promo-edit-section-label">तयशुदा आकार</div>
+      <div className="promo-presets-grid">
         {Object.entries(AD_PRESETS).map(([key, preset]) => (
           <button key={key} type="button" onClick={() => applyPreset(key)}>
             {preset.label}
@@ -1202,7 +1202,7 @@ export const AdvertisementPagePanel = memo(function AdvertisementPagePanel({
       <div className="generation-wizard-screen">
         {/* Upload zone */}
         <div
-          className="ad-upload-zone"
+          className="promo-upload-zone"
           onClick={() => fileInputRef.current?.click()}
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => {
@@ -1212,7 +1212,7 @@ export const AdvertisementPagePanel = memo(function AdvertisementPagePanel({
         >
           <Upload size={28} />
           <span>विज्ञापन अपलोड करें</span>
-          <span className="ad-upload-hint">JPG · PNG · PDF · एक से ज़्यादा भी चलेंगे · क्लिक करें या खींचकर छोड़ें</span>
+          <span className="promo-upload-hint">JPG · PNG · PDF · एक से ज़्यादा भी चलेंगे · क्लिक करें या खींचकर छोड़ें</span>
         </div>
         <input
           ref={fileInputRef}
@@ -1226,10 +1226,10 @@ export const AdvertisementPagePanel = memo(function AdvertisementPagePanel({
         {/* Ad Library */}
         {ads.length > 0 ? (
           <>
-            <div className="ad-library-header">
+            <div className="promo-library-header">
               <span>{ads.length} विज्ञापन अपलोड किए गए</span>
             </div>
-            <div className="ad-library-grid">
+            <div className="promo-library-grid">
               {ads.map((ad) => (
                 <AdCard
                   key={ad.id}
@@ -1253,14 +1253,14 @@ export const AdvertisementPagePanel = memo(function AdvertisementPagePanel({
             ) : null}
 
             {/* Placement presets */}
-            <div className="ad-placement-section">
-              <div className="ad-section-label">प्लेसमेंट स्टाइल</div>
-              <div className="ad-placement-presets">
+            <div className="promo-placement-section">
+              <div className="promo-section-label">प्लेसमेंट स्टाइल</div>
+              <div className="promo-placement-presets">
                 {PLACEMENT_STYLES.map((style) => (
                   <button
                     key={style}
                     type="button"
-                    className={`ad-preset-btn${placementStyle === style ? " selected" : ""}`}
+                    className={`promo-preset-btn${placementStyle === style ? " selected" : ""}`}
                     onClick={() => setPlacementStyle(style)}
                   >
                     {style}
@@ -1273,9 +1273,9 @@ export const AdvertisementPagePanel = memo(function AdvertisementPagePanel({
                 specific numbered inside page, reserving the matching masthead/
                 folio band before ads are placed. "No Header" keeps the panel's
                 original standalone behavior unchanged. */}
-            <div className="ad-placement-section">
-              <div className="ad-section-label">हेडर</div>
-              <div className="ad-source-options">
+            <div className="promo-placement-section">
+              <div className="promo-section-label">हेडर</div>
+              <div className="promo-source-options">
                 <label>
                   <input
                     type="radio"
@@ -1312,7 +1312,7 @@ export const AdvertisementPagePanel = memo(function AdvertisementPagePanel({
               </div>
               {headerMode === "inside" ? (
                 insidePages.length > 0 ? (
-                  <div className="ad-edit-row" style={{ maxWidth: 320, marginTop: 10 }}>
+                  <div className="promo-edit-row" style={{ maxWidth: 320, marginTop: 10 }}>
                     <label>किस पन्ने से जोड़ें:</label>
                     <select
                       value={targetPageNumber ?? insidePages[0]?.pageNumber ?? ""}
@@ -1326,7 +1326,7 @@ export const AdvertisementPagePanel = memo(function AdvertisementPagePanel({
                     </select>
                   </div>
                 ) : (
-                  <p className="ad-remaining-info" style={{ marginTop: 10 }}>
+                  <p className="promo-remaining-info" style={{ marginTop: 10 }}>
                     इस संस्करण में अभी कोई इनसाइड पेज नहीं है — पहले पेज पैनल से एक जोड़ें।
                   </p>
                 )
@@ -1345,7 +1345,7 @@ export const AdvertisementPagePanel = memo(function AdvertisementPagePanel({
             </div>
           </>
         ) : (
-          <div className="ad-empty-state">
+          <div className="promo-empty-state">
             <ImageIcon size={40} />
             <p>अभी तक कोई विज्ञापन अपलोड नहीं किया गया।</p>
             <p>शुरू करने के लिए JPG, PNG, या PDF फ़ाइलें अपलोड करें।</p>
@@ -1359,18 +1359,18 @@ export const AdvertisementPagePanel = memo(function AdvertisementPagePanel({
   if (phase === "article-source") {
     return (
       <div className="generation-wizard-screen">
-        <div className="ad-panel-back-row">
+        <div className="promo-panel-back-row">
           <button type="button" className="editorial-back-btn" onClick={() => setPhase("upload")}>
             <ChevronLeft size={14} /> वापस
           </button>
-          <span className="ad-remaining-info">
+          <span className="promo-remaining-info">
             {remainingRects.length} छपने लायक जगह मिलीं
             ({remainingRects.map((r) => `${Math.round(r.width)}×${Math.round(r.height)}pt`).join(", ")})
           </span>
         </div>
 
-        <div className="ad-section-label">लेखों की संख्या</div>
-        <div className="ad-edit-row" style={{ maxWidth: 250, marginBottom: 16 }}>
+        <div className="promo-section-label">लेखों की संख्या</div>
+        <div className="promo-edit-row" style={{ maxWidth: 250, marginBottom: 16 }}>
           <label>बची हुई जगह में लेख:</label>
           <input
             type="number"
@@ -1381,8 +1381,8 @@ export const AdvertisementPagePanel = memo(function AdvertisementPagePanel({
           />
         </div>
 
-        <div className="ad-section-label">लेख कहाँ से लें</div>
-        <div className="ad-source-options">
+        <div className="promo-section-label">लेख कहाँ से लें</div>
+        <div className="promo-source-options">
           <label>
             <input
               type="radio"
@@ -1407,7 +1407,7 @@ export const AdvertisementPagePanel = memo(function AdvertisementPagePanel({
 
         {articleSource === "category" ? (
           <>
-            <div className="ad-section-label">श्रेणी चुनें</div>
+            <div className="promo-section-label">श्रेणी चुनें</div>
             <div className="generation-category-grid">
               {NEWSWIRE_CATEGORIES.map((cat) => (
                 <button
@@ -1455,11 +1455,11 @@ export const AdvertisementPagePanel = memo(function AdvertisementPagePanel({
   if (phase === "manual-slots") {
     return (
       <div className="generation-wizard-screen">
-        <div className="ad-panel-back-row">
+        <div className="promo-panel-back-row">
           <button type="button" className="editorial-back-btn" onClick={() => setPhase("article-source")}>
             <ChevronLeft size={14} /> वापस
           </button>
-          <span className="ad-remaining-info">
+          <span className="promo-remaining-info">
             {manualArticleCount} लेख बॉक्स में लेख जोड़ें
           </span>
         </div>
@@ -1537,7 +1537,7 @@ export const AdvertisementPagePanel = memo(function AdvertisementPagePanel({
 
     return (
       <div className="generation-wizard-screen">
-        <div className="ad-panel-back-row">
+        <div className="promo-panel-back-row">
           <button type="button" onClick={() => setPhase(articleSource === "manual" ? "manual-slots" : "article-source")} className="ghost">
             <ChevronLeft size={16} /> वापस
           </button>

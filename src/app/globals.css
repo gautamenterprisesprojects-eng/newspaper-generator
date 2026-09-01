@@ -6597,7 +6597,7 @@
 
 /* ── Advertisement Page Panel ── */
 
-.ad-upload-zone {
+.promo-upload-zone {
   border: 2px dashed #b0a898;
   border-radius: 10px;
   padding: 32px 24px;
@@ -6612,17 +6612,17 @@
   margin-bottom: 16px;
 }
 
-.ad-upload-zone:hover {
+.promo-upload-zone:hover {
   border-color: #191714;
   background: #f5f2ec;
   color: #444;
 }
 
-.ad-upload-zone svg { color: #aaa; }
-.ad-upload-zone span { font-size: 14px; font-weight: 700; }
-.ad-upload-hint { font-size: 11px !important; font-weight: 400 !important; color: #aaa; }
+.promo-upload-zone svg { color: #aaa; }
+.promo-upload-zone span { font-size: 14px; font-weight: 700; }
+.promo-upload-hint { font-size: 11px !important; font-weight: 400 !important; color: #aaa; }
 
-.ad-library-header {
+.promo-library-header {
   font-size: 12px;
   font-weight: 700;
   color: #555;
@@ -6631,7 +6631,7 @@
   letter-spacing: 0.04em;
 }
 
-.ad-library-grid {
+.promo-library-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   gap: 10px;
@@ -6640,7 +6640,7 @@
   padding: 4px;
 }
 
-.ad-card {
+.promo-card {
   border: 1.5px solid #d9d4cc;
   border-radius: 7px;
   overflow: hidden;
@@ -6648,9 +6648,9 @@
   transition: border-color 140ms;
 }
 
-.ad-card.locked { border-color: #e8a000; }
+.promo-card.locked { border-color: #e8a000; }
 
-.ad-card-preview {
+.promo-card-preview {
   position: relative;
   width: 100%;
   height: 90px;
@@ -6660,7 +6660,7 @@
   justify-content: center;
 }
 
-.ad-card-placeholder {
+.promo-card-placeholder {
   color: #bbb;
   display: flex;
   align-items: center;
@@ -6669,7 +6669,7 @@
   height: 100%;
 }
 
-.ad-card-lock-badge {
+.promo-card-lock-badge {
   position: absolute;
   top: 4px;
   right: 4px;
@@ -6684,11 +6684,11 @@
   gap: 3px;
 }
 
-.ad-card-meta {
+.promo-card-meta {
   padding: 6px 8px 0;
 }
 
-.ad-card-filename {
+.promo-card-filename {
   display: block;
   font-size: 10px;
   font-weight: 700;
@@ -6698,21 +6698,21 @@
   white-space: nowrap;
 }
 
-.ad-card-dims {
+.promo-card-dims {
   display: block;
   font-size: 9px;
   color: #999;
   margin-bottom: 4px;
 }
 
-.ad-card-actions {
+.promo-card-actions {
   display: flex;
   gap: 4px;
   padding: 4px 6px 6px;
   justify-content: flex-end;
 }
 
-.ad-card-actions button {
+.promo-card-actions button {
   padding: 3px 6px;
   border: 1px solid #ddd;
   border-radius: 3px;
@@ -6722,11 +6722,11 @@
   transition: background 100ms;
 }
 
-.ad-card-actions button:hover { background: #eee; }
-.ad-card-actions button.danger { color: #c62828; border-color: #f5b8b8; }
-.ad-card-actions button.danger:hover { background: #ffebee; }
+.promo-card-actions button:hover { background: #eee; }
+.promo-card-actions button.danger { color: #c62828; border-color: #f5b8b8; }
+.promo-card-actions button.danger:hover { background: #ffebee; }
 
-.ad-empty-state {
+.promo-empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -6736,13 +6736,13 @@
   text-align: center;
 }
 
-.ad-empty-state p { font-size: 13px; color: #999; margin: 0; }
+.promo-empty-state p { font-size: 13px; color: #999; margin: 0; }
 
-.ad-placement-section {
+.promo-placement-section {
   margin-top: 16px;
 }
 
-.ad-section-label {
+.promo-section-label {
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
@@ -6751,14 +6751,14 @@
   margin-bottom: 8px;
 }
 
-.ad-placement-presets {
+.promo-placement-presets {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   margin-bottom: 8px;
 }
 
-.ad-preset-btn {
+.promo-preset-btn {
   padding: 6px 12px;
   font-size: 11px;
   font-weight: 600;
@@ -6770,11 +6770,11 @@
   transition: border-color 100ms, background 100ms;
 }
 
-.ad-preset-btn:hover { background: #f5f2ec; }
-.ad-preset-btn.selected { border-color: #191714; background: #f0ede8; color: #111; font-weight: 700; }
+.promo-preset-btn:hover { background: #f5f2ec; }
+.promo-preset-btn.selected { border-color: #191714; background: #f0ede8; color: #111; font-weight: 700; }
 
 /* Ad Edit Window */
-.ad-edit-window {
+.promo-edit-window {
   margin-top: 14px;
   border: 1.5px solid #d0ccc5;
   border-radius: 8px;
@@ -6782,34 +6782,34 @@
   background: #faf8f4;
 }
 
-.ad-edit-preview {
+.promo-edit-preview {
   border-radius: 5px;
   overflow: hidden;
   margin-bottom: 12px;
   background: #e8e4dc;
 }
 
-.ad-edit-controls {
+.promo-edit-controls {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
   margin-bottom: 10px;
 }
 
-.ad-edit-row {
+.promo-edit-row {
   display: flex;
   flex-direction: column;
   gap: 3px;
 }
 
-.ad-edit-row label {
+.promo-edit-row label {
   font-size: 10px;
   font-weight: 700;
   color: #666;
   text-transform: uppercase;
 }
 
-.ad-edit-row input {
+.promo-edit-row input {
   width: 100%;
   padding: 5px 7px;
   border: 1px solid #ccc;
@@ -6819,7 +6819,7 @@
   box-sizing: border-box;
 }
 
-.ad-edit-lock {
+.promo-edit-lock {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -6830,7 +6830,7 @@
   grid-column: 1 / -1;
 }
 
-.ad-edit-section-label {
+.promo-edit-section-label {
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
@@ -6838,13 +6838,13 @@
   margin: 10px 0 5px;
 }
 
-.ad-mode-row {
+.promo-mode-row {
   display: flex;
   gap: 5px;
   margin-bottom: 6px;
 }
 
-.ad-mode-row button {
+.promo-mode-row button {
   padding: 4px 10px;
   font-size: 11px;
   font-weight: 600;
@@ -6855,16 +6855,16 @@
   transition: background 100ms, border-color 100ms;
 }
 
-.ad-mode-row button:hover { background: #f0ede8; }
-.ad-mode-row button.selected { border-color: #191714; background: #191714; color: #fff; }
+.promo-mode-row button:hover { background: #f0ede8; }
+.promo-mode-row button.selected { border-color: #191714; background: #191714; color: #fff; }
 
-.ad-presets-grid {
+.promo-presets-grid {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
 }
 
-.ad-presets-grid button {
+.promo-presets-grid button {
   padding: 4px 8px;
   font-size: 10px;
   font-weight: 600;
@@ -6875,10 +6875,10 @@
   transition: background 100ms;
 }
 
-.ad-presets-grid button:hover { background: #f5f2ec; }
+.promo-presets-grid button:hover { background: #f5f2ec; }
 
 /* Ad panel back row and remaining info */
-.ad-panel-back-row {
+.promo-panel-back-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -6887,19 +6887,19 @@
   flex-wrap: wrap;
 }
 
-.ad-remaining-info {
+.promo-remaining-info {
   font-size: 11px;
   color: #666;
   font-style: italic;
 }
 
-.ad-source-options {
+.promo-source-options {
   display: flex;
   gap: 20px;
   margin-bottom: 14px;
 }
 
-.ad-source-options label {
+.promo-source-options label {
   display: flex;
   align-items: center;
   gap: 7px;
