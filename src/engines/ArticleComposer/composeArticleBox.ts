@@ -5227,25 +5227,25 @@ function composeArticleBoxPass(
             0,
             byline.y + byline.height + bylineDividerGap + bylineDividerToBody - rawLeadRegion.y,
           )
-        : forceBylineBelowFirstColumnImage || settings.tightBylineToBodyGap || tightTwoColumnBylineToBodyGap || tightWideEightColumnBylineToBodyGap
-          ? // Measured off the byline's real ink, like every other branch here.
-            // `bylineReserveHeight` is itself already ceil-snapped to the grid,
-            // and `totalLeadConsumedHeight` below ceil-snaps whatever this
-            // yields a second time -- so taking the reserve here rounds up
-            // twice and can leave up to two empty grid rows between the byline
-            // and the body. That only ever showed with the image on the right,
-            // because a left/first-column image takes the branch above and
-            // measures the ink instead. The outer snap still lands the body on
-            // the baseline grid, so columns stay row-aligned.
-            Math.max(
-              0,
-              byline.y +
-                byline.height +
-                bylineDividerGap +
-                (tightWideEightColumnBylineToBodyGap ? 0.5 : bylineDividerToBody) -
-                rawLeadRegion.y,
-            )
-          : bylineReserveHeight
+        : // Measured off the byline's real ink, like every other branch here.
+          // `bylineReserveHeight` is itself already ceil-snapped to the grid,
+          // and `totalLeadConsumedHeight` below ceil-snaps whatever this
+          // yields a second time -- so taking the reserve instead of the ink
+          // rounds up twice and leaves up to two empty grid rows between the
+          // byline and the body. That only ever showed with the image on the
+          // right (a left/first-column image, or any of the "tight" flags,
+          // used to route here through the ink-measured branch above instead)
+          // -- ink-measuring unconditionally removes the gap for every case,
+          // not just the ones already known to hit it. The outer snap still
+          // lands the body on the baseline grid, so columns stay row-aligned.
+          Math.max(
+            0,
+            byline.y +
+              byline.height +
+              bylineDividerGap +
+              (tightWideEightColumnBylineToBodyGap ? 0.5 : bylineDividerToBody) -
+              rawLeadRegion.y,
+          )
       : bylineRegion && rawLeadRegion && byline.text
         ? Math.max(
             0,
