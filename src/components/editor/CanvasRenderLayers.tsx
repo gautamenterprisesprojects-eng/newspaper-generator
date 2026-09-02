@@ -453,6 +453,8 @@ type StoryItemProps = {
   selectedParagraphIndex: number;
   contentMode: boolean;
   productionView: boolean;
+  /** False pins every story box in place -- see ArticleBox's own note. */
+  boxDragEnabled: boolean;
   frameLayoutContext: FrameLayoutContext;
   renderProfiler?: PerformanceProfiler;
   imageSourcesByStoryId: Record<NewspaperStoryId, string>;
@@ -489,6 +491,7 @@ const StoryItem = memo(function StoryItem({
   selectedParagraphIndex,
   contentMode,
   productionView,
+  boxDragEnabled,
   frameLayoutContext,
   renderProfiler,
   imageSourcesByStoryId,
@@ -631,6 +634,7 @@ const StoryItem = memo(function StoryItem({
         showCompositionOverlays={!productionView}
         bodyRendererMode={story.compositionSettings.bodyRendererMode ?? "line"}
         interactionEnabled={!productionView}
+        boxDragEnabled={boxDragEnabled}
         frameLayoutContext={frameLayoutContext}
         renderProfiler={renderProfiler}
         imageSource={imageSourcesByStoryId[story.id]}
@@ -770,6 +774,10 @@ function getStoryItemChangeReasons(previous: StoryItemProps, next: StoryItemProp
     }
   }
 
+  if (previous.boxDragEnabled !== next.boxDragEnabled) {
+    reasons.push("boxDragEnabled");
+  }
+
   if (previous.productionView !== next.productionView) {
     reasons.push("production view changed");
   }
@@ -823,6 +831,7 @@ export const StoryLayer = memo(function StoryLayer({
   selectedParagraphIndex,
   contentMode,
   productionView,
+  boxDragEnabled,
   frameLayoutContext,
   renderProfiler,
   imageSourcesByStoryId,
@@ -853,6 +862,8 @@ export const StoryLayer = memo(function StoryLayer({
   selectedParagraphIndex: number;
   contentMode: boolean;
   productionView: boolean;
+  /** False pins every story box in place -- see ArticleBox's own note. */
+  boxDragEnabled: boolean;
   frameLayoutContext: FrameLayoutContext;
   renderProfiler?: PerformanceProfiler;
   imageSourcesByStoryId: Record<NewspaperStoryId, string>;
@@ -892,6 +903,7 @@ export const StoryLayer = memo(function StoryLayer({
           selectedParagraphIndex={selectedParagraphIndex}
           contentMode={contentMode}
           productionView={productionView}
+          boxDragEnabled={boxDragEnabled}
           frameLayoutContext={frameLayoutContext}
           renderProfiler={renderProfiler}
           imageSourcesByStoryId={imageSourcesByStoryId}

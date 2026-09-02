@@ -88,6 +88,17 @@ type ArticleBoxProps = {
   bodyRendererMode?: "line" | "segmented";
   contentMode?: boolean;
   interactionEnabled?: boolean;
+  /**
+   * Whether this box may be moved or resized by dragging.
+   *
+   * Separate from interactionEnabled on purpose. That flag makes the box
+   * completely inert -- it also gates click, tap, context menu and the whole
+   * selectable-objects layer, which is where the double-tap-to-edit handlers
+   * live. On a phone the box must stay fully interactive (tap to select,
+   * double-tap to edit) while being pinned in place, because a stray touch
+   * while scrolling was dragging stories out of position.
+   */
+  boxDragEnabled?: boolean;
   frameLayoutContext?: FrameLayoutContext;
   renderProfiler?: PerformanceProfiler;
   imageSource?: string;
@@ -925,6 +936,7 @@ function ArticleBoxComponent({
   bodyRendererMode = "line",
   contentMode = false,
   interactionEnabled = true,
+  boxDragEnabled = true,
   frameLayoutContext,
   renderProfiler,
   imageSource,
@@ -1293,7 +1305,7 @@ function ArticleBoxComponent({
     <Group
       x={articleBox.x}
       y={articleBox.y}
-      draggable={interactionEnabled}
+      draggable={interactionEnabled && boxDragEnabled}
       onClick={(event) => {
         if (!interactionEnabled) {
           return;
@@ -1990,7 +2002,11 @@ function ArticleBoxComponent({
               wrap="none"
              listening={false} perfectDrawEnabled={false} />
           </Group>
-          {(["nw", "n", "ne", "e", "se", "s", "sw", "w"] as ResizeHandle[]).map((handle) => {
+          {/* No resize handles when the box is pinned -- they are the resize
+              affordance, and drawing them would invite exactly the drag the
+              lock exists to prevent. The selection outline and badge stay, so
+              the box still reads as selected. */}
+          {(boxDragEnabled ? (["nw", "n", "ne", "e", "se", "s", "sw", "w"] as ResizeHandle[]) : []).map((handle) => {
             const handlePosition = getHandlePosition(handle, articleBox);
 
             return (
@@ -2150,5 +2166,6 @@ export const ArticleBox = memo(
     previous.onContextMenu === next.onContextMenu &&
     previous.onRequestImageReplace === next.onRequestImageReplace &&
     previous.onMove === next.onMove &&
-    previous.onResize === next.onResize,
+    previous.onResize === next.onResize &&
+    previous.boxDragEnabled === next.boxDragEnabled,
 );

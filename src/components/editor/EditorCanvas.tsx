@@ -7078,6 +7078,12 @@ export function EditorCanvas() {
                   selectedParagraphIndex={selectedParagraphIndex}
                   contentMode={editingMode === "text" || selectedObjects.length > 0}
                   productionView={productionView}
+                  // Pinned on a phone: a stray touch while scrolling the page
+                  // was dragging stories out of position and leaving the
+                  // layout disturbed. Selection, double-tap editing and image
+                  // replacement all stay live -- only moving and resizing by
+                  // drag are off, and only under the compact width.
+                  boxDragEnabled={!isCompactViewport(viewport)}
                   frameLayoutContext={frameLayoutContext}
                   renderProfiler={performanceProfilerEnabled ? profilerRef.current : undefined}
                   imageSourcesByStoryId={imageSourcesByStoryId}
