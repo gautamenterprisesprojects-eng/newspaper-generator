@@ -65,15 +65,20 @@ const MIN_SUBDIV_COL_W = 160;          // pt — 2 standard columns minimum per 
  * must keep its existing behaviour untouched.
  */
 /**
- * Floors are "a headline plus two lines of body, and its padding":
- *   4+ columns (>=590pt) — the headline fits on one line:
- *                          24pt headline + 2 x 16.5pt leading + 16pt pad = 73
- *   3 columns  (>=440pt) — the headline wraps to two lines: +24pt  = 97 -> 104
- * Anything narrower keeps the full flat floor.
+ * Floors start from "a headline plus two lines of body, and its padding" --
+ * 24pt headline + 2 x 16.5pt leading + 16pt padding = 73pt for a width where
+ * the headline fits on one line, +24pt more where it wraps to two.
+ *
+ * The 4+ column figure is then raised to 1.5in. At the bare 73pt a full-width
+ * band comes out about 1.02in deep, and a strip that shallow running across
+ * the top of the page reads as a mistake rather than as a filler -- reported
+ * from a real page. 108pt is the shallowest that still looks deliberate.
+ * Raising it does not cost white space: the arranger scores an unfillable
+ * band as blank, so it now avoids leaving one in the first place.
  */
 const WIDE_FILLER_FLOORS: ReadonlyArray<{ minWidth: number; minHeight: number }> = [
-  { minWidth: 590, minHeight: 74 },  // 4–6 columns
-  { minWidth: 440, minHeight: 104 }, // 3 columns
+  { minWidth: 590, minHeight: 108 }, // 4–6 columns — 1.5in
+  { minWidth: 440, minHeight: 116 }, // 3 columns
 ];
 
 export type AdResidualOptions = {
@@ -569,6 +574,74 @@ function mergeVerticalRects(
   return merged;
 }
 
+/**
+ * Cuts `rect` into exactly `count` tiles that cover it completely.
+ *
+ * Advertisement Page only. Unlike the pattern library this never leaves part
+ * of a zone uncovered and never returns a different number of tiles than was
+ * asked for (short of the zone being too small to cut further), which is what
+ * the article count needs: N articles, N boxes, no blank remainder.
+ *
+ * Cuts across the long axis first so boxes stay near newspaper proportions,
+ * and biases an even split 55/45 rather than in half, the way a page splits a
+ * lead story from its follow.
+ */
+function guillotineSplit(
+  rect: AdResidualRect,
+  count: number,
+  options?: AdResidualOptions,
+): AdResidualRect[] {
+  if (count <= 1) return [rect];
+
+  const headCount = Math.ceil(count / 2);
+  const tailCount = count - headCount;
+  const minH = minArticleHeightFor(rect.width, options);
+  const minW = MIN_SUBDIV_COL_W;
+
+  const canCutHorizontally = rect.height >= minH * 2 + GUTTER;
+  const canCutVertically = rect.width >= minW * 2 + GUTTER;
+  const preferHorizontal = rect.height >= rect.width;
+
+  const cutHorizontally = canCutHorizontally && (preferHorizontal || !canCutVertically);
+  const cutVertically = !cutHorizontally && canCutVertically;
+
+  if (!cutHorizontally && !cutVertically) return [rect];
+
+  const bias = headCount === tailCount ? 0.55 : headCount / count;
+
+  if (cutHorizontally) {
+    const usable = rect.height - GUTTER;
+    let headH = Math.round(usable * bias);
+    headH = Math.min(Math.max(headH, minH), usable - minH);
+    const head = { x: rect.x, y: rect.y, width: rect.width, height: headH };
+    const tail = {
+      x: rect.x,
+      y: rect.y + headH + GUTTER,
+      width: rect.width,
+      height: rect.height - headH - GUTTER,
+    };
+    return [
+      ...guillotineSplit(head, headCount, options),
+      ...guillotineSplit(tail, tailCount, options),
+    ];
+  }
+
+  const usable = rect.width - GUTTER;
+  let headW = Math.round(usable * bias);
+  headW = Math.min(Math.max(headW, minW), usable - minW);
+  const head = { x: rect.x, y: rect.y, width: headW, height: rect.height };
+  const tail = {
+    x: rect.x + headW + GUTTER,
+    y: rect.y,
+    width: rect.width - headW - GUTTER,
+    height: rect.height,
+  };
+  return [
+    ...guillotineSplit(head, headCount, options),
+    ...guillotineSplit(tail, tailCount, options),
+  ];
+}
+
 // ─── Core: Professional Slot Builder ─────────────────────────────────────────
 
 /**
@@ -613,8 +686,10 @@ export function buildAdResidualSlots(
   standardColW: number,
   standardGutter: number,
   maxSlots = Infinity,
+  options?: AdResidualOptions,
 ): AdResidualSlot[] {
   if (remainingRects.length === 0) return [];
+  const exactFill = options?.wideShortFillers === true;
 
   // ── Helper: build one annotated slot from a raw rect ─────────────────────
   const makeSlot = (sub: AdResidualRect): AdResidualSlot => {
@@ -638,9 +713,79 @@ export function buildAdResidualSlots(
     };
   };
 
+  // ── Pass 0: fold zones down to the article budget ────────────────────────
+  // With more zones than articles, Pass 1 used to hand slots to the biggest
+  // zones and simply leave the rest with nothing -- and a zone with no article
+  // is a blank hole on the printed page. Merging first means every zone still
+  // gets an article; the publisher's article count is respected by making the
+  // zones bigger, not by abandoning one of them.
+  //
+  // Only unions that are themselves rectangles are merged (same x+width and
+  // vertically adjacent, or same y+height and horizontally adjacent), so a
+  // merged zone is still a single well-formed article box.
+  const foldZonesToBudget = (rects: AdResidualRect[]): AdResidualRect[] => {
+    if (!exactFill || !Number.isFinite(maxSlots)) return rects;
+    const working = rects.map((r) => ({ ...r }));
+    // Strict adjacency only. It is tempting to treat a gutter-sized gap as
+    // adjacent too, but two residual zones are separated precisely BECAUSE an
+    // ad sits between them -- that is what split them in the first place -- so
+    // a zone merged across the gap would print on top of the ad. Gaps that are
+    // merely rejected bands are already reclaimed earlier, by admitting bands
+    // on width alone and merging before anything is judged on size.
+    const near = (a: number, b: number) => Math.abs(a - b) <= 2;
+
+    while (working.length > maxSlots) {
+      let bestI = -1;
+      let bestJ = -1;
+      let bestArea = Number.POSITIVE_INFINITY;
+
+      for (let i = 0; i < working.length; i++) {
+        for (let j = i + 1; j < working.length; j++) {
+          const a = working[i]!;
+          const b = working[j]!;
+          const stackable =
+            near(a.x, b.x) &&
+            near(a.width, b.width) &&
+            (near(a.y + a.height, b.y) || near(b.y + b.height, a.y));
+          const abuttable =
+            near(a.y, b.y) &&
+            near(a.height, b.height) &&
+            (near(a.x + a.width, b.x) || near(b.x + b.width, a.x));
+          if (!stackable && !abuttable) continue;
+          // Merge the smallest pair first, so the page keeps as much of its
+          // zone structure as the budget allows.
+          const area = a.width * a.height + b.width * b.height;
+          if (area < bestArea) {
+            bestArea = area;
+            bestI = i;
+            bestJ = j;
+          }
+        }
+      }
+
+      if (bestI < 0) break; // nothing left that merges into a rectangle
+      const a = working[bestI]!;
+      const b = working[bestJ]!;
+      const x = Math.min(a.x, b.x);
+      const y = Math.min(a.y, b.y);
+      working.splice(bestJ, 1);
+      working.splice(bestI, 1);
+      working.push({
+        x,
+        y,
+        width: Math.max(a.x + a.width, b.x + b.width) - x,
+        height: Math.max(a.y + a.height, b.y + b.height) - y,
+      });
+    }
+
+    return working;
+  };
+
+  const budgetedRects = foldZonesToBudget(remainingRects);
+
   // ── Pass 1: One full-zone slot per residual rect ──────────────────────────
   // Sort largest area first so the biggest zones get articles first.
-  const sortedRects = [...remainingRects].sort(
+  const sortedRects = [...budgetedRects].sort(
     (a, b) => b.width * b.height - a.width * a.height,
   );
 
@@ -648,11 +793,50 @@ export function buildAdResidualSlots(
   const subdividableRects: AdResidualRect[] = [];
 
   for (const rect of sortedRects) {
-    if (slots.length >= maxSlots) break;
-    // Add one slot for the whole rect — no subdivision yet
+    // Every zone gets a slot, even past the budget. Folding above has already
+    // taken the count as low as the geometry allows; going over by one beats
+    // printing a blank hole, which is the thing publishers actually report.
+    if (!exactFill && slots.length >= maxSlots) break;
     slots.push(makeSlot(rect));
     // Remember this rect as a candidate for Pass 2 subdivision
     subdividableRects.push(rect);
+  }
+
+  // ── Pass 2 (Advertisement Page): split zones to hit the article count ────
+  // The publisher asked for N articles and every zone must end up covered, so
+  // the budget is spread across the zones by area and each zone is cut into
+  // exactly its share by a guillotine split that tiles the zone completely.
+  // The generic Pass 2 below cannot do this: its pattern library either fits
+  // the budget or is skipped, so a 4-article page came back with 2 boxes.
+  if (exactFill && Number.isFinite(maxSlots) && slots.length < maxSlots) {
+    const zones = [...subdividableRects];
+    const totalArea = zones.reduce((sum, z) => sum + z.width * z.height, 0);
+    let remaining = maxSlots - zones.length;
+
+    // Largest zone first, so the extra articles land where there is room.
+    const order = zones
+      .map((zone, index) => ({ zone, index }))
+      .sort((a, b) => b.zone.width * b.zone.height - a.zone.width * a.zone.height);
+
+    const shares = new Map<number, number>();
+    for (const { zone, index } of order) {
+      if (remaining <= 0) break;
+      const share = Math.min(remaining, Math.round((zone.width * zone.height / totalArea) * (maxSlots - zones.length)));
+      shares.set(index, share);
+      remaining -= share;
+    }
+    // Anything left over from rounding goes to the biggest zone.
+    if (remaining > 0 && order.length > 0) {
+      const first = order[0]!.index;
+      shares.set(first, (shares.get(first) ?? 0) + remaining);
+    }
+
+    const built: AdResidualSlot[] = [];
+    zones.forEach((zone, index) => {
+      const parts = guillotineSplit(zone, 1 + (shares.get(index) ?? 0), options);
+      for (const part of parts) built.push(makeSlot(part));
+    });
+    return built;
   }
 
   // ── Pass 2: Subdivide widest zones if capacity remains ───────────────────
@@ -681,10 +865,22 @@ export function buildAdResidualSlots(
       const allWideEnough = subRects.every((sub) => sub.width >= MIN_SUBDIV_COL_W);
       if (!allWideEnough) continue;
 
-      // Replace with subdivisions if they fit within maxSlots
+      // All of the subdivision, or none of it. Taking only the first few
+      // sub-rects left the rest of the zone covered by nothing at all -- the
+      // single-zone slot it replaced was already gone. Measured: two zones
+      // against a 4-article budget lost a 296x253pt block out of the middle
+      // of the page, 7.4% of the sheet, printing as one big white hole.
       const extraSlots = subRects.length - 1; // net new slots from subdivision
       if (slots.length + extraSlots > maxSlots) {
-        // Partial subdivision: take only as many sub-slots as budget allows
+        // Partial subdivision: take only as many sub-slots as budget allows.
+        //
+        // This leaves the rest of the zone covered by nothing -- the
+        // single-zone slot it replaces has already been removed -- and prints
+        // as a blank hole. The Advertisement Page never reaches this branch
+        // any more (its own exact-count pass runs earlier and tiles the zone
+        // completely), but PageAdvertisementPlacement still does, so the
+        // behaviour is left exactly as it was rather than changed underneath
+        // front/inside/editorial pages. Worth fixing there separately.
         const budget = maxSlots - slots.length + 1;
         slots.splice(existingIdx, 1, ...subRects.slice(0, budget).map(makeSlot));
       } else {

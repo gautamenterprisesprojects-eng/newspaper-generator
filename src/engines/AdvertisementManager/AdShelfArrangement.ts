@@ -341,6 +341,24 @@ function blankArea(placements: ShelfPlacement[], area: ShelfArea): number {
   return Math.max(0, area.width * area.height - coveredArea);
 }
 
+/** How many separate editorial zones an arrangement leaves behind. */
+function zoneCount(placements: ShelfPlacement[], area: ShelfArea): number {
+  return computeAdResidualRects(
+    placements.map((p) => ({
+      placedX: Math.floor(p.x),
+      placedY: Math.floor(p.y),
+      displayWidthPt: Math.ceil(p.widthPt),
+      displayHeightPt: Math.ceil(p.heightPt),
+      placed: true,
+    })),
+    area.x,
+    area.y,
+    area.width,
+    area.height,
+    { wideShortFillers: true },
+  ).length;
+}
+
 /**
  * Arranges unlocked ads into bottom-anchored, same-width vertical stacks.
  *
@@ -353,7 +371,28 @@ export function arrangeAdShelf(ads: ShelfAdInput[], area: ShelfArea): ShelfPlace
 
   const byHeightDesc = [...free].sort((a, b) => b.heightPt - a.heightPt);
 
-  let best: { placements: ShelfPlacement[]; blank: number } | null = null;
+  // Blank area decides; zone count breaks near-ties. Two arrangements that
+  // waste the same space are not equally good -- the one that leaves four
+  // little pockets forces four article boxes on a publisher who asked for two,
+  // which is its own complaint. Fewer, bigger zones also read better.
+  const TIE = 2000; // pt^2, about a fifth of a square inch
+  type Candidate = { placements: ShelfPlacement[]; blank: number; zones: number };
+  // Held in an object so assignments made inside `consider` are visible to
+  // the reader below -- a plain `let` gets narrowed to `null` by control-flow
+  // analysis, which cannot see across the closure.
+  const state: { best: Candidate | null } = { best: null };
+  const consider = (placements: ShelfPlacement[], blank: number) => {
+    if (!Number.isFinite(blank)) return;
+    const next: Candidate = { placements, blank, zones: zoneCount(placements, area) };
+    const current = state.best;
+    if (current === null || next.blank < current.blank - TIE) {
+      state.best = next;
+      return;
+    }
+    if (next.blank <= current.blank + TIE && next.zones < current.zones) {
+      state.best = next;
+    }
+  };
 
   // One candidate per stack count. Fewer stacks means taller stacks and a
   // wider leftover; more stacks means a shorter ad block but a narrower
@@ -380,26 +419,15 @@ export function arrangeAdShelf(ads: ShelfAdInput[], area: ShelfArea): ShelfPlace
     const placements = placeStacks(stacks, area);
     const blank = blankArea(placements, area);
 
-    // Strictly-better wins, so ties keep the earliest (fewest stacks =
-    // tallest, most newspaper-like ad column).
-    if (best === null || blank < best.blank - 0.5) {
-      best = { placements, blank };
-    }
+    consider(placements, blank);
   }
 
   // The previous row-based arrangement, scored on exactly the same terms.
   const rowPlacements = buildRowArrangement(free, area);
-  const rowBlank = blankArea(rowPlacements, area);
-  if (best === null || rowBlank < best.blank - 0.5) {
-    best = { placements: rowPlacements, blank: rowBlank };
-  }
+  consider(rowPlacements, blankArea(rowPlacements, area));
 
   // No candidate could be placed without overlap -- more ad inches than the
   // page can hold. Nothing here can fix that, so fall back to the old row
   // arrangement, which is what would have been produced before this change.
-  if (best === null || !Number.isFinite(best.blank)) {
-    return rowPlacements;
-  }
-
-  return best.placements;
+  return state.best === null ? rowPlacements : state.best.placements;
 }

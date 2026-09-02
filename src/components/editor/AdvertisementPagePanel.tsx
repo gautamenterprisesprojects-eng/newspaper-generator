@@ -1098,12 +1098,24 @@ export const AdvertisementPagePanel = memo(function AdvertisementPagePanel({
         COL_W,
         GUTTER,
         maxArticleSlots,
+        // Advertisement Page only: fold zones down to the article count, give
+        // every zone a slot, and split zones by an exact-count guillotine so
+        // the boxes cover the page completely and there are exactly as many
+        // of them as the publisher asked for.
+        { wideShortFillers: true },
       );
 
       const customLayoutSlots: any[] = [];
       let slotIndex = 1;
       for (const slot of adResidualSlots) {
-        if (customLayoutSlots.length >= manualArticleCount) break;
+        // Every slot is kept. buildAdResidualSlots already aims at
+        // manualArticleCount -- it folds zones together and splits them by an
+        // exact count to hit it -- so it only ever comes back with one more
+        // than asked when two zones are separated by an ad and genuinely
+        // cannot be merged. Dropping that slot here left its zone with no
+        // article behind it, which is the blank hole in the middle of the
+        // page. One extra article beats a hole, and `needed` below follows the
+        // slot count, so the extra one is actually fetched.
         customLayoutSlots.push({
           storyNumber: slotIndex,
           priority: slotIndex === 1 ? "lead" : "secondary",
