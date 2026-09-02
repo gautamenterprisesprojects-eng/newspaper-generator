@@ -2466,6 +2466,7 @@ type EditorActions = {
   cancelLiveMove: () => void;
   setSmartLayoutEnabled: (enabled: boolean) => void;
   setZoom: (zoom: number) => void;
+  setZoomLimits: (limits: { min: number; max: number }) => void;
   zoomIn: () => void;
   zoomOut: () => void;
 };
@@ -2491,11 +2492,25 @@ type EditorStore = {
   productionView: boolean;
   performanceProfilerEnabled: boolean;
   zoom: number;
+  zoomLimits: { min: number; max: number };
   smartLayout: {
     enabled: boolean;
   };
   liveResizePreviewDrawCommands: PreviewDrawCommand[];
 } & EditorActions;
+
+/**
+ * Desktop zoom range -- unchanged, and the default everywhere.
+ */
+export const ZOOM_LIMITS = { min: 0.35, max: 1.5 } as const;
+
+/**
+ * Phones only. A whole 13x21in page needs roughly 0.23 to fit a small
+ * handset, which the desktop floor of 0.35 cannot express. Applied by
+ * EditorCanvas via setZoomLimits when the viewport is compact, so desktop
+ * keeps exactly the range it always had.
+ */
+export const COMPACT_ZOOM_LIMITS = { min: 0.15, max: 2.4 } as const;
 
 const clampStoryPosition = (position: Point, size: Size): Point => ({
   x: clamp(position.x, CONTENT_BOUNDS.x, CONTENT_BOUNDS.x + CONTENT_BOUNDS.width - size.width),
@@ -2912,6 +2927,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
   liveResizePreviewDrawCommands: [],
   zoom: 0.45,
+  zoomLimits: ZOOM_LIMITS,
 
   selectFrame: (frameId, additive = false) =>
     set((state) => {
@@ -7520,18 +7536,34 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       },
     })),
 
+  // Bounds come from state, which is ZOOM_LIMITS (the original desktop range)
+  // unless a phone-sized viewport has widened them -- see setZoomLimits.
   setZoom: (zoom) =>
-    set({
-      zoom: clamp(Math.round(zoom * 100) / 100, 0.35, 1.5),
-    }),
+    set((state) => ({
+      zoom: clamp(Math.round(zoom * 100) / 100, state.zoomLimits.min, state.zoomLimits.max),
+    })),
+
+  setZoomLimits: (limits) =>
+    set((state) => ({
+      zoomLimits: limits,
+      zoom: clamp(state.zoom, limits.min, limits.max),
+    })),
 
   zoomIn: () =>
     set((state) => ({
-      zoom: clamp(Math.round((state.zoom + 0.1) * 100) / 100, 0.35, 1.5),
+      zoom: clamp(
+        Math.round((state.zoom + 0.1) * 100) / 100,
+        state.zoomLimits.min,
+        state.zoomLimits.max,
+      ),
     })),
 
   zoomOut: () =>
     set((state) => ({
-      zoom: clamp(Math.round((state.zoom - 0.1) * 100) / 100, 0.35, 1.5),
+      zoom: clamp(
+        Math.round((state.zoom - 0.1) * 100) / 100,
+        state.zoomLimits.min,
+        state.zoomLimits.max,
+      ),
     })),
 }));

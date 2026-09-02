@@ -3346,6 +3346,349 @@
   pointer-events: none;
 }
 
+/* ==========================================================================
+   Editor guided tour
+   Mounted only while active. The spotlight is one box-shadow cutout, and the
+   only looping animation uses transform/opacity so it stays inexpensive.
+   ========================================================================== */
+
+.editor-tour-controls {
+  position: fixed;
+  top: 10px;
+  right: 12px;
+  z-index: 95;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid rgba(17, 15, 12, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 253, 248, 0.92);
+  box-shadow: 0 10px 24px rgba(17, 15, 12, 0.16);
+  backdrop-filter: blur(10px);
+}
+
+.editor-tour-help {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(13, 95, 117, 0.3);
+  border-radius: 999px;
+  background: #fffdf8;
+  color: #0d5f75;
+  cursor: pointer;
+  font-size: 17px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.editor-tour-switch {
+  position: relative;
+  width: 46px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: #c9c2b6;
+  cursor: pointer;
+  transition: background-color 180ms ease;
+}
+
+.editor-tour-switch.is-on {
+  background: linear-gradient(135deg, #059669, #0d9488);
+}
+
+.editor-tour-switch span {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: #fffdf8;
+  box-shadow: 0 1px 4px rgba(17, 15, 12, 0.32);
+  transition: transform 220ms cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+.editor-tour-switch.is-on span {
+  transform: translateX(18px);
+}
+
+.editor-tour-root {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  pointer-events: none;
+}
+
+.editor-tour-spotlight {
+  position: fixed;
+  border-radius: 14px;
+  box-shadow: 0 0 0 9999px rgba(8, 13, 18, 0.72);
+  pointer-events: none;
+  transition: top 300ms cubic-bezier(0.2, 0.8, 0.3, 1),
+    left 300ms cubic-bezier(0.2, 0.8, 0.3, 1),
+    width 300ms cubic-bezier(0.2, 0.8, 0.3, 1),
+    height 300ms cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+.editor-tour-pulse {
+  position: fixed;
+  pointer-events: none;
+  border-radius: 14px;
+  box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.92);
+  animation: editor-tour-pulse 1.55s ease-in-out infinite;
+}
+
+@keyframes editor-tour-pulse {
+  0%,
+  100% {
+    opacity: 0.36;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.018);
+  }
+}
+
+.editor-tour-arrow {
+  position: fixed;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.editor-tour-arrow-line,
+.editor-tour-arrow-under,
+.editor-tour-arrow-head {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.editor-tour-arrow-under {
+  stroke: rgba(255, 253, 248, 0.3);
+  stroke-width: 7;
+}
+
+.editor-tour-arrow-line {
+  stroke: #fffdf8;
+  stroke-width: 2.6;
+  stroke-dasharray: 4 7;
+}
+
+.editor-tour-arrow-head {
+  stroke: #fffdf8;
+  stroke-width: 3;
+}
+
+.editor-tour-arrow-line,
+.editor-tour-arrow-head {
+  animation: editor-tour-draw 520ms ease-out both;
+}
+
+@keyframes editor-tour-draw {
+  from {
+    opacity: 0;
+    stroke-dashoffset: 260;
+  }
+  to {
+    opacity: 1;
+    stroke-dashoffset: 0;
+  }
+}
+
+.editor-tour-card {
+  position: fixed;
+  width: 340px;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 16px 18px 15px;
+  border: 1px solid rgba(13, 148, 136, 0.24);
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(255, 253, 248, 0.98), rgba(250, 247, 239, 0.98)),
+    radial-gradient(circle at 18px 18px, rgba(13, 148, 136, 0.12), transparent 34px);
+  box-shadow: 0 22px 58px -16px rgba(8, 13, 18, 0.62), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  animation: editor-tour-card-in 280ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+  pointer-events: auto;
+}
+
+@keyframes editor-tour-card-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0);
+  }
+}
+
+.editor-tour-card-head,
+.editor-tour-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.editor-tour-card-head span {
+  color: #0d9488;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+
+.editor-tour-card-head button {
+  border: 0;
+  background: transparent;
+  color: #766f64;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.editor-tour-card h3 {
+  margin: 10px 0 0;
+  color: #16130f;
+  font-size: 17px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.editor-tour-card p {
+  margin: 6px 0 0;
+  color: #5f584e;
+  font-size: 13.5px;
+  font-weight: 650;
+  line-height: 1.58;
+}
+
+.editor-tour-click-hint {
+  display: inline-flex;
+  margin-top: 12px;
+  max-width: 100%;
+  align-items: center;
+  gap: 7px;
+  border: 1px dashed rgba(13, 148, 136, 0.36);
+  border-radius: 8px;
+  background: rgba(236, 253, 245, 0.72);
+  color: #0f766e;
+  padding: 7px 9px;
+  font-size: 11.5px;
+  font-weight: 850;
+  line-height: 1.35;
+}
+
+.editor-tour-click-hint::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #10b981;
+  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.14);
+}
+
+.editor-tour-dots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.editor-tour-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #d4cec4;
+  transition: width 220ms ease, background-color 220ms ease;
+}
+
+.editor-tour-dots span.is-on {
+  width: 18px;
+  background: linear-gradient(135deg, #059669, #0d9488);
+}
+
+.editor-tour-actions {
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
+.editor-tour-actions button {
+  min-height: 38px;
+  padding: 0 15px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.editor-tour-actions .ghost {
+  border: 1px solid rgba(17, 15, 12, 0.16);
+  background: #fffdf8;
+  color: #3f3931;
+}
+
+.editor-tour-actions .primary {
+  border: 0;
+  background: linear-gradient(135deg, #059669, #0d9488);
+  color: #fff;
+  box-shadow: 0 8px 20px -8px rgba(5, 150, 105, 0.65);
+}
+
+@media (max-width: 640px) {
+  .editor-tour-controls {
+    top: max(10px, env(safe-area-inset-top, 0px));
+    right: 10px;
+  }
+
+  .editor-tour-card {
+    left: 12px !important;
+    right: 12px;
+    width: auto;
+    max-width: none;
+    max-height: min(420px, calc(100dvh - 24px));
+  }
+
+  .editor-tour-card h3 {
+    font-size: 15.5px;
+  }
+
+  .editor-tour-card p {
+    font-size: 12.8px;
+    line-height: 1.52;
+  }
+
+  .editor-tour-click-hint {
+    font-size: 11px;
+    padding: 6px 8px;
+  }
+
+  .editor-tour-actions button {
+    min-height: 36px;
+    padding: 0 13px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .editor-tour-switch,
+  .editor-tour-switch span,
+  .editor-tour-spotlight,
+  .editor-tour-dots span {
+    transition: none;
+  }
+
+  .editor-tour-pulse,
+  .editor-tour-arrow-line,
+  .editor-tour-arrow-head,
+  .editor-tour-card {
+    animation: none;
+  }
+}
+
 .generation-wizard-backdrop {
   position: fixed;
   inset: 0;
@@ -3416,6 +3759,12 @@
   background: rgba(255, 253, 248, 0.08);
   color: #fffdf8;
   cursor: pointer;
+}
+
+.generation-wizard-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .generation-wizard-steps {
@@ -6828,4 +7177,540 @@
   font-size: 12px;
   color: #c62828;
   font-weight: 600;
+}
+
+/* ==========================================================================
+   Native-shell behaviour (WebView app)
+   The portal launches this editor inside the same wrapped WebView, so the
+   same rules apply here: no pinch zoom of the *document* (the canvas has its
+   own pinch-to-zoom), no rubber-band overscroll, no tap flash, no accidental
+   text selection while dragging a box around the page.
+   ========================================================================== */
+
+/* Touch devices only -- on a desktop these would change trackpad scroll
+   chaining and double-tap behaviour for no benefit. */
+@media (hover: none) and (pointer: coarse) {
+  .app-shell {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  html,
+  body {
+    overscroll-behavior: none;
+  }
+
+  .app-shell {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  input,
+  textarea,
+  select,
+  [contenteditable="true"],
+  .selectable {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  /* Under 16px, iOS zooms the viewport on focus and never returns. */
+  input,
+  textarea,
+  select {
+    font-size: max(16px, 1rem);
+  }
+}
+
+.pt-safe-editor {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.pb-safe-editor {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Touch only -- desktop keeps its existing hover/active styling. */
+@media (hover: none) and (pointer: coarse) {
+  .tap {
+    transition: transform 140ms cubic-bezier(0.2, 0.8, 0.3, 1), opacity 140ms ease;
+  }
+
+  .tap:active {
+    transform: scale(0.97);
+    opacity: 0.9;
+  }
+}
+
+/* The Konva stage owns its gestures completely: the browser must not try to
+   scroll, zoom or text-select while a finger is on the page canvas. */
+.canvas-touch-surface {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Editor panels become swipe-up sheets on phones. */
+@keyframes editor-sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.animate-editor-sheet-in {
+  animation: editor-sheet-in 300ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-editor-sheet-in,
+  .tap {
+    animation: none;
+    transition: none;
+  }
+}
+
+/* ==========================================================================
+   Generation wizard on phones
+   The wizard is a centred 860px dialog on desktop. At 390px that same panel
+   becomes a cramped box with 3 layout cards squeezed to ~110px each, which
+   is below the size where the layout thumbnails are actually readable --
+   and the thumbnail IS the choice being made here. On phones it becomes a
+   full-height sheet with 2 columns and a pinned action bar.
+   ========================================================================== */
+
+@media (max-width: 720px) {
+  .generation-wizard-panel {
+    width: 100vw;
+    max-width: 100vw;
+    max-height: 100dvh;
+    height: 100dvh;
+    border: 0;
+    border-radius: 0;
+    animation: editor-sheet-in 300ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  .generation-wizard-header {
+    padding: 14px 16px;
+    padding-top: calc(14px + env(safe-area-inset-top, 0px));
+  }
+
+  .generation-wizard-header button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .generation-wizard-screen {
+    padding: 16px;
+  }
+
+  /* Two per row: big enough for the layout thumbnail to be legible, which
+     three across at this width is not. */
+  .generation-layout-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .layout-preview-select-btn,
+  .layout-category-tab {
+    min-height: 44px;
+  }
+
+  .layout-category-tabs {
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .layout-category-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* The action bar is the thing users are reaching for after scrolling a
+     long catalogue; pin it instead of making them scroll back. */
+  /* Pinned action bar. The horizontal -16px cancels the screen's own padding
+     so the bar runs edge to edge; there is deliberately NO negative bottom
+     margin -- sticky pins the element's *margin* box, so a -16px bottom
+     margin lifts the painted box 16px clear of the scrollport and the list
+     shows through underneath it. The screen's bottom padding is absorbed into
+     this bar's own padding instead. */
+  .generation-wizard-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    margin: 0 -16px 0;
+    padding: 12px 16px;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid rgba(25, 23, 20, 0.14);
+    background: #fffdf8;
+  }
+
+  /* With the bar flush to the scrollport, the container's own bottom padding
+     would leave a cream strip after the last row; the bar supplies that
+     breathing room itself. */
+  .generation-wizard-screen {
+    padding-bottom: 0;
+  }
+
+  .generation-wizard-actions button {
+    min-height: 48px;
+    font-size: 15px;
+  }
+
+  .generation-wizard-tabs {
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .generation-wizard-tabs::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Very narrow phones: one layout card per row rather than two cramped ones. */
+@media (max-width: 400px) {
+  .generation-layout-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ==========================================================================
+   Editor workspace on phones
+   The workspace is built from fixed side docks -- 292px left, 320px right --
+   flanking the canvas. On a 390px screen those two alone exceed the viewport,
+   so the canvas would have nothing left. On phones each dock instead becomes
+   a bottom sheet over a full-width canvas: the page itself is the thing worth
+   the screen, and a panel is a thing you open, act on, and dismiss.
+   ========================================================================== */
+
+@media (max-width: 860px) {
+  .workspace-dock-left,
+  .workspace-dock-right {
+    inset: auto 0 0 0;
+    width: 100%;
+    max-height: 72dvh;
+    border: 0;
+    border-top: 1px solid rgba(25, 23, 20, 0.18);
+    border-radius: 14px 14px 0 0;
+    box-shadow: 0 -10px 34px rgba(25, 23, 20, 0.24);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    animation: editor-sheet-in 300ms cubic-bezier(0.32, 0.72, 0, 1);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .workspace-dock-bottom {
+    inset: auto 0 0 0;
+    max-height: 52dvh;
+    border-radius: 14px 14px 0 0;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    animation: editor-sheet-in 300ms cubic-bezier(0.32, 0.72, 0, 1);
+    overscroll-behavior: contain;
+  }
+
+  /* Collapsed docks are launcher chips; keep them clear of the canvas edges
+     and above the home indicator. */
+  .workspace-dock-left.collapsed {
+    inset: auto auto calc(12px + env(safe-area-inset-bottom, 0px)) 10px;
+  }
+
+  .workspace-dock-right.collapsed {
+    inset: auto 10px calc(12px + env(safe-area-inset-bottom, 0px)) auto;
+  }
+
+  .workspace-dock-bottom.collapsed {
+    inset: auto auto calc(12px + env(safe-area-inset-bottom, 0px)) 50%;
+    transform: translateX(-50%);
+  }
+
+  .workspace-dock.collapsed {
+    animation: none;
+  }
+
+  /* Toolbars hold more controls than fit a phone; scroll them sideways
+     rather than wrapping into a wall that eats the canvas. */
+  .workspace-toolbar {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    padding-top: calc(6px + env(safe-area-inset-top, 0px));
+  }
+
+  .workspace-toolbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .workspace-toolbar select,
+  .workspace-toolbar button {
+    min-height: 40px;
+    flex-shrink: 0;
+  }
+}
+
+/* Konva's own generated stage container. touch-action: none hands every
+   gesture to the pinch/pan handlers on the Stage -- without it the browser
+   claims the drag first and the page scrolls instead of panning. Touch
+   devices only; desktop mouse handling is left exactly as it was. */
+@media (hover: none) and (pointer: coarse) {
+  .konvajs-content {
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
+
+/* ==========================================================================
+   Publisher editor shell on phones
+   Desktop lays this out as a fixed 25vw / 60vw / 15vw grid over a
+   full-viewport canvas. At 390px those columns become 97px and 58px, which
+   clips both the layout panel and the action rail (the buttons literally run
+   off the screen edge). The canvas Stage is already full-viewport and the
+   shell is a pointer-events:none overlay on top of it, so phones keep the
+   canvas full-bleed and float the two panels over its lower half instead --
+   the page stays the biggest thing on screen, and pinch/pan (see the touch
+   handlers in EditorCanvas) is what makes that workable.
+   ========================================================================== */
+
+@media (max-width: 860px) {
+  .publisher-focused-shell {
+    display: block;
+    grid-template-columns: none;
+  }
+
+  .publisher-focused-center {
+    display: none;
+  }
+
+  /* Live page layout: a sheet over the bottom of the canvas, above the
+     action bar. Capped so the page itself keeps the upper half. */
+  .publisher-focused-left {
+    position: fixed;
+    inset: auto 0 calc(72px + env(safe-area-inset-bottom, 0px)) 0;
+    height: auto;
+    max-height: 34dvh;
+    border-right: 0;
+    border-top: 1px solid rgba(25, 23, 20, 0.18);
+    border-radius: 14px 14px 0 0;
+    box-shadow: 0 -10px 30px rgba(25, 23, 20, 0.2);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  /* The five page actions form the bottom bar. A scrolling row was wrong
+     here: actions that sit off the edge read as cropped, and a primary
+     control you have to discover by swiping is a hidden control. Five equal
+     grid tracks instead, so every action is always fully on screen at any
+     width -- the labels stack under their icons and wrap rather than the
+     button growing past its share. */
+  .publisher-focused-actions {
+    position: fixed;
+    inset: auto 0 0 0;
+    height: auto;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
+    align-items: stretch;
+    padding: 6px 8px;
+    padding-bottom: max(6px, env(safe-area-inset-bottom, 0px));
+    overflow: visible;
+    border-top: 1px solid rgba(25, 23, 20, 0.18);
+    background: #ede8dd;
+  }
+
+  .publisher-action-button {
+    /* min-width:0 is what actually lets a grid item shrink below its
+       content width; without it the long labels would push the track wide
+       again and the last button would clip off the right edge. */
+    min-width: 0;
+    width: 100%;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+    min-height: 60px;
+    padding: 7px 3px;
+    border-radius: 9px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: center;
+    font-size: 10.5px;
+    line-height: 1.15;
+    box-shadow: 0 4px 10px rgba(25, 23, 20, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+    /* The staggered entrance reads as sluggish when these are the primary
+       controls sitting under the user's thumb. Cancelling it means also
+       restoring opacity/transform by hand: the base rule starts them at
+       opacity 0 and lets the animation's forwards fill reveal them, so
+       animation:none alone leaves an invisible bar. */
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  .publisher-action-button > span {
+    font-size: 10.5px;
+    line-height: 1.15;
+  }
+
+  .publisher-action-button > svg {
+    width: 17px;
+    height: 17px;
+  }
+}
+
+/* ==========================================================================
+   Live-layout sheet handle (phones)
+   The layout picker and the page preview compete for one small screen. The
+   sheet therefore has two sizes -- a peek strip showing the first row of
+   boxes, and an expanded state for picking from the whole page -- and the
+   handle toggles which of the two gets the room. Hidden entirely on desktop,
+   where the panel is a permanent left column and there is nothing to trade.
+   ========================================================================== */
+
+.layout-sheet-handle {
+  display: none;
+}
+
+@media (max-width: 860px) {
+  .layout-sheet-handle {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    width: 100%;
+    padding: 8px 14px 10px;
+    border: 0;
+    border-bottom: 1px solid rgba(25, 23, 20, 0.12);
+    border-radius: 14px 14px 0 0;
+    background: #ede8dd;
+    cursor: pointer;
+    /* The whole strip is the target, so it never needs a precise tap. */
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .layout-sheet-grabber {
+    width: 40px;
+    height: 5px;
+    margin: 0 auto;
+    border-radius: 999px;
+    background: rgba(25, 23, 20, 0.26);
+  }
+
+  .layout-sheet-handle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .layout-sheet-handle-text {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 1px;
+    text-align: left;
+  }
+
+  .layout-sheet-handle-label {
+    font-family: "Cliff Noto Sans Devanagari", system-ui, sans-serif;
+    font-size: 15px;
+    font-weight: 900;
+    color: #191714;
+  }
+
+  /* Says what the sheet is for. Without it the box map reads as a picture of
+     the page rather than something you are meant to tap. */
+  .layout-sheet-handle-sub {
+    font-family: "Cliff Noto Sans Devanagari", system-ui, sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    color: #6d675d;
+  }
+
+  .layout-sheet-handle-hint {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 4px;
+    font-family: "Cliff Noto Sans Devanagari", system-ui, sans-serif;
+    font-size: 12px;
+    font-weight: 800;
+    color: #0d5f75;
+  }
+
+  .layout-sheet-chevron {
+    width: 18px;
+    height: 18px;
+    /* Base art points up (collapsed = tap to grow upward); the expanded
+       state flips it to point down toward where the sheet will go. */
+    transition: transform 320ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  .publisher-focused-left.sheet-expanded .layout-sheet-chevron {
+    transform: rotate(180deg);
+  }
+
+  /* Animating max-height keeps the page canvas behind it continuously
+     visible as the sheet grows, rather than snapping between two layouts. */
+  .publisher-focused-left {
+    transition: max-height 320ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  /* Peek: the handle plus a sliver of the map, enough to signal what the
+     sheet is without taking room from the page. Kept in step with
+     MOBILE_SHEET_COLLAPSED_RATIO in EditorCanvas.tsx, which reserves exactly
+     this much when working out where the page fits. */
+  .publisher-focused-left.sheet-collapsed {
+    max-height: 17dvh;
+  }
+
+  .publisher-focused-left.sheet-expanded {
+    max-height: 66dvh;
+  }
+
+  /* The help paragraph is orientation for a first-time user and pure noise
+     once the sheet is collapsed to a strip. */
+  .publisher-focused-left.sheet-collapsed .live-layout-help p {
+    display: none;
+  }
+
+  /* The panel prints its own heading, which the handle now states. */
+  .publisher-focused-left .live-layout-help strong {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .publisher-focused-left {
+    transition: none;
+  }
+}
+
+@media (max-width: 860px) {
+  /* The desktop rule sizes this map to min(68vh, 610px) for a tall left
+     column. Inside the phone sheet that makes the map taller than the sheet
+     itself, so box 1 fills the view and every other box sits below the fold
+     -- the opposite of what a page-box picker is for. Height-driven with the
+     page's own proportions instead, so the whole map is visible at once. */
+  .publisher-focused-left .live-layout-map {
+    min-height: 0;
+    height: min(42dvh, 340px);
+    max-height: none;
+    width: auto;
+    aspect-ratio: 1 / 1.45;
+    margin: 0 auto;
+    border-width: 6px;
+  }
+
+  /* Box numbers stay legible at the smaller map size. */
+  .publisher-focused-left .live-layout-map button {
+    font-size: 13px;
+    font-weight: 800;
+  }
 }
