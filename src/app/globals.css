@@ -4196,6 +4196,26 @@
   opacity: 0.68;
 }
 
+/* Spinner for the wizard action that builds the page. Sized to the action
+   button's 36px height and drawn in the primary button's own foreground
+   colour, since that is the only button it appears on. */
+.generation-wizard-button-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 6px;
+  border: 2px solid rgba(255, 253, 248, 0.35);
+  border-top-color: #fffdf8;
+  border-radius: 999px;
+  animation: publisher-button-spin 750ms linear infinite;
+  vertical-align: -1px;
+}
+
+.generation-wizard-actions button:disabled .generation-wizard-button-spinner {
+  /* The button dims while it works; the spinner must stay legible. */
+  opacity: 1;
+}
+
 .generation-wizard-error {
   margin: 0;
   border: 1px solid rgba(180, 35, 24, 0.18);
@@ -4304,6 +4324,22 @@
   .generation-style-grid,
   .generation-category-grid {
     grid-template-columns: 1fr;
+  }
+
+  /* The language options are three short words, so stacking them one per row
+     (which the rule above does, since they share the category grid's class)
+     pushed the whole choice off the bottom of a phone screen -- only "हिंदी"
+     was visible. Three across fits comfortably even at 390px. */
+  .generation-language-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .generation-language-grid button {
+    padding-left: 4px;
+    padding-right: 4px;
+    font-size: 13px;
+    white-space: nowrap;
   }
 
   .generation-wizard-actions {

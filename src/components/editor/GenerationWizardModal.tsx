@@ -2049,7 +2049,7 @@ function CategoryScreen({
       <div style={{ fontWeight: 600, fontSize: 12, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.03em" }}>
         पन्ने की भाषा
       </div>
-        <div className="generation-category-grid" data-tour="editor-news-language" style={{ marginBottom: 14 }}>
+        <div className="generation-category-grid generation-language-grid" data-tour="editor-news-language" style={{ marginBottom: 14 }}>
         {PAGE_LANGUAGE_OPTIONS.map((option) => (
           <button
             key={option.value}
@@ -2090,7 +2090,7 @@ function CategoryScreen({
         </button>
         <button
           type="button"
-          className="primary"
+          className="secondary"
           data-tour="editor-load-news"
           disabled={state.languageMode !== "hindi"}
           onClick={onLoadPreloaded}
@@ -2102,13 +2102,23 @@ function CategoryScreen({
         >
           {state.languageMode === "hindi" ? "तैयार खबरें लोड करें" : "सिर्फ़ हिंदी में तैयार"}
         </button>
+        {/* The page-building action is the primary one -- "तैयार खबरें" is a
+            test shortcut and should not be the button that looks like the
+            thing to press. */}
         <button
           type="button"
-          className="secondary"
+          className="primary"
           disabled={state.loading}
           onClick={onLoadLive}
         >
-          {state.loading ? "लोड हो रहा है..." : "पन्ना बनाएं"}
+          {state.loading ? (
+            <>
+              <span className="generation-wizard-button-spinner" aria-hidden="true" />
+              पन्ना बन रहा है...
+            </>
+          ) : (
+            "पन्ना बनाएं"
+          )}
         </button>
       </div>
     </div>
