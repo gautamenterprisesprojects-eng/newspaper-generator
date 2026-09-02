@@ -1088,6 +1088,16 @@ const getCaptionCreditText = (caption: ArticleData["caption"]) => {
   return [caption.photographer, caption.agency].filter(Boolean).join(" | ");
 };
 
+/**
+ * Smallest size a photo caption may be set at, in points.
+ *
+ * 5.5pt is agate -- the size newspapers use for classifieds and results
+ * tables, and the accepted floor for readable print. Below the fitter stops
+ * shrinking and starts dropping words instead, which is worse: a caption
+ * that reads small is still a caption, one missing its last clause is wrong.
+ */
+const CAPTION_MIN_FONT_SIZE = 5.5;
+
 const createCaptionLayout = ({
   caption,
   image,
@@ -1209,7 +1219,11 @@ const createCaptionLayout = ({
             Math.ceil((isBottomOverlayPosition ? 4.6 : captionBaseStyle.fontSize) * 1.08),
         ),
         1,
-        isSideOverlayPosition ? 7 : 3,
+        // Two rows maximum, the same as a caption below the image. A caption
+        // over the foot of a photo was allowed three, which is where the
+        // three-line captions on the reported page came from. The side rail
+        // is genuinely a vertical strip and keeps its own allowance.
+        isSideOverlayPosition ? 7 : 2,
       )
     : 2;
 
@@ -1259,7 +1273,7 @@ const createCaptionLayout = ({
     for (const scale of [0.96, 0.93, 0.9, 0.87, 0.84, 0.8, 0.76]) {
       const oneLineStyle = {
         ...baseStyle,
-        fontSize: Math.max(baseStyle.fontSize * scale, 6.8),
+        fontSize: Math.max(baseStyle.fontSize * scale, CAPTION_MIN_FONT_SIZE),
       };
       const oneLineMetrics = measure(contentStr, oneLineStyle);
 
@@ -1282,10 +1296,27 @@ const createCaptionLayout = ({
       };
     }
 
-    for (const scale of [0.95, 0.9, 0.85, 0.8, 0.76, 0.72, 0.66, 0.6, 0.54, 0.48]) {
+    // Step down in 0.25pt increments to the floor rather than through a
+    // handful of coarse scales, and take the FIRST size that fits -- which is
+    // the largest one that does. The old ladder jumped 0.95 -> 0.9 -> 0.85,
+    // so a caption needing 8.7pt was set at 8.55, and one needing anything
+    // below the last rung fell straight through to the word-dropping
+    // fallback even though a slightly smaller size would have held it.
+    //
+    // The floor is 5.5pt (agate, the smallest size newspapers set) instead of
+    // 6.8. Measured against the four captions on the reported page: at the
+    // 6.8 floor every one of them lost words to the ellipsis fallback on a
+    // one-column image, because 6.8 was as small as the fitter could go and
+    // it still did not fit.
+    const captionFloor = isOverlayPosition ? 4.6 : CAPTION_MIN_FONT_SIZE;
+    for (
+      let candidate = baseStyle.fontSize - 0.25;
+      candidate >= captionFloor - 0.001;
+      candidate -= 0.25
+    ) {
       currentStyle = {
         ...baseStyle,
-        fontSize: Math.max(baseStyle.fontSize * scale, isOverlayPosition ? 4.6 : 6.8),
+        fontSize: Math.max(candidate, captionFloor),
         lineHeight: isOverlayPosition ? 1.02 : 1.08,
       };
       metrics = measure(contentStr, currentStyle);
@@ -1302,7 +1333,7 @@ const createCaptionLayout = ({
 
     currentStyle = {
       ...baseStyle,
-      fontSize: isOverlayPosition ? 4.6 : 6.8,
+      fontSize: isOverlayPosition ? 4.6 : CAPTION_MIN_FONT_SIZE,
       lineHeight: isOverlayPosition ? 1 : 1.04,
     };
     metrics = measure(contentStr, currentStyle);
