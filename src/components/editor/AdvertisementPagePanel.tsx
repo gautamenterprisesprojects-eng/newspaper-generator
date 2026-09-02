@@ -362,6 +362,7 @@ function computeRemainingRects(
 // ─── Ad Card ──────────────────────────────────────────────────────────────────
 
 const PT_PER_INCH = 72;
+const PT_PER_CM = 72 / 2.54; // 28.3465
 
 // Redesigned as fully inline-styled markup -- no globals.css classes at all
 // for this card, so there is zero dependency on external stylesheet cascade,
@@ -422,34 +423,42 @@ const AdCard = memo(function AdCard({
   // hidden behind an extra click. Kept in sync with ad.displayWidthPt/
   // displayHeightPt exactly the way AdEditWindow's own pt/cm/inch fields
   // are, including the same aspect-lock behavior.
-  const [widthInStr, setWidthInStr] = useState((ad.displayWidthPt / PT_PER_INCH).toFixed(2));
-  const [heightInStr, setHeightInStr] = useState((ad.displayHeightPt / PT_PER_INCH).toFixed(2));
+  const [widthCmStr, setWidthCmStr] = useState((ad.displayWidthPt / PT_PER_CM).toFixed(2));
+  const [heightCmStr, setHeightCmStr] = useState((ad.displayHeightPt / PT_PER_CM).toFixed(2));
   useEffect(() => {
-    setWidthInStr((ad.displayWidthPt / PT_PER_INCH).toFixed(2));
-    setHeightInStr((ad.displayHeightPt / PT_PER_INCH).toFixed(2));
+    setWidthCmStr((ad.displayWidthPt / PT_PER_CM).toFixed(2));
+    setHeightCmStr((ad.displayHeightPt / PT_PER_CM).toFixed(2));
   }, [ad.displayWidthPt, ad.displayHeightPt]);
   const aspectRatio = ad.originalWidth / Math.max(1, ad.originalHeight);
 
-  const handleWidthInInput = (valStr: string) => {
-    setWidthInStr(valStr);
-    const inches = Number(valStr);
-    if (isNaN(inches) || inches <= 0) return;
-    const widthPt = Math.max(10, Math.round(inches * PT_PER_INCH));
+  // An ad can never be usefully bigger than the printable area -- a size past
+  // it cannot be placed, and the arrangement then has to clamp and overlap it.
+  // A stray keystroke in these fields (a missing decimal point turns 5.47 into
+  // 547) was enough to produce one, so the size is held inside the page here
+  // rather than left to the placement engine to cope with.
+  const clampWidthPt = (pt: number) => Math.min(CONTENT_W, Math.max(10, Math.round(pt)));
+  const clampHeightPt = (pt: number) => Math.min(CONTENT_H, Math.max(10, Math.round(pt)));
+
+  const handleWidthCmInput = (valStr: string) => {
+    setWidthCmStr(valStr);
+    const cm = Number(valStr);
+    if (isNaN(cm) || cm <= 0) return;
+    const widthPt = clampWidthPt(cm * PT_PER_CM);
     const patch: Partial<AdItem> = { displayWidthPt: widthPt };
     if (ad.aspectLocked) {
-      patch.displayHeightPt = Math.max(10, Math.round(widthPt / aspectRatio));
+      patch.displayHeightPt = clampHeightPt(widthPt / aspectRatio);
     }
     onUpdate(ad.id, patch);
   };
 
-  const handleHeightInInput = (valStr: string) => {
-    setHeightInStr(valStr);
-    const inches = Number(valStr);
-    if (isNaN(inches) || inches <= 0) return;
-    const heightPt = Math.max(10, Math.round(inches * PT_PER_INCH));
+  const handleHeightCmInput = (valStr: string) => {
+    setHeightCmStr(valStr);
+    const cm = Number(valStr);
+    if (isNaN(cm) || cm <= 0) return;
+    const heightPt = clampHeightPt(cm * PT_PER_CM);
     const patch: Partial<AdItem> = { displayHeightPt: heightPt };
     if (ad.aspectLocked) {
-      patch.displayWidthPt = Math.max(10, Math.round(heightPt * aspectRatio));
+      patch.displayWidthPt = clampWidthPt(heightPt * aspectRatio);
     }
     onUpdate(ad.id, patch);
   };
@@ -495,25 +504,27 @@ const AdCard = memo(function AdCard({
       </div>
       <div style={{ display: "flex", gap: 6, alignItems: "center", padding: "4px 8px" }}>
         <label style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11 }}>
-          चौड़ाई (इंच)
+          चौड़ाई (सेमी)
           <input
             type="number"
-            step="0.01"
-            min="0.1"
-            value={widthInStr}
-            onChange={(e) => handleWidthInInput(e.target.value)}
-            style={{ width: 48 }}
+            step="0.1"
+            min="0.3"
+            max={(CONTENT_W / PT_PER_CM).toFixed(1)}
+            value={widthCmStr}
+            onChange={(e) => handleWidthCmInput(e.target.value)}
+            style={{ width: 52 }}
           />
         </label>
         <label style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11 }}>
-          ऊँचाई (इंच)
+          ऊँचाई (सेमी)
           <input
             type="number"
-            step="0.01"
-            min="0.1"
-            value={heightInStr}
-            onChange={(e) => handleHeightInInput(e.target.value)}
-            style={{ width: 48 }}
+            step="0.1"
+            min="0.3"
+            max={(CONTENT_H / PT_PER_CM).toFixed(1)}
+            value={heightCmStr}
+            onChange={(e) => handleHeightCmInput(e.target.value)}
+            style={{ width: 52 }}
           />
         </label>
       </div>
