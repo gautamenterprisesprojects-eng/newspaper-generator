@@ -3899,6 +3899,28 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         const verySmallImageRoll =
           hashStringToInt(`${item?.id ?? "no-item"}-${storyNumberOffset + slot.storyNumber}-image-roll`) % 100;
         const verySmallImageDenied = slot.priority === "brief" && verySmallImageRoll >= 20;
+        // Advertisement Page only: a shallow box carries no photo.
+        //
+        // The ad page's article boxes are cut from whatever the ads leave, so
+        // a box can come out very wide and not very deep -- nothing like the
+        // proportions a template slot is designed around. Once the headline,
+        // byline and caption have taken their share of a box that shallow,
+        // what is left for the photo is a long thin letterbox, and a news
+        // photo (usually a portrait) dropped into it reads as stretched.
+        // Reported from a real page: a full-width box roughly 4in deep whose
+        // photo band came out over five times wider than it was tall.
+        //
+        // Text-only is the right answer for those boxes -- a wide shallow
+        // run of type is ordinary newspaper furniture, a smeared face is not.
+        // Gated on the slot's own isAdResidualSpace marker, so no template
+        // layout on any other page kind is affected.
+        const AD_RESIDUAL_MIN_IMAGE_BOX_HEIGHT = 288; // 4in
+        // isAdvertisementPageSlot, not isAdResidualSpace: the latter is also
+        // stamped by PageAdvertisementPlacement for ads embedded in front,
+        // inside and editorial pages, and those are deliberately untouched.
+        const isAdvertisementPageSlot = Boolean((slot as any).isAdvertisementPageSlot);
+        const adResidualShallowBoxImageDenied =
+          isAdvertisementPageSlot && (slot.height ?? 0) < AD_RESIDUAL_MIN_IMAGE_BOX_HEIGHT;
         // Publisher-exclusive: Youth UPDATE's own "SHORT NEWS" rail (story 3)
         // always carries its fixed section banner -- drawn as a hardcoded
         // overlay (see youthUpdateEditorialRailBox's own pattern in
@@ -3941,6 +3963,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           ? true
           : priorityForbidsImage ||
             verySmallImageDenied ||
+            adResidualShallowBoxImageDenied ||
             youthUpdateInsideCompactSlot ||
             isEightColumnTwoColumnSlot ||
             isCliffInsideSixColumnTwoColumnSlot

@@ -1129,6 +1129,12 @@ export const AdvertisementPagePanel = memo(function AdvertisementPagePanel({
           // Pass fluid metadata so downstream story frames can apply correct text columns
           internalTextColumns: slot.internalTextColumns,
           isAdResidualSpace: slot.isAdResidualSpace,
+          // Set ONLY here, by the dedicated Advertisement Page tab.
+          // isAdResidualSpace alone is not specific enough to gate on --
+          // PageAdvertisementPlacement stamps that too, for ads embedded in
+          // front/inside/editorial pages, so anything keyed on it would
+          // change those pages as well.
+          isAdvertisementPageSlot: true,
         });
         slotIndex++;
       }
