@@ -71,12 +71,36 @@ const REQUIRED_FONT_DEFINITIONS = NEWSPAPER_FONT_DEFINITIONS.filter(
 const toFontCheckString = (font: NewspaperFontDefinition) =>
   `${font.style} ${font.weight} 16px "${font.family}"`;
 
-const getBrowserFontEntries = () => {
-  if (typeof document === "undefined" || !document.fonts?.entries) {
+const getBrowserFontEntries = (): FontFace[] => {
+  if (typeof document === "undefined" || !document.fonts) {
     return [];
   }
 
-  return Array.from(document.fonts.entries()).map(([font]) => font);
+  // FontFaceSet is Set-like, and the engines disagree about what entries()
+  // yields: Chromium gives [key, value] pairs, WebKit gives the FontFace
+  // itself. So `.map(([font]) => font)` -- destructuring the pair -- threw
+  // "TypeError: {} is not iterable" on WebKit. Verified against real WebKit:
+  // entries()[0] is [object FontFace], Array.isArray false, not iterable.
+  //
+  // That mattered far out of proportion to its size. This runs from
+  // createInitialFontManagerState, which is a useState initialiser in
+  // EditorCanvas, so it threw during the editor's very first render and took
+  // the whole page down -- Safari showed its "This page couldn't load"
+  // process-crash screen. Chrome on iOS is WebKit too, which is why both iOS
+  // browsers failed while Android was fine.
+  //
+  // forEach is on FontFaceSet in both engines and hands back the FontFace
+  // directly, with no pair shape to disagree about.
+  const fonts: FontFace[] = [];
+  try {
+    document.fonts.forEach((font) => {
+      if (font) fonts.push(font);
+    });
+  } catch {
+    return [];
+  }
+
+  return fonts;
 };
 
 export const getNewspaperFontStack = (role: NewspaperFontRole) =>
@@ -101,7 +125,7 @@ const getFontStatus = (font: NewspaperFontDefinition) => {
     // ignore
   }
 
-  if (!document.fonts.entries) {
+  if (typeof document.fonts.forEach !== "function") {
     return false;
   }
 
