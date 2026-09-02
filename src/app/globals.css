@@ -4342,6 +4342,7 @@
     white-space: nowrap;
   }
 
+
   .generation-wizard-actions {
     flex-wrap: wrap;
   }
@@ -7320,6 +7321,63 @@
    ========================================================================== */
 
 @media (max-width: 720px) {
+  /* The manual "replace this article" popup, on phones.
+     
+     Two things clipped it. The backdrop centres its child with
+     align-items:center, and a flex item taller than its container overflows
+     EQUALLY in both directions -- the part above the top edge cannot be
+     scrolled to, which is why the form appeared cut off at the top with
+     HEADLINE half visible. And the backdrop's height came from inset:0,
+     which on iOS resolves against the large viewport (URL bar hidden), so
+     the foot of the popup sat under Safari's toolbar.
+     
+     margin:auto on the child centres it when it fits and still lets the
+     backdrop scroll to the very top when it does not -- the standard fix for
+     that flexbox overflow. 100dvh tracks the visible viewport as the URL bar
+     shows and hides, and the safe-area insets keep it clear of the notch and
+     the home indicator. */
+  .manual-box-popup-backdrop {
+    /* Above the floating tour controls (z-index 95) and the bottom action
+       bar. This is a modal: while it is open nothing else may sit on top of
+       it, and the tour toggle was covering its own Clear button. */
+    z-index: 120;
+    height: 100vh;
+    height: 100dvh;
+    align-items: flex-start;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding:
+      calc(env(safe-area-inset-top, 0px) + 12px)
+      calc(env(safe-area-inset-right, 0px) + 12px)
+      calc(env(safe-area-inset-bottom, 0px) + 12px)
+      calc(env(safe-area-inset-left, 0px) + 12px);
+  }
+
+  .manual-box-popup {
+    width: 100%;
+    max-height: none;
+    margin: auto;
+  }
+
+  /* Raising the popup's own z-index is not enough to get it on top, because
+     it is trapped: it renders inside .publisher-focused-left, and a
+     position:fixed element always starts a stacking context, so the popup's
+     z-index only competes with its siblings inside that box. Measured on the
+     live page -- the floating tour controls are z:95 and sit OUTSIDE the
+     shell (z:24), and the bottom action bar is a later sibling of the
+     popup's own parent, so both painted over the form.
+     
+     :has() lifts the two ancestors only while the popup is actually mounted,
+     so the shell clears the tour controls and the popup's parent clears the
+     action bar, and everything returns to normal the moment it closes. */
+  .publisher-focused-shell:has(.manual-box-popup-backdrop) {
+    z-index: 120;
+  }
+
+  .publisher-focused-left:has(.manual-box-popup-backdrop) {
+    z-index: 10;
+  }
+
   .generation-wizard-panel {
     width: 100vw;
     max-width: 100vw;
