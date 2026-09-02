@@ -208,6 +208,7 @@ import { EDITORIAL_COLOURS, EDITORIAL_RAIL } from "@/engines/MasterPage/Editoria
 import { GRID_SIZE, snapValue } from "@/utils/grid";
 import { NEWSPAPER_PAGE, POINTS_PER_INCH, RULER_SIZE } from "@/utils/page";
 import { saveBytes, type SaveOutcome } from "@/utils/saveFile";
+import { startVisualViewportVars } from "@/utils/visualViewportVars";
 
 type Viewport = {
   width: number;
@@ -1599,6 +1600,11 @@ const removeYouthUpdateHatchTicksNearKickers = (
 };
 
 export function EditorCanvas() {
+  // Publish the genuinely visible viewport to CSS, so full-screen overlays
+  // can be sized to it rather than to the layout viewport -- see
+  // visualViewportVars for why the CSS units are not enough on iOS.
+  useEffect(() => startVisualViewportVars(), []);
+
   const containerRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<Konva.Stage | null>(null);
   const contentLayerRef = useRef<Konva.Layer | null>(null);

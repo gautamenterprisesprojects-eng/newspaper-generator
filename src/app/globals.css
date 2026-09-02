@@ -7341,10 +7341,33 @@
        bar. This is a modal: while it is open nothing else may sit on top of
        it, and the tour toggle was covering its own Clear button. */
     z-index: 120;
+    /* svh, not dvh. dvh is the CURRENT viewport, which on iOS grows as the
+       URL bar retracts -- so a popup sized against it while the bar was
+       hidden sat partly under the bar and the bottom toolbar once they came
+       back, which is the top-and-bottom clipping still reported on a large
+       iPhone. svh is the SMALL viewport, the height with the browser chrome
+       showing, so the modal fits whatever the toolbars are doing. vh and dvh
+       are kept ahead of it as fallbacks for engines without svh. */
+    /* The last three are fallbacks; --app-visual-vh is the real answer. It
+       carries window.visualViewport.height, the area actually on screen,
+       which is the only measure iOS's toolbars cannot eat into. --app-visual-top
+       pins it below the URL bar when that bar has pushed the visible area
+       down the layout viewport. */
+    /* border-box, because this stylesheet has no global reset: without it the
+       12px padding below is added ON TOP of the height, so the backdrop ends
+       up 24px taller than the visible viewport and pushes the popup's foot
+       off screen. */
+    box-sizing: border-box;
     height: 100vh;
     height: 100dvh;
+    height: 100svh;
+    height: var(--app-visual-vh, 100svh);
+    top: var(--app-visual-top, 0px);
     align-items: flex-start;
-    overflow-y: auto;
+    /* The popup scrolls inside itself (max-height below), so the backdrop
+       does not need to scroll -- one scroll container instead of two nested
+       ones, which is far more predictable on iOS. */
+    overflow: hidden;
     -webkit-overflow-scrolling: touch;
     padding:
       calc(env(safe-area-inset-top, 0px) + 12px)
@@ -7354,8 +7377,14 @@
   }
 
   .manual-box-popup {
+    box-sizing: border-box;
     width: 100%;
-    max-height: none;
+    /* Bounded by the backdrop's content box and scrolling internally, so it
+       can never be taller than the visible area no matter how long the body
+       text is. margin:auto centres it when it is shorter. */
+    max-height: 100%;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     margin: auto;
   }
 
@@ -7393,6 +7422,9 @@
      Two explicit columns instead of auto-fit, since at this width auto-fit
      has no room to make a sensible choice. */
   .publisher-page-picker-backdrop {
+    box-sizing: border-box;
+    height: var(--app-visual-vh, 100svh);
+    top: var(--app-visual-top, 0px);
     padding:
       calc(env(safe-area-inset-top, 0px) + 12px)
       calc(env(safe-area-inset-right, 0px) + 12px)
