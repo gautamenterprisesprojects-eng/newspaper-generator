@@ -4165,11 +4165,14 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             : {}),
           ...(isShallowAdBox
             ? {
-                // One line, and small enough that one line is actually
-                // reachable -- the composer shrinks toward its own floor to
-                // honour headlineMaxLines, so starting lower means it lands
-                // on a size that still reads rather than at the floor.
-                headlineMaxLines: 1,
+                // Small enough that a single line is actually reachable: the
+                // composer shrinks toward its own floor to honour a one-line
+                // cap, so starting lower means it lands on a size that still
+                // reads. The cap itself is NOT set here -- headlineMaxLines
+                // belongs to ArticleCompositionSettings, not to StoryFrame,
+                // so setting it on the frame is silently dropped (it was, and
+                // the headlines stayed two lines on the live page). It is set
+                // with the rest of the composition settings below.
                 headlineFontSize: Math.max(16, defaultTypography.headlineFontSize - 6),
                 headlineLineHeight: 0.92,
                 headlineLineHeightMode: "percentage" as const,
@@ -4405,6 +4408,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
                 }
               : {}),
             ...(isYouthUpdateInsideStory ? { suppressColumnRules: true } : {}),
+            // Advertisement Page, shallow box: one line of headline. Set here
+            // rather than on the story frame -- this is the object the
+            // composer actually reads headlineMaxLines from.
+            ...(isShallowAdBox ? { headlineMaxLines: 1 } : {}),
             ...(isYouthUpdateFrontStory || isYouthUpdateInsideStory
               ? {
                   englishBodyHyphenation: true,
