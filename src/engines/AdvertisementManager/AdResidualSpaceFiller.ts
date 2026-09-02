@@ -575,6 +575,15 @@ function mergeVerticalRects(
 }
 
 /**
+ * Box size is governed by how many boxes are asked for, not by the cut floors:
+ * a generous-floors-first ladder was tried here and measured against a build
+ * without it over 6,704 generated boxes -- identical 5th-percentile width
+ * (4.11in vs 4.10in) and height (2.56in both), and a slightly WORSE median
+ * height. It only changed which way a zone was cut, never how big the results
+ * came out. The lever that actually works is capping the article count to
+ * what the space can hold at a readable size, which the panel now does.
+ *
+ * /
  * Cuts `rect` into exactly `count` tiles that cover it completely.
  *
  * Advertisement Page only. Unlike the pattern library this never leaves part

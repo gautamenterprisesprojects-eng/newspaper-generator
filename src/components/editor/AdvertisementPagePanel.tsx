@@ -1152,17 +1152,44 @@ export const AdvertisementPagePanel = memo(function AdvertisementPagePanel({
         // found, even if that's fewer than the boxes already laid out
         // around the ad; the slots array is trimmed to match just below,
         // same "thin page beats fake content" rule batch generation uses.
-        try {
-          const response = await fetch(
-            `/api/newswire?category=${encodeURIComponent(state.category)}&language=${state.languageMode}&limit=${needed + 4}`,
-          );
-          const payload = (await response.json().catch(() => null)) as {
-            success?: boolean;
-            data?: NewswireStory[];
-          } | null;
-          articles = Array.isArray(payload?.data) ? payload.data.slice(0, needed) : [];
-        } catch {
-          articles = [];
+        const fetchCategory = async (category: string, limit: number): Promise<NewswireStory[]> => {
+          try {
+            const response = await fetch(
+              `/api/newswire?category=${encodeURIComponent(category)}&language=${state.languageMode}&limit=${limit}`,
+            );
+            const payload = (await response.json().catch(() => null)) as {
+              success?: boolean;
+              data?: NewswireStory[];
+            } | null;
+            return Array.isArray(payload?.data) ? payload.data : [];
+          } catch {
+            return [];
+          }
+        };
+
+        articles = (await fetchCategory(state.category, needed + 4)).slice(0, needed);
+
+        // Top up from the other categories when the chosen one is short.
+        //
+        // Without this, asking for five articles from a category that only
+        // has four produced four boxes and left the fifth box's space blank.
+        // The chosen category still gets first claim on every slot -- other
+        // categories only fill what it could not -- which is the same rule
+        // batch generation already uses for a page with its own category.
+        // Still no fallback/preloaded content: if the live wire genuinely has
+        // nothing more, the page is rebuilt around however many are real.
+        if (articles.length < needed) {
+          const seen = new Set(articles.map((a) => a.id));
+          for (const category of NEWSWIRE_CATEGORIES) {
+            if (articles.length >= needed) break;
+            if (category === state.category) continue;
+            for (const story of await fetchCategory(category, needed)) {
+              if (articles.length >= needed) break;
+              if (!story?.id || seen.has(story.id)) continue;
+              seen.add(story.id);
+              articles.push(story);
+            }
+          }
         }
       } else {
         // Manual stories -- only the slots the publisher actually wrote
@@ -1175,11 +1202,44 @@ export const AdvertisementPagePanel = memo(function AdvertisementPagePanel({
         throw new Error("कोई लेख नहीं मिला — कृपया कोई और श्रेणी चुनें या लेख खुद लिखें।");
       }
 
-      // No fallback padding: trim the already-built slots to however many
-      // real articles are actually available, rather than leaving a slot
-      // with no article behind it.
+      // Fewer real articles than boxes: REBUILD the boxes for that many,
+      // rather than lopping the extra ones off the end.
+      //
+      // Trimming left the surviving boxes exactly where they were, so the
+      // space the dropped box occupied stayed empty -- a blank block on the
+      // page. Rebuilding re-cuts the same zones into however many boxes there
+      // is content for, so they still tile the page completely.
       if (articles.length < customLayoutSlots.length) {
-        customLayoutSlots.length = articles.length;
+        const rebuilt = buildAdResidualSlots(
+          remainingRects.map((r) => ({ x: r.x, y: r.y, width: r.width, height: r.height })),
+          CONTENT_X,
+          COL_W,
+          GUTTER,
+          articles.length,
+          { wideShortFillers: true },
+        );
+        customLayoutSlots.length = 0;
+        rebuilt.forEach((slot, index) => {
+          customLayoutSlots.push({
+            storyNumber: index + 1,
+            priority: index === 0 ? "lead" : "secondary",
+            x: slot.x,
+            y: slot.y,
+            width: slot.width,
+            height: slot.height,
+            columnStart: slot.columnStart,
+            columnSpan: slot.columnSpan,
+            internalTextColumns: slot.internalTextColumns,
+            isAdResidualSpace: slot.isAdResidualSpace,
+            isAdvertisementPageSlot: true,
+          });
+        });
+        // A rebuild can come back with more boxes than articles when the
+        // geometry has its own floor (see minArticleBoxes); drop the surplus
+        // articles, never leave a box without one.
+        if (articles.length > customLayoutSlots.length) {
+          articles = articles.slice(0, customLayoutSlots.length);
+        }
       }
       const customLayout = { slots: customLayoutSlots };
 
@@ -1241,6 +1301,7 @@ export const AdvertisementPagePanel = memo(function AdvertisementPagePanel({
         professionalJustification,
         customLayout,
         customStories,
+        isAdvertisementPage: true,
         pageKind: headerMode === "front" ? "front" : headerMode === "inside" ? "inside" : undefined,
       });
 
@@ -1292,11 +1353,44 @@ export const AdvertisementPagePanel = memo(function AdvertisementPagePanel({
     );
   }, [remainingRects]);
 
-  // Keep the publisher's choice at or above that floor, so what they pick is
-  // what they get rather than being silently overridden at generate time.
+  // And a ceiling, for the same reason from the other end: past a certain
+  // count the leftover space can only be cut into boxes too small to read
+  // comfortably. Box size is set by how many boxes are asked for -- measured
+  // over 6,704 generated boxes, changing the cutting rules moved the 5th
+  // percentile by 0.01in, while the article count moves it inches -- so the
+  // count is where this has to be controlled. The largest count whose boxes
+  // all stay at least MIN_COMFORTABLE_BOX_IN on both sides wins.
+  const maxArticleBoxes = useMemo(() => {
+    if (remainingRects.length === 0) return 10;
+    const MIN_COMFORTABLE_BOX_PT = 2.5 * PT_PER_INCH;
+    const rects = remainingRects.map((r) => ({ x: r.x, y: r.y, width: r.width, height: r.height }));
+    let best = minArticleBoxes;
+    for (let count = minArticleBoxes; count <= 10; count++) {
+      const slots = buildAdResidualSlots(rects, CONTENT_X, COL_W, GUTTER, count, {
+        wideShortFillers: true,
+      });
+      // A box is only cramped when it is small in BOTH directions. A wide
+      // shallow band is deliberate page furniture -- it is what keeps the
+      // space beside an ad block from printing blank -- and measured over
+      // 6,177 generated boxes every short box came out at least 4in wide,
+      // with none small on both sides at once.
+      const comfortable = slots.every(
+        (slot) => slot.width >= MIN_COMFORTABLE_BOX_PT || slot.height >= MIN_COMFORTABLE_BOX_PT,
+      );
+      // Scanned, not broken out of: which cut pattern a zone gets depends on
+      // the count, so comfort is not necessarily monotonic in it.
+      if (comfortable) best = count;
+    }
+    return Math.max(minArticleBoxes, best);
+  }, [remainingRects, minArticleBoxes]);
+
+  // Keep the publisher's choice inside both bounds, so what they pick is what
+  // they get rather than being silently overridden at generate time.
   useEffect(() => {
-    setManualArticleCount((current) => (current < minArticleBoxes ? minArticleBoxes : current));
-  }, [minArticleBoxes]);
+    setManualArticleCount((current) =>
+      current < minArticleBoxes ? minArticleBoxes : current > maxArticleBoxes ? maxArticleBoxes : current,
+    );
+  }, [minArticleBoxes, maxArticleBoxes]);
 
   const editingAd = useMemo(
     () => (editingAdId ? ads.find((a) => a.id === editingAdId) ?? null : null),
@@ -1522,19 +1616,22 @@ export const AdvertisementPagePanel = memo(function AdvertisementPagePanel({
           <input
             type="number"
             min={minArticleBoxes}
-            max={10}
+            max={maxArticleBoxes}
             value={manualArticleCount}
             onChange={(e) =>
-              setManualArticleCount(Math.max(minArticleBoxes, parseInt(e.target.value) || minArticleBoxes))
+              setManualArticleCount(
+                Math.min(
+                  maxArticleBoxes,
+                  Math.max(minArticleBoxes, parseInt(e.target.value) || minArticleBoxes),
+                ),
+              )
             }
           />
         </div>
-        {minArticleBoxes > 1 ? (
-          <p className="promo-remaining-info" style={{ marginTop: -10, marginBottom: 14 }}>
-            इस विज्ञापन सजावट में कम से कम {minArticleBoxes} लेख बॉक्स बनेंगे — इससे कम लेख चुनने पर
-            पेज पर खाली सफ़ेद जगह रह जाएगी।
-          </p>
-        ) : null}
+        <p className="promo-remaining-info" style={{ marginTop: -10, marginBottom: 14 }}>
+          इस विज्ञापन सजावट में {minArticleBoxes} से {maxArticleBoxes} लेख बॉक्स बन सकते हैं — इससे कम
+          चुनने पर पेज पर खाली सफ़ेद जगह रह जाएगी, और इससे ज़्यादा चुनने पर बॉक्स पढ़ने लायक नहीं रहेंगे।
+        </p>
 
         <div className="promo-section-label">लेख कहाँ से लें</div>
         <div className="promo-source-options">

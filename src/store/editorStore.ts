@@ -1753,7 +1753,8 @@ const chooseLayoutFittedNewswireArticleData = ({
   // page. Confirmed live: the caption kept showing until this call got it too.
   const disableCaption =
     options?.templateId === AKHAND_EDITORIAL_5A_TEMPLATE_ID ||
-    (options?.templateId?.includes("EightColumn") ?? false);
+    (options?.templateId?.includes("EightColumn") ?? false) ||
+    options?.isAdvertisementPage === true;
   const stripBodyDateline = options?.templateId === AKHAND_EDITORIAL_5A_TEMPLATE_ID;
   // Box 3 (मां बगलामुखी मंदिर) never carries a kicker on the printed page,
   // regardless of whether the fetched Dharma article happens to have kicker
@@ -1924,6 +1925,13 @@ type NewswireImportOptions = {
   bodyAlignment?: ArticleData["typography"]["bodyAlignment"];
   professionalJustification?: boolean;
   customLayout?: { slots: any[] };
+  /**
+   * Set only by the dedicated Advertisement Page tab. Its boxes are cut from
+   * whatever the ads leave, so photos in them are decorative page furniture
+   * rather than reported news pictures, and the publisher does not want a
+   * source line printed under them.
+   */
+  isAdvertisementPage?: boolean;
   customStories?: StoryFrame[];
   /** One or more advertisements to embed within this page (front/inside/editorial), shelf-packed from the bottom-right corner, with real stories filling the rest — see PageAdvertisementPlacement. Ignored when customLayout is already set (the dedicated Advertisement Page tab supplies its own). */
   pageAdvertisements?: PageAdvertisement[];
@@ -4421,7 +4429,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           // Dharm-Sanskriti's photos are decorative page furniture (Ram
           // Darbar, Shiva, Tulsidas), not news photos needing a source/credit
           // caption underneath -- the printed page never captions them.
-          isAkhandEditorial5A || isEightColumnTemplate || isCliffInsideSixColumnTemplate,
+          isAkhandEditorial5A ||
+            isEightColumnTemplate ||
+            isCliffInsideSixColumnTemplate ||
+            options.isAdvertisementPage === true,
           isAkhandEditorial5A,
           isAkhandEditorial5A && slot.storyNumber !== 5
             ? {

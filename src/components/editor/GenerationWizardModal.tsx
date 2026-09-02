@@ -1015,6 +1015,12 @@ export type NewswireImportOptions = {
   bodyAlignment?: ArticleData["typography"]["bodyAlignment"];
   professionalJustification?: boolean;
   customLayout?: { slots: any[] };
+  /**
+   * Set only by the dedicated Advertisement Page tab. Its boxes are cut from
+   * whatever the ads leave, so photos in them are page furniture rather than
+   * reported news pictures and carry no source line.
+   */
+  isAdvertisementPage?: boolean;
   customStories?: any[];
   /** "front" reserves the masthead band and retypes the page as the front page. */
   pageKind?: PageKind;
