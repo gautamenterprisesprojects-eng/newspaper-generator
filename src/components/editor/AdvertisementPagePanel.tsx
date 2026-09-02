@@ -1087,6 +1087,7 @@ export const AdvertisementPagePanel = memo(function AdvertisementPagePanel({
         {/* Upload zone */}
         <div
           className="ad-upload-zone"
+          data-tour="editor-ad-upload"
           onClick={() => fileInputRef.current?.click()}
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => {
@@ -1220,6 +1221,7 @@ export const AdvertisementPagePanel = memo(function AdvertisementPagePanel({
               <button
                 type="button"
                 className="primary"
+                data-tour="editor-ad-arrange"
                 onClick={handleArrange}
                 disabled={headerMode === "inside" && insidePages.length === 0}
               >
@@ -1427,7 +1429,7 @@ export const AdvertisementPagePanel = memo(function AdvertisementPagePanel({
           <span>लेआउट स्टाइल विकल्प</span>
         </div>
 
-        <div style={{ marginBottom: 14, padding: "12px 14px", background: "#f8f9fa", borderRadius: 8, border: "1.5px solid #d0d7de" }}>
+        <div data-tour="editor-style-options" style={{ marginBottom: 14, padding: "12px 14px", background: "#f8f9fa", borderRadius: 8, border: "1.5px solid #d0d7de" }}>
           {/* Subheading Accent & Background Colour Picker */}
           <div style={{ marginBottom: 14 }}>
             <div style={{ fontWeight: 700, fontSize: 13, color: "#111", marginBottom: 6, display: "flex", alignItems: "center", gap: 8 }}>

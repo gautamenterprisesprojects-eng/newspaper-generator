@@ -1084,6 +1084,7 @@ export const EditorialSlotPanel = memo(function EditorialSlotPanel({
                   <button
                     type="button"
                     className="layout-preview-select-btn"
+                    data-tour={state.layoutDesign === layout.id ? "editor-editorial-layout-choice" : undefined}
                     onClick={(e) => {
                       e.stopPropagation();
                       selectLayout();
@@ -1186,7 +1187,7 @@ export const EditorialSlotPanel = memo(function EditorialSlotPanel({
         </div>
       )}
 
-      <div className="editorial-slot-workspace">
+      <div className="editorial-slot-workspace" data-tour="editor-editorial-slots">
         <div className="editorial-slot-map-card">
           <div className="editorial-slot-map-frame">
             {previewSlots.map((slot, index) => {
@@ -1293,6 +1294,7 @@ export const EditorialSlotPanel = memo(function EditorialSlotPanel({
         <button
           type="button"
           className="primary"
+          data-tour="editor-editorial-generate"
           disabled={generating || (assignedCount === 0 && !autoFill)}
           onClick={() => void handleGenerate()}
         >

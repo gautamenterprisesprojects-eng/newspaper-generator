@@ -1294,7 +1294,11 @@ export function FrameManagerPanel({
   };
 
   const liveReplacementSection = (
-    <section className="live-layout-replacer" aria-label="Live layout story replacement">
+    <section
+      className="live-layout-replacer"
+      aria-label="Live layout story replacement"
+      data-tour="editor-live-layout-panel"
+    >
       <div className="live-layout-help">
         <strong>लाइव पेज लेआउट</strong>
         <p>जिस बॉक्स की खबर बदलनी है उस नंबर पर क्लिक करें। पॉपअप में टेक्स्ट या फोटो बदलकर सिर्फ वही बॉक्स अपडेट होगा।</p>
@@ -1302,6 +1306,7 @@ export function FrameManagerPanel({
       {layoutPreviewBounds ? (
         <div
           className="live-layout-map"
+          data-tour="editor-live-layout-boxes"
           style={{
             aspectRatio: `${layoutPreviewBounds.width} / ${layoutPreviewBounds.height}`,
           }}
@@ -1316,6 +1321,7 @@ export function FrameManagerPanel({
                 key={card.frameId}
                 type="button"
                 className={isSelected ? "selected" : ""}
+                data-tour="editor-live-layout-click-box"
                 style={{
                   left: `${((bounds.x - layoutPreviewBounds.left) / layoutPreviewBounds.width) * 100}%`,
                   top: `${((bounds.y - layoutPreviewBounds.top) / layoutPreviewBounds.height) * 100}%`,
@@ -1333,7 +1339,7 @@ export function FrameManagerPanel({
       ) : (
         <p>No story boxes on this page.</p>
       )}
-      <div className="live-layout-selected">
+      <div className="live-layout-selected" data-tour="editor-live-layout-selected">
         <span>Selected Box</span>
         <strong>
           {selectedReplacementCard
@@ -1344,6 +1350,7 @@ export function FrameManagerPanel({
       <button
         type="button"
         className="live-layout-load"
+        data-tour="editor-live-layout-load"
         onClick={loadReplacementCandidates}
         disabled={replacementLoading || !selectedReplacementStoryId}
       >
@@ -1371,7 +1378,7 @@ export function FrameManagerPanel({
 
   const manualReplacementPopup = manualReplacementCard ? (
     <div className="manual-box-popup-backdrop" onClick={() => setManualReplacementFrameId(null)}>
-      <div className="manual-box-popup" onClick={(event) => event.stopPropagation()}>
+      <div className="manual-box-popup" data-tour="editor-live-replace-popup" onClick={(event) => event.stopPropagation()}>
         <button
           type="button"
           className="manual-box-popup-close"
@@ -1404,7 +1411,7 @@ export function FrameManagerPanel({
             />
           </label>
 
-          <label className="manual-box-field">
+          <label className="manual-box-field" data-tour="editor-live-replace-headline">
             <span>Headline *</span>
             <textarea
               rows={2}
@@ -1430,7 +1437,7 @@ export function FrameManagerPanel({
             </em>
           </label>
 
-          <label className="manual-box-field">
+          <label className="manual-box-field" data-tour="editor-live-replace-body">
             <span>Body text *</span>
             <textarea
               rows={6}
@@ -1446,7 +1453,7 @@ export function FrameManagerPanel({
             </em>
           </label>
 
-          <div className="manual-box-field manual-box-image-picker">
+          <div className="manual-box-field manual-box-image-picker" data-tour="editor-live-replace-image">
             <span>{manualReplacementEntry.imageUrl ? "Image selected" : "Image (optional)"}</span>
             <input
               ref={replacementImageInputRef}
@@ -1480,7 +1487,12 @@ export function FrameManagerPanel({
             />
           </label>
         </div>
-        <button type="button" className="manual-box-popup-done" onClick={applyManualReplacement}>
+        <button
+          type="button"
+          className="manual-box-popup-done"
+          data-tour="editor-live-replace-done"
+          onClick={applyManualReplacement}
+        >
           Replace current article
         </button>
       </div>
@@ -1755,11 +1767,16 @@ export function FrameManagerPanel({
         <span>Selected {status.selectedFrames}</span>
       </section>
 
-      <section className="live-layout-replacer" aria-label="Live layout story replacement">
+      <section
+        className="live-layout-replacer"
+        aria-label="Live layout story replacement"
+        data-tour="editor-live-layout-panel"
+      >
         <div className="frame-manager-panel-title">Live Page Layout</div>
         {layoutPreviewBounds ? (
           <div
             className="live-layout-map"
+            data-tour="editor-live-layout-boxes"
             style={{
               aspectRatio: `${layoutPreviewBounds.width} / ${layoutPreviewBounds.height}`,
             }}
@@ -1774,6 +1791,7 @@ export function FrameManagerPanel({
                   key={card.frameId}
                   type="button"
                   className={isSelected ? "selected" : ""}
+                  data-tour="editor-live-layout-click-box"
                   style={{
                     left: `${((bounds.x - layoutPreviewBounds.left) / layoutPreviewBounds.width) * 100}%`,
                     top: `${((bounds.y - layoutPreviewBounds.top) / layoutPreviewBounds.height) * 100}%`,
@@ -1791,7 +1809,7 @@ export function FrameManagerPanel({
         ) : (
           <p>No story boxes on this page.</p>
         )}
-        <div className="live-layout-selected">
+        <div className="live-layout-selected" data-tour="editor-live-layout-selected">
           <span>Selected Box</span>
           <strong>
             {selectedReplacementCard
@@ -1802,6 +1820,7 @@ export function FrameManagerPanel({
         <button
           type="button"
           className="live-layout-load"
+          data-tour="editor-live-layout-load"
           onClick={loadReplacementCandidates}
           disabled={replacementLoading || !selectedReplacementStoryId}
         >
@@ -1828,7 +1847,7 @@ export function FrameManagerPanel({
 
       {manualReplacementCard ? (
         <div className="manual-box-popup-backdrop" onClick={() => setManualReplacementFrameId(null)}>
-          <div className="manual-box-popup" onClick={(event) => event.stopPropagation()}>
+          <div className="manual-box-popup" data-tour="editor-live-replace-popup" onClick={(event) => event.stopPropagation()}>
             <button
               type="button"
               className="manual-box-popup-close"
@@ -1861,7 +1880,7 @@ export function FrameManagerPanel({
                 />
               </label>
 
-              <label className="manual-box-field">
+              <label className="manual-box-field" data-tour="editor-live-replace-headline">
                 <span>Headline *</span>
                 <textarea
                   rows={2}
@@ -1887,7 +1906,7 @@ export function FrameManagerPanel({
                 </em>
               </label>
 
-              <label className="manual-box-field">
+              <label className="manual-box-field" data-tour="editor-live-replace-body">
                 <span>Body text *</span>
                 <textarea
                   rows={6}
@@ -1903,7 +1922,7 @@ export function FrameManagerPanel({
                 </em>
               </label>
 
-              <div className="manual-box-field manual-box-image-picker">
+              <div className="manual-box-field manual-box-image-picker" data-tour="editor-live-replace-image">
                 <span>{manualReplacementEntry.imageUrl ? "Image selected" : "Image (optional)"}</span>
                 <input
                   ref={replacementImageInputRef}
@@ -1937,7 +1956,12 @@ export function FrameManagerPanel({
                 />
               </label>
             </div>
-            <button type="button" className="manual-box-popup-done" onClick={applyManualReplacement}>
+            <button
+              type="button"
+              className="manual-box-popup-done"
+              data-tour="editor-live-replace-done"
+              onClick={applyManualReplacement}
+            >
               Replace current article
             </button>
           </div>

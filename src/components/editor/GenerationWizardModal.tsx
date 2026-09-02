@@ -23,7 +23,8 @@ import {
   useEffect,
   type ReactNode,
 } from "react";
-import { X, ChevronRight, ChevronLeft } from "lucide-react";
+import { X, ChevronRight, ChevronLeft, HelpCircle } from "lucide-react";
+import { startEditorTour } from "./EditorGuidedTour";
 import {
   NEWSWIRE_CATEGORIES,
   NEWSWIRE_SUBHEADING_PRESETS,
@@ -1232,6 +1233,7 @@ function FrontPageLayoutScreen({
               <button
                 type="button"
                 className="layout-preview-select-btn"
+                data-tour={state.layoutDesign === layout.id ? "editor-layout-choice" : undefined}
                 onClick={(e) => {
                   e.stopPropagation();
                   selectLayout();
@@ -1382,6 +1384,7 @@ function LayoutPickerScreen({
               <button
                 type="button"
                 className="layout-preview-select-btn"
+                data-tour={state.layoutDesign === layout.id ? "editor-layout-choice" : undefined}
                 onClick={(e) => {
                   e.stopPropagation();
                   selectAndContinue(layout);
@@ -1522,7 +1525,7 @@ function StyleScreen({
 }) {
   return (
     <div className="generation-wizard-screen">
-      <div style={{ marginBottom: 14, padding: "12px 14px", background: "#f8f9fa", borderRadius: 8, border: "1.5px solid #d0d7de" }}>
+      <div data-tour="editor-style-options" style={{ marginBottom: 14, padding: "12px 14px", background: "#f8f9fa", borderRadius: 8, border: "1.5px solid #d0d7de" }}>
         <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontWeight: 700, fontSize: 14, color: "#111" }}>
           <input
             type="checkbox"
@@ -1594,7 +1597,7 @@ function StyleScreen({
       <div style={{ fontWeight: 600, fontSize: 12, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.03em" }}>
         अख़बार का रंग पैलेट
       </div>
-      <div className="generation-style-grid">
+      <div className="generation-style-grid" data-tour="editor-theme-palette">
         {WIZARD_ACCENT_PRESETS.map((preset) => (
           <button
             key={preset.id}
@@ -1630,7 +1633,7 @@ function StyleScreen({
         <button type="button" className="secondary" onClick={onBack}>
           वापस
         </button>
-        <button type="button" className="primary" onClick={onContinue}>
+        <button type="button" className="primary" data-tour="editor-style-next" onClick={onContinue}>
           आगे बढ़ें
         </button>
       </div>
@@ -1922,7 +1925,7 @@ const ManualBoxSeeder = memo(function ManualBoxSeeder({
   );
 
   return (
-    <div className="manual-box-seeder">
+    <div className="manual-box-seeder" data-tour="editor-manual-boxes">
       <div className="manual-box-seeder-header">
         <strong>अपने खुद के लेख लिखें</strong>
         <p>
@@ -2040,7 +2043,7 @@ function CategoryScreen({
       <div style={{ fontWeight: 600, fontSize: 12, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.03em" }}>
         पन्ने की भाषा
       </div>
-      <div className="generation-category-grid" style={{ marginBottom: 14 }}>
+        <div className="generation-category-grid" data-tour="editor-news-language" style={{ marginBottom: 14 }}>
         {PAGE_LANGUAGE_OPTIONS.map((option) => (
           <button
             key={option.value}
@@ -2054,11 +2057,11 @@ function CategoryScreen({
         ))}
       </div>
       {state.tab === "front" ? null : plannedCategories.length > 0 ? (
-        <p className="generation-category-planned-note" style={{ fontSize: 12, color: "#555", fontStyle: "italic", marginBottom: 14 }}>
+        <p className="generation-category-planned-note" data-tour="editor-news-category" style={{ fontSize: 12, color: "#555", fontStyle: "italic", marginBottom: 14 }}>
           Category: {plannedCategories.join(", ")} (सेटिंग्स में सेट — यहां बदलने के लिए admin से settings unlock करवाएं)
         </p>
       ) : (
-        <div className="generation-category-grid">
+        <div className="generation-category-grid" data-tour="editor-news-category">
           {NEWSWIRE_CATEGORIES.map((category) => (
             <button
               key={category}
@@ -2082,6 +2085,7 @@ function CategoryScreen({
         <button
           type="button"
           className="primary"
+          data-tour="editor-load-news"
           disabled={state.languageMode !== "hindi"}
           onClick={onLoadPreloaded}
           title={
@@ -2505,26 +2509,37 @@ export const GenerationWizardModal = memo(function GenerationWizardModal({
       aria-modal="true"
       aria-label="न्यूज़ लेआउट बनाएं"
     >
-      <div className={`generation-wizard-panel step-${state.step} tab-${state.tab}`}>
+      <div className={`generation-wizard-panel step-${state.step} tab-${state.tab}`} data-tour="editor-wizard-panel">
         {/* Header */}
         <div className="generation-wizard-header">
           <div>
             <span>लेआउट बिल्डर</span>
             <strong>{stepLabel}</strong>
           </div>
-          <button type="button" onClick={onClose} aria-label="बंद करें">
-            <X size={17} strokeWidth={2.2} />
-          </button>
+          <div className="generation-wizard-header-actions">
+            <button
+              type="button"
+              onClick={() => startEditorTour()}
+              aria-label="ट्यूटोरियल देखें"
+              title="ट्यूटोरियल देखें"
+            >
+              <HelpCircle size={17} strokeWidth={2.2} />
+            </button>
+            <button type="button" onClick={onClose} aria-label="बंद करें">
+              <X size={17} strokeWidth={2.2} />
+            </button>
+          </div>
         </div>
 
         {/* 4 Tabs */}
-        <div className="generation-wizard-tabs" role="tablist">
+        <div className="generation-wizard-tabs" role="tablist" data-tour="editor-section-tabs">
           {TABS.map((tab) => (
             <button
               key={tab}
               type="button"
               role="tab"
               aria-selected={state.tab === tab}
+              data-tour={`editor-tab-${tab === "advertisement" ? "advertisement" : tab}`}
               className={`generation-wizard-tab${state.tab === tab ? " active" : ""}`}
               // Front and inside are now separate flows with separate layout
               // catalogues, so SET_TAB resets the step and the selected template

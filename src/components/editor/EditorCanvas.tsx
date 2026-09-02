@@ -2,6 +2,7 @@
 
 import { GenerationWizardModal } from "./GenerationWizardModal";
 import type { WizardTab } from "./GenerationWizardModal";
+import { EditorGuidedTour, EditorTourControls } from "./EditorGuidedTour";
 
 import { Activity, AlignCenter, AlignJustify, AlignLeft, AlignRight, Eye, EyeOff, Minus, Plus, SquarePlus, X } from "lucide-react";
 import { Profiler, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -136,7 +137,7 @@ import {
   saveIssueUsedArticles,
 } from "@/lib/portalIssueArticleUsage";
 import { WIZARD_LAYOUT_DESIGNS, type NewswireImportOptions } from "./GenerationWizardModal";
-import { loadStoriesForPage, useEditorStore } from "@/store/editorStore";
+import { COMPACT_ZOOM_LIMITS, loadStoriesForPage, useEditorStore, ZOOM_LIMITS } from "@/store/editorStore";
 import type { WorkspaceCommand, WorkspacePanelId } from "@/engines/WorkspaceManager/WorkspaceManagerTypes";
 import { activateDockPanel, toggleDockCollapsed } from "@/engines/WorkspaceManager/WorkspaceManagerEngine";
 import type {
@@ -206,6 +207,7 @@ import { getNewspaperFontStack } from "@/engines/FontManager/FontManagerEngine";
 import { EDITORIAL_COLOURS, EDITORIAL_RAIL } from "@/engines/MasterPage/EditorialPageStyle";
 import { GRID_SIZE, snapValue } from "@/utils/grid";
 import { NEWSPAPER_PAGE, POINTS_PER_INCH, RULER_SIZE } from "@/utils/page";
+import { saveBytes, type SaveOutcome } from "@/utils/saveFile";
 
 type Viewport = {
   width: number;
@@ -221,6 +223,28 @@ const PUBLISHER_LEFT_RATIO = 0.25;
 const PUBLISHER_CENTER_RATIO = 0.6;
 const PUBLISHER_RIGHT_RATIO = 0.15;
 const PUBLISHER_COLUMN_PADDING = 12;
+
+// Matches the max-width: 860px phone rules in globals.css. Below this the
+// shell restacks (panels move under the canvas) and the geometry below has to
+// follow, or the page centres itself behind the sheet.
+const COMPACT_VIEWPORT_MAX_WIDTH = 860;
+// Kept in step with .publisher-focused-left.sheet-collapsed (17dvh) and the
+// action bar's own height in globals.css. If those change, change these.
+const MOBILE_SHEET_COLLAPSED_RATIO = 0.17;
+const MOBILE_ACTION_BAR_HEIGHT = 78;
+
+// Phones get the wider range so a whole page can fit; desktop keeps the
+// range it always had. The store applies the same bounds, so neither can
+// compute a zoom the other rejects.
+const zoomLimitsFor = (viewport: Viewport) =>
+  isCompactViewport(viewport) ? COMPACT_ZOOM_LIMITS : ZOOM_LIMITS;
+
+const clampZoom = (value: number, viewport: Viewport) => {
+  const limits = zoomLimitsFor(viewport);
+  return Math.min(limits.max, Math.max(limits.min, value));
+};
+
+const isCompactViewport = (viewport: Viewport) => viewport.width <= COMPACT_VIEWPORT_MAX_WIDTH;
 const MAJOR_GRID_INTERVAL = POINTS_PER_INCH;
 const pageMaster = DEFAULT_PAGE_MASTER;
 const layoutArticleCounts = [5, 6, 7, 8, 10, 12];
@@ -351,26 +375,17 @@ const getSafeFilenamePart = (value: string) =>
     .replace(/^-+|-+$/g, "")
     .slice(0, 80) || "newspaper";
 
-const downloadBytes = (bytes: Uint8Array | ArrayBuffer, filename: string, mimeType: string) => {
-  const data = bytes instanceof Uint8Array
-    ? bytes.slice().buffer
-    : bytes.slice(0);
-  const blob = new Blob([data], { type: mimeType });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-
-  link.href = url;
-  link.download = filename;
-  link.rel = "noopener";
-  link.style.display = "none";
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-
-  window.setTimeout(() => {
-    URL.revokeObjectURL(url);
-  }, 30_000);
-};
+/**
+ * Routes through saveBytes so the PDF actually lands somewhere inside the
+ * wrapped iOS/Android app. The old implementation here (blob URL + <a
+ * download>) is silently inert in a WebView -- see utils/saveFile.ts. In a
+ * desktop browser saveBytes still takes exactly that path.
+ */
+const downloadBytes = async (
+  bytes: Uint8Array | ArrayBuffer,
+  filename: string,
+  mimeType: string,
+): Promise<SaveOutcome> => saveBytes(bytes, filename, mimeType, { shareTitle: filename });
 
 const getPortalReturnUrl = () => {
   if (typeof window === "undefined") {
@@ -1194,8 +1209,25 @@ const buildSequence = (limit: number, step: number) => {
 };
 
 const getWorkspaceRect = (viewport: Viewport, _hasInspector: boolean) => {
+  if (isCompactViewport(viewport)) {
+    // Phones stack the live-layout sheet and the action bar *below* the
+    // canvas rather than flanking it, so the page gets the full width and
+    // gives up height instead. Reserving that bottom strip here is what lets
+    // the page centre itself in the part of the screen the user can actually
+    // see, rather than behind the sheet.
+    const top = PUBLISHER_COLUMN_PADDING;
+    const reservedBottom =
+      viewport.height * MOBILE_SHEET_COLLAPSED_RATIO + MOBILE_ACTION_BAR_HEIGHT;
+
+    return {
+      left: PUBLISHER_COLUMN_PADDING,
+      top,
+      width: Math.max(1, viewport.width - PUBLISHER_COLUMN_PADDING * 2),
+      height: Math.max(1, viewport.height - top - reservedBottom),
+    };
+  }
+
   const left = viewport.width * PUBLISHER_LEFT_RATIO + PUBLISHER_COLUMN_PADDING;
-  const right = viewport.width * PUBLISHER_RIGHT_RATIO + PUBLISHER_COLUMN_PADDING;
   const top = PUBLISHER_COLUMN_PADDING;
   const bottom = PUBLISHER_COLUMN_PADDING;
 
@@ -1205,6 +1237,24 @@ const getWorkspaceRect = (viewport: Viewport, _hasInspector: boolean) => {
     width: Math.max(1, viewport.width * PUBLISHER_CENTER_RATIO - PUBLISHER_COLUMN_PADDING * 2),
     height: Math.max(1, viewport.height - top - bottom),
   };
+};
+
+/**
+ * The zoom at which the whole page fits the visible workspace, both axes.
+ * "Fit" used to be a hardcoded 0.45 regardless of screen, which is roughly
+ * right on a laptop and far too large on a phone -- the page ran off the
+ * bottom on first paint.
+ */
+const getFitZoom = (viewport: Viewport) => {
+  // getWorkspaceRect ignores its hasInspector argument, so the fit does not
+  // depend on whether a story is selected.
+  const workspace = getWorkspaceRect(viewport, false);
+  const availableHeight = Math.max(1, workspace.height - RULER_SIZE);
+
+  return clampZoom(
+    Math.min(workspace.width / NEWSPAPER_PAGE.width, availableHeight / NEWSPAPER_PAGE.height),
+    viewport,
+  );
 };
 
 const getPageOrigin = (
@@ -1579,6 +1629,10 @@ export function EditorCanvas() {
   const [shortcutOverlayOpen, setShortcutOverlayOpen] = useState(false);
   const [workspaceHistory, setWorkspaceHistory] = useState<string[]>([]);
   const [pagePanOffset, setPagePanOffset] = useState({ x: 0, y: 0 });
+  // Phone-only: whether the live-layout sheet is expanded over the page.
+  // Starts collapsed so the page preview -- the thing being judged -- owns
+  // the screen until the user actually wants to pick a box.
+  const [layoutSheetExpanded, setLayoutSheetExpanded] = useState(false);
   const [isCtrlPanning, setIsCtrlPanning] = useState(false);
   const [rulerUnit, setRulerUnit] = useState<RulerUnit>("in");
   const [customGuides, setCustomGuides] = useState<EditorGuide[]>([]);
@@ -1715,6 +1769,7 @@ export function EditorCanvas() {
   const endLiveResize = useEditorStore((state) => state.endLiveResize);
   const cancelLiveResize = useEditorStore((state) => state.cancelLiveResize);
   const setZoom = useEditorStore((state) => state.setZoom);
+  const setZoomLimits = useEditorStore((state) => state.setZoomLimits);
   const zoomIn = useEditorStore((state) => state.zoomIn);
   const zoomOut = useEditorStore((state) => state.zoomOut);
   const selectFrame = useEditorStore((state) => state.selectFrame);
@@ -1865,9 +1920,17 @@ export function EditorCanvas() {
     setWorkspaceHistory((current) => [`Open ${panelId}`, ...current].slice(0, 24));
   }, [setWorkspaceState]);
   const fitPage = useCallback(() => {
-    setZoom(0.45);
+    // Desktop keeps its long-standing fixed 0.45. Only phones, where the
+    // panels sit under the canvas and 0.45 runs the page off the bottom,
+    // get a measured fit.
+    if (isCompactViewport(viewport)) {
+      setZoom(getFitZoom(viewport));
+      setPagePanOffset({ x: 0, y: 0 });
+    } else {
+      setZoom(0.45);
+    }
     setWorkspaceHistory((current) => ["Fit Page", ...current].slice(0, 24));
-  }, [setZoom]);
+  }, [setZoom, viewport]);
   const fitWidth = useCallback(() => {
     setZoom(0.72);
     setWorkspaceHistory((current) => ["Fit Width", ...current].slice(0, 24));
@@ -2171,7 +2234,11 @@ export function EditorCanvas() {
     const storedZoom = Number(window.localStorage.getItem("cliff-news-workspace-zoom"));
     const storedPageId = window.localStorage.getItem("cliff-news-workspace-active-page");
 
-    if (Number.isFinite(storedZoom) && storedZoom > 0) {
+    // Not on phones: the stored value is whatever zoom this publisher last
+    // used, which on a desktop is worth returning to but on a handset just
+    // reopens the page at a zoom that shows one corner of it. Compact
+    // viewports get a measured fit instead (see the auto-fit effect below).
+    if (Number.isFinite(storedZoom) && storedZoom > 0 && !isCompactViewport(viewport)) {
       setZoom(storedZoom);
     }
     if (storedPageId && document.pages.some((page) => page.id === storedPageId)) {
@@ -2182,6 +2249,31 @@ export function EditorCanvas() {
   useEffect(() => {
     window.localStorage.setItem("cliff-news-workspace-zoom", String(zoom));
   }, [zoom]);
+
+  // Phones open fitted to the page. The restored zoom above is whatever this
+  // publisher last used -- on a desktop that is a sensible thing to return to,
+  // but a phone opening at a desktop's zoom shows a corner of the page and
+  // nothing else. Runs once, and only after the viewport has been measured,
+  // so it never fights a zoom the user has since chosen themselves.
+  const didAutoFitRef = useRef(false);
+  useEffect(() => {
+    if (didAutoFitRef.current) return;
+    if (viewport.width <= 1 || viewport.height <= 1) return;
+    // Widen the store's clamp before fitting -- the desktop floor of 0.35
+    // cannot express a whole page on a handset. Desktop never calls this and
+    // keeps ZOOM_LIMITS untouched.
+    // Deliberately does NOT mark itself done here: the first value this sees
+    // is the pre-measurement default (a desktop-sized guess), and the real
+    // size only arrives once the ResizeObserver below reports it. Bailing
+    // permanently on that first reading is why the phone kept the desktop
+    // zoom. Marked done only after a fit has actually been applied.
+    if (!isCompactViewport(viewport)) return;
+
+    didAutoFitRef.current = true;
+    setZoomLimits(COMPACT_ZOOM_LIMITS);
+    setZoom(getFitZoom(viewport));
+    setPagePanOffset({ x: 0, y: 0 });
+  }, [setZoom, setZoomLimits, viewport]);
 
   useEffect(() => {
     window.localStorage.setItem("cliff-news-workspace-active-page", activePageId);
@@ -4032,7 +4124,11 @@ export function EditorCanvas() {
     }
 
     const pdfBytes = await pdfDoc.save({ useObjectStreams: false });
-    downloadBytes(pdfBytes, filename, "application/pdf");
+    const saved = await downloadBytes(pdfBytes, filename, "application/pdf");
+    if (!saved.ok) {
+      window.alert(`PDF सेव नहीं हो सका: ${saved.error}`);
+      setWorkspaceHistory((current) => [`PDF save failed: ${saved.error}`, ...current].slice(0, 24));
+    }
 
     // Surface partial failures so the user knows some pages didn't make it,
     // rather than silently exporting a truncated PDF.
@@ -4089,8 +4185,18 @@ export function EditorCanvas() {
         filenamePageNumber,
         portalPlanForPage?.section || pageModel.sectionName || `Page ${filenamePageNumber}`,
       );
-      downloadBytes(pdfBytes, filename, "application/pdf");
-      setWorkspaceHistory((current) => [`Exported ${filename}`, ...current].slice(0, 24));
+      // The wallet has already been charged at this point, so a save failure
+      // has to be loud: the publisher has paid and would otherwise be left
+      // with no file and no explanation.
+      const saved = await downloadBytes(pdfBytes, filename, "application/pdf");
+      if (!saved.ok) {
+        window.alert(
+          `पेज बन गया और पैसा कट गया, लेकिन फ़ाइल सेव नहीं हो सकी: ${saved.error}\n\nकृपया दोबारा डाउनलोड करें — दोबारा पैसा नहीं कटेगा।`,
+        );
+        setWorkspaceHistory((current) => [`Charged but save failed: ${saved.error}`, ...current].slice(0, 24));
+      } else {
+        setWorkspaceHistory((current) => [`Exported ${filename}`, ...current].slice(0, 24));
+      }
     } catch (error) {
       console.error("Export page PDF failed", error);
       window.alert(`Export page failed. पैसा नहीं कटा है, कृपया Try Again करें: ${error instanceof Error ? error.message : "unknown error"}`);
@@ -5426,7 +5532,7 @@ export function EditorCanvas() {
 
     if (event.evt.ctrlKey || event.evt.metaKey) {
       const direction = event.evt.deltaY > 0 ? -1 : 1;
-      const nextZoom = Math.min(2.4, Math.max(0.2, zoom + direction * 0.05));
+      const nextZoom = clampZoom(zoom + direction * 0.05, viewport);
 
       setZoom(nextZoom);
       setPagePanOffset((current) =>
@@ -5447,6 +5553,94 @@ export function EditorCanvas() {
       ),
     );
   }, [selectedStoryLayout, setZoom, viewport, zoom]);
+
+  // ── Touch gestures ────────────────────────────────────────────────────
+  // The stage had mouse handlers only, so on a phone the page could not be
+  // zoomed or panned at all: document zoom is disabled for the WebView shell,
+  // and Konva does not synthesise pinch. Two fingers zoom around their own
+  // midpoint (and pan with it, so the page tracks the fingers rather than
+  // drifting); one finger on empty canvas pans. A single finger on a story is
+  // left alone -- that is a tap/drag on the story itself.
+  const pinchRef = useRef<{ distance: number; center: { x: number; y: number } } | null>(null);
+  const touchPanRef = useRef<{ x: number; y: number } | null>(null);
+
+  const touchDistance = (a: Touch, b: Touch) =>
+    Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+
+  const touchCenter = (a: Touch, b: Touch) => ({
+    x: (a.clientX + b.clientX) / 2,
+    y: (a.clientY + b.clientY) / 2,
+  });
+
+  const handleStageTouchMove = useCallback(
+    (event: Konva.KonvaEventObject<TouchEvent>) => {
+      const touches = event.evt.touches;
+
+      if (touches.length >= 2) {
+        event.evt.preventDefault();
+        touchPanRef.current = null;
+
+        const [first, second] = [touches[0], touches[1]];
+        const distance = touchDistance(first, second);
+        const center = touchCenter(first, second);
+        const previous = pinchRef.current;
+
+        if (!previous || previous.distance <= 0) {
+          pinchRef.current = { distance, center };
+          return;
+        }
+
+        const nextZoom = clampZoom(zoom * (distance / previous.distance), viewport);
+        // Anchor on the pinch midpoint: without this correction the page
+        // scales about the viewport origin and slides out from under the
+        // fingers instead of staying pinned to them.
+        const zoomRatio = nextZoom / zoom;
+
+        setZoom(nextZoom);
+        setPagePanOffset((current) =>
+          clampPublisherPanOffset(
+            {
+              x: center.x - (center.x - current.x) * zoomRatio + (center.x - previous.center.x),
+              y: center.y - (center.y - current.y) * zoomRatio + (center.y - previous.center.y),
+            },
+            viewport,
+            nextZoom,
+            Boolean(selectedStoryLayout),
+          ),
+        );
+
+        pinchRef.current = { distance, center };
+        return;
+      }
+
+      if (touches.length === 1 && event.target === event.target.getStage()) {
+        event.evt.preventDefault();
+        const touch = touches[0];
+        const previous = touchPanRef.current;
+
+        if (previous) {
+          const dx = touch.clientX - previous.x;
+          const dy = touch.clientY - previous.y;
+          setPagePanOffset((current) =>
+            clampPublisherPanOffset(
+              { x: current.x + dx, y: current.y + dy },
+              viewport,
+              zoom,
+              Boolean(selectedStoryLayout),
+            ),
+          );
+        }
+
+        touchPanRef.current = { x: touch.clientX, y: touch.clientY };
+      }
+    },
+    [selectedStoryLayout, setZoom, viewport, zoom],
+  );
+
+  const handleStageTouchEnd = useCallback(() => {
+    pinchRef.current = null;
+    touchPanRef.current = null;
+  }, []);
 
   const handleStageMouseDown = useCallback(
     (event: Konva.KonvaEventObject<MouseEvent>) => {
@@ -6668,7 +6862,45 @@ export function EditorCanvas() {
       ref={containerRef}
     >
       <div className="publisher-focused-shell" aria-label="Publisher page workspace">
-        <section className="publisher-focused-left" aria-label="Live page layout">
+        <section
+          className={`publisher-focused-left${layoutSheetExpanded ? " sheet-expanded" : " sheet-collapsed"}`}
+          aria-label="Live page layout"
+        >
+          {/* Phones only (hidden by CSS above 860px): the layout picker and
+              the page preview are competing for one small screen, so the
+              picker starts as a peek strip and the page keeps the room.
+              Tapping the handle swaps which of the two is large. */}
+          <button
+            type="button"
+            className="layout-sheet-handle"
+            data-tour="editor-live-layout-toggle"
+            onClick={() => setLayoutSheetExpanded((open) => !open)}
+            aria-expanded={layoutSheetExpanded}
+          >
+            <span className="layout-sheet-grabber" aria-hidden="true" />
+            <span className="layout-sheet-handle-row">
+              <span className="layout-sheet-handle-text">
+                <span className="layout-sheet-handle-label">लाइव पेज लेआउट</span>
+                <span className="layout-sheet-handle-sub">टच करें खबर बदलने के लिए</span>
+              </span>
+              <span className="layout-sheet-handle-hint">
+                {layoutSheetExpanded ? "छोटा करें" : "बड़ा करें"}
+                {/* Points the way the sheet will move: up to grow while it is
+                    collapsed, down to shrink once it is open. One chevron,
+                    rotated by the expanded class. */}
+                <svg className="layout-sheet-chevron" viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M6 15l6-6 6 6"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </span>
+            </span>
+          </button>
           {leftWorkspacePanels.frames}
         </section>
         <section className="publisher-focused-center" aria-hidden="true" />
@@ -6687,6 +6919,7 @@ export function EditorCanvas() {
           <button
             type="button"
             className="publisher-action-button"
+            data-tour="editor-page-preview"
             onClick={() => void openPagePreview()}
             disabled={pagePreview?.status === "loading"}
           >
@@ -6696,6 +6929,7 @@ export function EditorCanvas() {
           <button
             type="button"
             className="publisher-action-button"
+            data-tour="editor-download-pdf"
             onClick={() => void handlePublisherDownloadPdf()}
             disabled={pdfExporting}
           >
@@ -6714,6 +6948,7 @@ export function EditorCanvas() {
           <button
             type="button"
             className="publisher-action-button"
+            data-tour="editor-regenerate-page"
             onClick={openGenerationWizard}
           >
             <PublisherRegenerateIcon />
@@ -6722,6 +6957,7 @@ export function EditorCanvas() {
           <button
             type="button"
             className="publisher-action-button primary"
+            data-tour="editor-next-page"
             onClick={openNextPagePicker}
           >
             <PublisherNextPageIcon />
@@ -6745,6 +6981,9 @@ export function EditorCanvas() {
         onMouseMove={handleStageMouseMove}
         onMouseUp={handleStageMouseUp}
         onMouseLeave={handleStageMouseUp}
+        onTouchMove={handleStageTouchMove}
+        onTouchEnd={handleStageTouchEnd}
+        onTouchCancel={handleStageTouchEnd}
       >
         {!productionView ? (
           <Profiler id="RulerLayer" onRender={handleReactRenderProfile}>
@@ -7005,13 +7244,14 @@ export function EditorCanvas() {
           <button
             type="button"
             className="secondary"
+            data-tour="editor-page-preview"
             onClick={() => void openPagePreview()}
             disabled={pagePreview?.status === "loading"}
             title="Full-screen look at the current page, rendered the same way the PDF export draws it"
           >
             <span>Preview</span>
           </button>
-          <button type="button" className="secondary" onClick={() => void exportCurrentPagePdf()} title="Export the whole edition as one multi-page PDF">
+          <button type="button" className="secondary" data-tour="editor-download-pdf" onClick={() => void exportCurrentPagePdf()} title="Export the whole edition as one multi-page PDF">
             <span>Export PDF</span>
           </button>
           <button type="button" className="secondary" onClick={() => void exportSinglePagePdf()} title="Export only the current page as a standalone PDF">
@@ -7074,7 +7314,7 @@ export function EditorCanvas() {
           </button>
         </div>
         <div className="toolbar-group" data-label="STORY">
-          <button type="button" className="primary" onClick={openGenerationWizard}>
+          <button type="button" className="primary" data-tour="editor-generate-layout" onClick={openGenerationWizard}>
             <SquarePlus size={16} strokeWidth={2.2} />
             <span>Generate Layout</span>
             <kbd>G</kbd>
@@ -7183,6 +7423,9 @@ export function EditorCanvas() {
         onSelectPageByNumber={selectPageByNumber}
         preferredTab={wizardPreferredTab}
       />
+
+      <EditorTourControls />
+      <EditorGuidedTour />
 
 
 
