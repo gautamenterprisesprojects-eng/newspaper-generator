@@ -7378,6 +7378,57 @@
     z-index: 10;
   }
 
+  /* The "which page do you want to build" picker, on phones.
+     
+     It was overflowing the right edge. Measured on a 390px viewport: the
+     modal's CSS width computed to 350px as intended, but it RENDERED 396px
+     wide with its right edge at 420 -- 30px off screen. It is a grid item of
+     its backdrop, so its automatic min-width is min-content, and long labels
+     like "राष्ट्रीय सार-समाचार" push min-content past the declared width, so
+     the box blows out past it. The inner grid collapsed with it, computing
+     "350px 0px" -- two columns, one of them zero wide.
+     
+     min-width:0 is the fix for that blowout, on the modal and on the cards,
+     with the labels allowed to wrap rather than forcing a wide min-content.
+     Two explicit columns instead of auto-fit, since at this width auto-fit
+     has no room to make a sensible choice. */
+  .publisher-page-picker-backdrop {
+    padding:
+      calc(env(safe-area-inset-top, 0px) + 12px)
+      calc(env(safe-area-inset-right, 0px) + 12px)
+      calc(env(safe-area-inset-bottom, 0px) + 12px)
+      calc(env(safe-area-inset-left, 0px) + 12px);
+  }
+
+  .publisher-page-picker {
+    /* border-box explicitly: this stylesheet has no global box-sizing reset,
+       so width:100% is the CONTENT width and the 14px padding would be added
+       on top -- which is the last 28px of the overflow. */
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    max-height: 100%;
+    padding: 18px 14px;
+  }
+
+  .publisher-page-picker-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .publisher-page-picker-grid button {
+    min-width: 0;
+    min-height: 104px;
+    padding: 12px 10px;
+  }
+
+  .publisher-page-picker-grid button strong,
+  .publisher-page-picker-grid button em {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
   .generation-wizard-panel {
     width: 100vw;
     max-width: 100vw;
