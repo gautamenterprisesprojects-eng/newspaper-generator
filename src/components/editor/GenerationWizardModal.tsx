@@ -122,34 +122,6 @@ export const WIZARD_FRONT_PAGE_DESIGNS: Array<{
   description: string;
 }> = [
   {
-    id: "CliffFrontEightColumn8A",
-    name: "8 Column Lead Mix",
-    storyCount: 8,
-    description:
-      "Fresh 8-column front layout with staggered 5/3, 2/6, 3/2/3, and full-width rows.",
-  },
-  {
-    id: "CliffFrontEightColumn8B",
-    name: "8 Column Right Lead Mix",
-    storyCount: 8,
-    description:
-      "Fresh 8-column front layout with a right-side 6-column lead, full-height 2-column boxes, and a full-width lower story.",
-  },
-  {
-    id: "CliffFrontEightColumn7C",
-    name: "8 Column Banner Mix",
-    storyCount: 7,
-    description:
-      "Fresh 8-column front layout with a full-width banner lead, 3/2/3 row, 6/2 row, and full-width footer.",
-  },
-  {
-    id: "CliffFrontEightColumn8D",
-    name: "8 Column Split Mix",
-    storyCount: 8,
-    description:
-      "Fresh 8-column front layout with 4/2/2, 5/3, 2/6, and full-width rows, all full-height.",
-  },
-  {
     id: "CliffFront8A",
     name: "द क्लिफ न्यूज़ फ्रंट पेज (8 बॉक्स)",
     storyCount: 8,
@@ -211,6 +183,34 @@ export const WIZARD_FRONT_PAGE_DESIGNS: Array<{
     storyCount: 6,
     description:
       "आधे पन्ने पर एक बड़ी तस्वीर वाली मुख्य खबर, साथ में एक और खबर, और नीचे दो शांत पट्टियाँ। एक दमदार तस्वीर के लिए बनाया गया।",
+  },
+  {
+    id: "CliffFrontEightColumn8A",
+    name: "8 Column Lead Mix",
+    storyCount: 8,
+    description:
+      "Fresh 8-column front layout with staggered 5/3, 2/6, 3/2/3, and full-width rows.",
+  },
+  {
+    id: "CliffFrontEightColumn8B",
+    name: "8 Column Right Lead Mix",
+    storyCount: 8,
+    description:
+      "Fresh 8-column front layout with a right-side 6-column lead, full-height 2-column boxes, and a full-width lower story.",
+  },
+  {
+    id: "CliffFrontEightColumn7C",
+    name: "8 Column Banner Mix",
+    storyCount: 7,
+    description:
+      "Fresh 8-column front layout with a full-width banner lead, 3/2/3 row, 6/2 row, and full-width footer.",
+  },
+  {
+    id: "CliffFrontEightColumn8D",
+    name: "8 Column Split Mix",
+    storyCount: 8,
+    description:
+      "Fresh 8-column front layout with 4/2/2, 5/3, 2/6, and full-width rows, all full-height.",
   },
 ];
 
@@ -405,10 +405,6 @@ export const WIZARD_LAYOUT_DESIGNS: Array<{
   { id: "CliffInsideEightColumn8B", name: "8 Column Inside City Mix", storyCount: 8, category: "advanced" },
   { id: "CliffInsideEightColumn7C", name: "8 Column Inside Anchor Mix", storyCount: 7, category: "advanced" },
   { id: "CliffInsideEightColumn8D", name: "8 Column Inside Lead Mix", storyCount: 8, category: "advanced" },
-  { id: "CliffInsideSixColumn7A", name: "6 Column Inside Anchor Rail", storyCount: 7, category: "basic" },
-  { id: "CliffInsideSixColumn8B", name: "6 Column Inside City Stack", storyCount: 8, category: "basic" },
-  { id: "CliffInsideSixColumn7C", name: "6 Column Inside Offset Lead", storyCount: 7, category: "basic" },
-  { id: "CliffInsideSixColumn8D", name: "6 Column Inside Uneven Mosaic", storyCount: 8, category: "basic" },
   { id: "IndianFront6A", name: "इंडियन फ्रंट 6A", storyCount: 6, category: "basic" },
   { id: "IndianFront7A", name: "इंडियन फ्रंट 7A", storyCount: 6, category: "basic" },
   { id: "IndianFront7B", name: "इंडियन फ्रंट 7B", storyCount: 6, category: "basic" },
@@ -432,6 +428,10 @@ export const WIZARD_LAYOUT_DESIGNS: Array<{
   { id: "AdvancedInfographicSplit7A", name: "एडवांस्ड इन्फोग्राफिक स्प्लिट 7A", storyCount: 6, category: "basic" },
   { id: "AdvancedEditorialColumn7A", name: "एडवांस्ड एडिटोरियल कॉलम 7A", storyCount: 6, category: "basic" },
   { id: "AdvancedQuadMosaic7A", name: "एडवांस्ड क्वाड मोज़ाइक 7A", storyCount: 6, category: "basic" },
+  { id: "CliffInsideSixColumn7A", name: "6 Column Inside Anchor Rail", storyCount: 7, category: "basic" },
+  { id: "CliffInsideSixColumn8B", name: "6 Column Inside City Stack", storyCount: 8, category: "basic" },
+  { id: "CliffInsideSixColumn7C", name: "6 Column Inside Offset Lead", storyCount: 7, category: "basic" },
+  { id: "CliffInsideSixColumn8D", name: "6 Column Inside Uneven Mosaic", storyCount: 8, category: "basic" },
 ];
 
 const WIZARD_ACCENT_PRESETS = NEWSWIRE_SUBHEADING_PRESETS.filter(
