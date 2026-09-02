@@ -1265,6 +1265,33 @@ export const AdvertisementPagePanel = memo(function AdvertisementPagePanel({
 
   // ── Editing ad ─────────────────────────────────────────────────────────────
 
+  // The ad geometry sets a floor on how many article boxes the page can have.
+  // A single ad in a corner leaves two rectangles -- the band above it and the
+  // strip beside it -- and no article box can be L-shaped, so a page with that
+  // ad cannot carry fewer than two articles without leaving one rectangle
+  // blank. Asking the slot builder for one slot returns however few it can
+  // actually get down to after folding zones together, which is that floor.
+  const minArticleBoxes = useMemo(() => {
+    if (remainingRects.length === 0) return 1;
+    return Math.max(
+      1,
+      buildAdResidualSlots(
+        remainingRects.map((r) => ({ x: r.x, y: r.y, width: r.width, height: r.height })),
+        CONTENT_X,
+        COL_W,
+        GUTTER,
+        1,
+        { wideShortFillers: true },
+      ).length,
+    );
+  }, [remainingRects]);
+
+  // Keep the publisher's choice at or above that floor, so what they pick is
+  // what they get rather than being silently overridden at generate time.
+  useEffect(() => {
+    setManualArticleCount((current) => (current < minArticleBoxes ? minArticleBoxes : current));
+  }, [minArticleBoxes]);
+
   const editingAd = useMemo(
     () => (editingAdId ? ads.find((a) => a.id === editingAdId) ?? null : null),
     [editingAdId, ads],
@@ -1488,12 +1515,20 @@ export const AdvertisementPagePanel = memo(function AdvertisementPagePanel({
           <label>बची हुई जगह में लेख:</label>
           <input
             type="number"
-            min={1}
+            min={minArticleBoxes}
             max={10}
             value={manualArticleCount}
-            onChange={(e) => setManualArticleCount(Math.max(1, parseInt(e.target.value) || 1))}
+            onChange={(e) =>
+              setManualArticleCount(Math.max(minArticleBoxes, parseInt(e.target.value) || minArticleBoxes))
+            }
           />
         </div>
+        {minArticleBoxes > 1 ? (
+          <p className="promo-remaining-info" style={{ marginTop: -10, marginBottom: 14 }}>
+            इस विज्ञापन सजावट में कम से कम {minArticleBoxes} लेख बॉक्स बनेंगे — इससे कम लेख चुनने पर
+            पेज पर खाली सफ़ेद जगह रह जाएगी।
+          </p>
+        ) : null}
 
         <div className="promo-section-label">लेख कहाँ से लें</div>
         <div className="promo-source-options">

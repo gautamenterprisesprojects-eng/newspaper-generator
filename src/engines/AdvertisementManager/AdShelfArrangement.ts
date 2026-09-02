@@ -96,7 +96,12 @@ const stackHeight = (stack: AdStack): number =>
  * stack while width and the stack budget allow, and the short ones fill in on
  * top afterwards, which is what keeps stack heights close together.
  */
-function buildStacks(free: ShelfAdInput[], area: ShelfArea, maxStacks: number): AdStack[] | null {
+function buildStacks(
+  free: ShelfAdInput[],
+  area: ShelfArea,
+  maxStacks: number,
+  strictWidth = false,
+): AdStack[] | null {
   const stacks: AdStack[] = [];
   const usedWidth = () => stacks.reduce((sum, s) => sum + s.widthPt, 0);
 
@@ -111,7 +116,22 @@ function buildStacks(free: ShelfAdInput[], area: ShelfArea, maxStacks: number): 
     // page's right edge); fall back to any stack at least as wide.
     const sameWidth = stacks.filter((s) => Math.abs(s.widthPt - ad.widthPt) <= 1);
     const wideEnough = stacks.filter((s) => s.widthPt >= ad.widthPt - 1);
-    let pool = sameWidth.length > 0 ? sameWidth : wideEnough;
+    // strictWidth refuses to drop a narrow ad into a wider stack. Doing so
+    // leaves a pocket beside it, and with several ads of several widths those
+    // pockets come out at different widths, so they cannot merge with each
+    // other into anything an article can use -- measured at 10-13% of the page
+    // lost to sub-column slivers on 5- and 6-ad pages. Refusing makes the
+    // candidate unbuildable instead, and the search takes a different one.
+    let pool = sameWidth.length > 0 ? sameWidth : strictWidth ? [] : wideEnough;
+    if (strictWidth && sameWidth.length === 0) {
+      const growable = stacks
+        .filter((s) => s.widthPt < ad.widthPt && usedWidth() - s.widthPt + ad.widthPt <= area.width + 0.5)
+        .sort((a, b) => a.height - b.height);
+      const host = growable[0];
+      if (!host) return null;
+      host.widthPt = ad.widthPt;
+      pool = [host];
+    }
 
     if (pool.length === 0) {
       // Every stack is narrower than this ad. It cannot simply be dropped into
@@ -149,8 +169,22 @@ function buildStacks(free: ShelfAdInput[], area: ShelfArea, maxStacks: number): 
  * that reaches the page is never worse than what the old code would have
  * produced.
  */
-function buildRowArrangement(free: ShelfAdInput[], area: ShelfArea): ShelfPlacement[] {
-  const sorted = [...free].sort((a, b) => b.widthPt * b.heightPt - a.widthPt * a.heightPt);
+function buildRowArrangement(
+  free: ShelfAdInput[],
+  area: ShelfArea,
+  order: "area" | "width" | "height" = "area",
+): ShelfPlacement[] {
+  // Ordering decides which ads end up sharing a row, and that is what decides
+  // how ragged the band's top edge is. Sorting by width groups equal-width ads
+  // into the same band -- the classic full-width ad stack across the foot of a
+  // page -- which on mixed-width sets wastes far less than sorting by area.
+  const sorted = [...free].sort((a, b) =>
+    order === "width"
+      ? b.widthPt - a.widthPt || b.heightPt - a.heightPt
+      : order === "height"
+        ? b.heightPt - a.heightPt || b.widthPt - a.widthPt
+        : b.widthPt * b.heightPt - a.widthPt * a.heightPt,
+  );
   const areaRight = area.x + area.width;
   const areaBottom = area.y + area.height;
   let cursorX = areaRight;
@@ -400,7 +434,8 @@ export function arrangeAdShelf(ads: ShelfAdInput[], area: ShelfArea): ShelfPlace
   // engine can say which wins, so try them all -- there are never more
   // candidates than there are ads.
   for (let maxStacks = 1; maxStacks <= free.length; maxStacks++) {
-    const stacks = buildStacks(byHeightDesc, area, maxStacks);
+   for (const strictWidth of [false, true]) {
+    const stacks = buildStacks(byHeightDesc, area, maxStacks, strictWidth);
     if (stacks === null) continue;
     rebalance(stacks, area);
 
@@ -420,11 +455,17 @@ export function arrangeAdShelf(ads: ShelfAdInput[], area: ShelfArea): ShelfPlace
     const blank = blankArea(placements, area);
 
     consider(placements, blank);
+   }
   }
 
-  // The previous row-based arrangement, scored on exactly the same terms.
-  const rowPlacements = buildRowArrangement(free, area);
-  consider(rowPlacements, blankArea(rowPlacements, area));
+  // Banded arrangements, scored on exactly the same terms. "area" is the
+  // previous row-based arrangement, kept so the result is never worse than
+  // what the old code produced.
+  const rowPlacements = buildRowArrangement(free, area, "area");
+  for (const order of ["area", "width", "height"] as const) {
+    const banded = buildRowArrangement(free, area, order);
+    consider(banded, blankArea(banded, area));
+  }
 
   // No candidate could be placed without overlap -- more ad inches than the
   // page can hold. Nothing here can fix that, so fall back to the old row
