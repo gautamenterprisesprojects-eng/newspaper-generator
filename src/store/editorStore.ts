@@ -1703,6 +1703,37 @@ const applyYouthUpdateEnglishBodyTypography = (articleData: ArticleData): Articl
 const usesRaggedRightBody = (_story: StoryFrame, item: NewswireStory) =>
   Boolean(item.raggedRight);
 
+/**
+ * A shallow box on the dedicated Advertisement Page.
+ *
+ * Those boxes are cut from whatever the ads leave, so they come out far
+ * flatter than any template slot. Once a kicker line and a two-line headline
+ * have taken their share there is nothing left for the story, and the box
+ * reads as all furniture and no news. Boxes matching this drop the kicker and
+ * hold their headline to a single line at a smaller size.
+ *
+ * Two shapes qualify: anything under 4in deep (the same figure that already
+ * denies these boxes a photo, for the same reason), and anything wide and
+ * under 5in -- width is what makes the shortfall obvious, since a wide box
+ * spends its depth on a headline set across the full measure.
+ */
+const AD_PAGE_SHALLOW_BOX_HEIGHT = 288; // 4in
+const AD_PAGE_WIDE_SHALLOW_BOX_HEIGHT = 360; // 5in
+const AD_PAGE_WIDE_BOX_COLUMNS = 3;
+
+const isShallowAdvertisementPageBox = (
+  options: NewswireImportOptions | undefined,
+  box: { height?: number; columnSpan?: number },
+): boolean => {
+  if (options?.isAdvertisementPage !== true) return false;
+  const height = box.height ?? 0;
+  const columnSpan = box.columnSpan ?? 0;
+  return (
+    height < AD_PAGE_SHALLOW_BOX_HEIGHT ||
+    (columnSpan >= AD_PAGE_WIDE_BOX_COLUMNS && height <= AD_PAGE_WIDE_SHALLOW_BOX_HEIGHT)
+  );
+};
+
 const chooseLayoutFittedNewswireArticleData = ({
   baseStory,
   item,
@@ -1760,7 +1791,9 @@ const chooseLayoutFittedNewswireArticleData = ({
   // regardless of whether the fetched Dharma article happens to have kicker
   // text -- same "explicit override, only for this one story" shape as
   // disableCaption above.
-  const disableKicker = options?.templateId === AKHAND_EDITORIAL_5A_TEMPLATE_ID;
+  const disableKicker =
+    options?.templateId === AKHAND_EDITORIAL_5A_TEMPLATE_ID ||
+    isShallowAdvertisementPageBox(options, baseStory);
   const preferSecondaryHeadlineAsHeadline =
     options?.templateId === AKHAND_EDITORIAL_5A_TEMPLATE_ID &&
     (baseStory.templateStoryNumber === 2 ||
@@ -3922,13 +3955,15 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         // run of type is ordinary newspaper furniture, a smeared face is not.
         // Gated on the slot's own isAdResidualSpace marker, so no template
         // layout on any other page kind is affected.
-        const AD_RESIDUAL_MIN_IMAGE_BOX_HEIGHT = 288; // 4in
-        // isAdvertisementPageSlot, not isAdResidualSpace: the latter is also
-        // stamped by PageAdvertisementPlacement for ads embedded in front,
-        // inside and editorial pages, and those are deliberately untouched.
-        const isAdvertisementPageSlot = Boolean((slot as any).isAdvertisementPageSlot);
         const adResidualShallowBoxImageDenied =
-          isAdvertisementPageSlot && (slot.height ?? 0) < AD_RESIDUAL_MIN_IMAGE_BOX_HEIGHT;
+          options?.isAdvertisementPage === true && (slot.height ?? 0) < AD_PAGE_SHALLOW_BOX_HEIGHT;
+        // Same box shape, the rest of the shallow-box treatment: no kicker
+        // above the headline, and the headline held to one line at a smaller
+        // size so it does not eat the depth the story needs.
+        const isShallowAdBox = isShallowAdvertisementPageBox(options, {
+          height: slot.height,
+          columnSpan: slot.columnSpan,
+        });
         // Publisher-exclusive: Youth UPDATE's own "SHORT NEWS" rail (story 3)
         // always carries its fixed section banner -- drawn as a hardcoded
         // overlay (see youthUpdateEditorialRailBox's own pattern in
@@ -4124,6 +4159,18 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           ...(isWideShallowNewsBand
             ? {
                 headlineFontSize: Math.max(18, defaultTypography.headlineFontSize - 4),
+                headlineLineHeight: 0.92,
+                headlineLineHeightMode: "percentage" as const,
+              }
+            : {}),
+          ...(isShallowAdBox
+            ? {
+                // One line, and small enough that one line is actually
+                // reachable -- the composer shrinks toward its own floor to
+                // honour headlineMaxLines, so starting lower means it lands
+                // on a size that still reads rather than at the floor.
+                headlineMaxLines: 1,
+                headlineFontSize: Math.max(16, defaultTypography.headlineFontSize - 6),
                 headlineLineHeight: 0.92,
                 headlineLineHeightMode: "percentage" as const,
               }
@@ -4433,7 +4480,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             isEightColumnTemplate ||
             isCliffInsideSixColumnTemplate ||
             options.isAdvertisementPage === true,
-          isAkhandEditorial5A,
+          // disableKicker. Applied on the draft as well as on the fitted
+          // result that replaces it -- a flag on only one of the two never
+          // reaches the printed page.
+          isAkhandEditorial5A || isShallowAdBox,
           isAkhandEditorial5A && slot.storyNumber !== 5
             ? {
                 fontSize: baseStory.headlineFontSize,
