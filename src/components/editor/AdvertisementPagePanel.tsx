@@ -41,6 +41,7 @@ import {
   RefreshCw,
   CheckCircle,
   AlertCircle,
+  Square,
 } from "lucide-react";
 import type { NewswireStory, NewswireCategory } from "@/lib/newswire";
 import { NEWSWIRE_CATEGORIES, NEWSWIRE_SUBHEADING_PRESETS } from "@/lib/newswire";
@@ -253,6 +254,8 @@ type AdItem = {
   rotation: 0 | 90 | 180 | 270;
   cropMode: "fit" | "fill" | "crop";
   locked: boolean;
+  /** Print a 1pt black rule around the advertisement on the page. */
+  showBorder: boolean;
   placedX: number;
   placedY: number;
   placed: boolean;
@@ -469,7 +472,15 @@ const AdCard = memo(function AdCard({
         <img
           src={ad.dataUrl}
           alt={ad.filename}
-          style={{ objectFit: "contain", maxWidth: "100%", maxHeight: "100%", display: "block" }}
+          style={{
+            objectFit: "contain",
+            maxWidth: "100%",
+            maxHeight: "100%",
+            display: "block",
+            // Mirrors the rule that will print around the ad, so the toggle
+            // shows its effect here rather than only after generating.
+            border: ad.showBorder ? "1px solid #000" : "none",
+          }}
         />
         {ad.locked ? (
           <div
@@ -533,6 +544,19 @@ const AdCard = memo(function AdCard({
         <button type="button" title="कॉपी बनाएं" onClick={() => onDuplicate(ad.id)} style={cardActionButtonStyle}><Copy size={12} /></button>
         <button type="button" title={ad.locked ? "अनलॉक करें" : "लॉक करें"} onClick={() => onToggleLock(ad.id)} style={cardActionButtonStyle}>
           {ad.locked ? <Unlock size={12} /> : <Lock size={12} />}
+        </button>
+        <button
+          type="button"
+          title={ad.showBorder ? "बॉर्डर हटाएं" : "बॉर्डर लगाएं (1px काली लाइन)"}
+          aria-pressed={ad.showBorder}
+          onClick={() => onUpdate(ad.id, { showBorder: !ad.showBorder })}
+          style={
+            ad.showBorder
+              ? { ...cardActionButtonStyle, background: "#191714", color: "#fff", borderColor: "#191714" }
+              : cardActionButtonStyle
+          }
+        >
+          <Square size={12} />
         </button>
         <button
           type="button"
@@ -937,6 +961,7 @@ export const AdvertisementPagePanel = memo(function AdvertisementPagePanel({
               rotation: 0,
               cropMode: "fit",
               locked: false,
+              showBorder: false,
               placedX: CONTENT_X,
               placedY: contentBounds.y + contentBounds.height - initialHeightPt,
               placed: false,
@@ -1292,6 +1317,16 @@ export const AdvertisementPagePanel = memo(function AdvertisementPagePanel({
                ...prototypeArticle.containerStyles,
                backgroundOpacity: 0,
                borderWidth: 0,
+               // containerBorderWidth, not frameBorderWidth: the container
+               // pair is what all three render paths actually draw -- the
+               // Konva preview (ArticleBox), the canvas export used for
+               // images, and PrintPDFEngine -- so a rule set here shows up in
+               // the preview and in the downloaded PDF alike.
+               article: {
+                 ...prototypeArticle.containerStyles.article,
+                 containerBorderWidth: ad.showBorder ? 1 : 0,
+                 containerBorderColor: ad.showBorder ? "#000000" : "transparent",
+               },
             },
           } as any,
         });
