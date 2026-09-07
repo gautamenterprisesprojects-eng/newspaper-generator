@@ -14,7 +14,6 @@ import {
   rectangle,
   StandardFonts,
 } from "pdf-lib";
-import { computeImageCoverCrop } from "@/engines/ImagePlacement/computeImageCoverCrop";
 import type {
   ArticleLayoutTextBlock,
   ArticleLayoutTextLine,
@@ -1106,38 +1105,7 @@ const drawArticle = ({
       const frameW = layout.image.width;
       const frameH = layout.image.height;
 
-      const sourceW = asset.pixelWidth > 0 ? asset.pixelWidth : image.width;
-      const sourceH = asset.pixelHeight > 0 ? asset.pixelHeight : image.height;
-      
-      if (debugImages) console.log(`[ImageExportDiagnostic] Image dimensions: sourceW=${sourceW}, sourceH=${sourceH}, frameW=${frameW}, frameH=${frameH}`);
-
-      const isPureAd =
-        (article as any)?.role === "advertisement" ||
-        (layout.image.coverCropWidth && Math.abs(layout.image.coverCropWidth - sourceW) < 2);
-
-      const crop = isPureAd
-        ? {
-            sourceX: 0,
-            sourceY: 0,
-            sourceWidth: sourceW,
-            sourceHeight: sourceH,
-            scale: Math.min(frameW / Math.max(1, sourceW), frameH / Math.max(1, sourceH)),
-          }
-        : computeImageCoverCrop({
-            sourceWidth: sourceW,
-            sourceHeight: sourceH,
-            frameWidth: frameW,
-            frameHeight: frameH,
-            // Matches composeArticleBox.ts's own bias -- keeps the top of
-            // the subject from being cut off by a dead-centre crop.
-            focalPointY: 0.3,
-          });
-
-      const scaledW = sourceW * crop.scale;
-      const scaledH = sourceH * crop.scale;
-      const imgX = frameX - crop.sourceX * crop.scale;
-      const imgY = frameY + frameH - scaledH + crop.sourceY * crop.scale;
-      
+      // Stretch the full embedded image into the same fixed frame as the editor.
       if (debugImages) console.log(`[ImageExportDiagnostic] Image clipping rectangle: frameX=${frameX}, frameY=${frameY}, frameW=${frameW}, frameH=${frameH}`);
 
       // Safe graphics-state restoration
@@ -1153,10 +1121,10 @@ const drawArticle = ({
         );
 
         page.drawImage(image, {
-          x: imgX,
-          y: imgY,
-          width: scaledW,
-          height: scaledH,
+          x: frameX,
+          y: frameY,
+          width: frameW,
+          height: frameH,
         });
         if (debugImages) console.log(`[ImageExportDiagnostic] Successfully executed page.drawImage for imageAssetId=${article.imageAssetId}`);
       } catch (e) {

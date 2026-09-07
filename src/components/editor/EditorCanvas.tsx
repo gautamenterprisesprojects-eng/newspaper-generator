@@ -39,7 +39,6 @@ import { PerformanceOverlay } from "@/components/editor/PerformanceOverlay";
 import { YouthUpdateEditorialRailImage } from "@/components/editor/YouthUpdateEditorialRailImage";
 import { YouthUpdateShortNewsBanner } from "@/components/editor/YouthUpdateShortNewsBanner";
 import { YouthUpdateInsideRail } from "@/components/editor/YouthUpdateInsideRail";
-import { computeImageCoverCrop } from "@/engines/ImagePlacement/computeImageCoverCrop";
 import { FrameManagerPanel } from "@/components/editor/FrameManagerPanel";
 import { StyleManagerPanel } from "@/components/editor/StyleManagerPanel";
 import {
@@ -3304,36 +3303,9 @@ export function EditorCanvas() {
       if (imageSource) {
         try {
           const storyImage = await loadImageElement(imageSource);
-          const imgNaturalW = storyImage.naturalWidth || storyImage.width;
-          const imgNaturalH = storyImage.naturalHeight || storyImage.height;
-
-          const isPureAd =
-            (story as any)?.role === "advertisement" ||
-            (layout.image.coverCropWidth && Math.abs(layout.image.coverCropWidth - imgNaturalW) < 2);
-
-          const crop = isPureAd
-            ? {
-                sourceX: layout.image.coverCropX ?? 0,
-                sourceY: layout.image.coverCropY ?? 0,
-                sourceWidth: layout.image.coverCropWidth ?? imgNaturalW,
-                sourceHeight: layout.image.coverCropHeight ?? imgNaturalH,
-              }
-            : computeImageCoverCrop({
-                sourceWidth: imgNaturalW,
-                sourceHeight: imgNaturalH,
-                frameWidth: layout.image.width,
-                frameHeight: layout.image.height,
-                // Matches composeArticleBox.ts's own bias -- keeps the top
-                // of the subject from being cut off by a dead-centre crop.
-                focalPointY: 0.3,
-              });
-
+          // Draw the whole source into the fixed frame without cropping.
           context.drawImage(
             storyImage,
-            crop.sourceX,
-            crop.sourceY,
-            crop.sourceWidth,
-            crop.sourceHeight,
             story.x + layout.image.x,
             story.y + layout.image.y,
             layout.image.width,
@@ -3786,24 +3758,10 @@ export function EditorCanvas() {
           try {
             const floatImage = await loadImageElement(floatImageSource);
             const frame = storyLayout.layout.editorialFloatImage;
-            const crop = computeImageCoverCrop({
-              sourceWidth: floatImage.naturalWidth || floatImage.width,
-              sourceHeight: floatImage.naturalHeight || floatImage.height,
-              frameWidth: frame.width,
-              frameHeight: frame.height,
-              // Matches composeArticleBox.ts's own bias -- keeps the top of
-              // the subject from being cut off by a dead-centre crop.
-              focalPointY: 0.3,
-            });
-
             context.save();
             context.globalAlpha = frame.opacity ?? 1;
             context.drawImage(
               floatImage,
-              crop.sourceX,
-              crop.sourceY,
-              crop.sourceWidth,
-              crop.sourceHeight,
               story.x + frame.x,
               story.y + frame.y,
               frame.width,

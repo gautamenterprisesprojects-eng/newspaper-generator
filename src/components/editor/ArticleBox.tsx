@@ -29,7 +29,6 @@ import type {
 } from "@/engines/FrameLayout/FrameLayoutInteractionTypes";
 import { getNewspaperFontStack } from "@/engines/FontManager/FontManagerEngine";
 import { createCanvasFontString } from "@/engines/TypographyEngine/TextMeasure";
-import { computeImageCoverCrop } from "@/engines/ImagePlacement/computeImageCoverCrop";
 import { isYouthUpdatePortalSession } from "@/engines/MasterPage/YouthUpdateConfig";
 import { useEditorStore } from "@/store/editorStore";
 import { FactBox } from "./FactBox";
@@ -132,8 +131,6 @@ const RemoteStoryImage = memo(function RemoteStoryImage({
   width,
   height,
   opacity = 1,
-  cropOverride,
-  fit = "cover",
 }: {
   source: string;
   x: number;
@@ -141,8 +138,6 @@ const RemoteStoryImage = memo(function RemoteStoryImage({
   width: number;
   height: number;
   opacity?: number;
-  cropOverride?: { x?: number; y?: number; width?: number; height?: number };
-  fit?: "cover" | "contain";
 }) {
   const [image, setImage] = useState<HTMLImageElement | null>(null);
 
@@ -176,48 +171,14 @@ const RemoteStoryImage = memo(function RemoteStoryImage({
     return null;
   }
 
-  const crop =
-    fit === "contain"
-      ? {
-          sourceX: 0,
-          sourceY: 0,
-          sourceWidth: image.width,
-          sourceHeight: image.height,
-        }
-      : cropOverride && cropOverride.width && cropOverride.height
-      ? {
-          sourceX: cropOverride.x ?? 0,
-          sourceY: cropOverride.y ?? 0,
-          sourceWidth: cropOverride.width,
-          sourceHeight: cropOverride.height,
-        }
-      : computeImageCoverCrop({
-          sourceWidth: image.width,
-          sourceHeight: image.height,
-          frameWidth: width,
-          frameHeight: height,
-          // Matches composeArticleBox.ts's own bias -- a dead-centre crop
-          // cuts evenly off top and bottom, which reads as the subject's
-          // head being cut off for a typical news photo.
-          focalPointY: 0.3,
-        });
-  const containScale = fit === "contain" ? Math.min(width / image.width, height / image.height) : 1;
-  const renderWidth = fit === "contain" ? image.width * containScale : width;
-  const renderHeight = fit === "contain" ? image.height * containScale : height;
-
+  // Stretch the complete bitmap inside the existing frame; text geometry stays fixed.
   return (
     <KonvaImage
       image={image}
-      x={x + (width - renderWidth) / 2}
-      y={y + (height - renderHeight) / 2}
-      width={renderWidth}
-      height={renderHeight}
-      crop={{
-        x: crop.sourceX,
-        y: crop.sourceY,
-        width: crop.sourceWidth,
-        height: crop.sourceHeight,
-      }}
+      x={x}
+      y={y}
+      width={width}
+      height={height}
       opacity={opacity}
       listening={false}
     />
@@ -1490,12 +1451,6 @@ function ArticleBoxComponent({
               width={layout.image.width}
               height={layout.image.height}
               opacity={layout.image.crop?.opacity ?? 1}
-              cropOverride={{
-                x: layout.image.coverCropX,
-                y: layout.image.coverCropY,
-                width: layout.image.coverCropWidth,
-                height: layout.image.coverCropHeight,
-              }}
             />
           ) : null}
           {layout.image.shapeType && layout.image.shapeType !== "rectangle" ? (
