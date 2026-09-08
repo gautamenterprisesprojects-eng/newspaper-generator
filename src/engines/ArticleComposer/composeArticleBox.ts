@@ -4245,9 +4245,10 @@ function composeArticleBoxPass(
       : settings.editorialPageStyle && [2, 5, 6].includes(editorialStoryNumber)
       ? 5
       : (settings.editorialPageStyle?.headlineToBodyGap ?? 0);
+  const insidePageImageHeadlineGap = 1;
   const insideImageHeadlineBottomGap =
     settings.insidePageStyle && hasImage && storyColumnSpan >= 2
-      ? 4
+      ? insidePageImageHeadlineGap
       : houseStyle?.headlineToBodyGap;
   const headlineToDatelineGap = settings.editorialPageStyle
     // Flat, and small. The scaling rule below exists to keep a big headline
@@ -4371,12 +4372,25 @@ function composeArticleBoxPass(
       autoSizeImage: false,
     };
   }
+  const insideMultiColumnTopImage =
+    settings.insidePageStyle &&
+    hasImage &&
+    storyColumnSpan >= 2 &&
+    ["top", "top-left", "top-right", "top-center"].includes(resolvedImageSettings.imageAlignment);
+  const headlineLineBottom = Math.max(
+    headlineFlowBottom,
+    ...headline.lineBoxes.map((line) => line.y + line.height),
+  );
+  const imagePlacementTopY = insideMultiColumnTopImage ? headlineLineBottom + insidePageImageHeadlineGap - 1 : mediaY;
+  const imagePlacementStackHeight = insideMultiColumnTopImage
+    ? Math.max(1, articleBox.height - imagePlacementTopY - bottomInset)
+    : availableStackHeight;
   const imagePlacement = placeImage({
     storyBounds: {
       x: inset,
-      y: mediaY,
+      y: imagePlacementTopY,
       width: contentWidth,
-      height: availableStackHeight,
+      height: imagePlacementStackHeight,
     },
     imageSettings: resolvedImageSettings,
     columnCount: safeColumnCount,
