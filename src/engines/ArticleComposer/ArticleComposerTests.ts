@@ -209,6 +209,43 @@ export const runArticleComposerTests = async () => {
     );
   }
 
+  const insideImageLayout = composeArticleBox(
+    {
+      ...createStoryBox(310),
+      height: 430,
+      imageEnabled: true,
+      imageAlignment: "top-left",
+      imageColumnSpan: 1,
+      imageHeight: 96,
+      imageHeightMode: "fixed",
+      imageWrapMode: "newspaper",
+      headlineFontSize: 24,
+      headlineLineHeight: 1,
+      autoFitHeadline: false,
+      autoBalanceHeadline: false,
+    },
+    {
+      ...prototypeArticle,
+      headline: "\u091c\u0930\u094d\u092e\u0928\u0940 \u092e\u0947\u0902 \u090f\u090f\u092b\u0921\u0940 \u0915\u093e \u092c\u0922\u093c\u0924\u093e \u092a\u094d\u0930\u092d\u093e\u0935",
+      subheadline: "",
+      body: "Body copy ".repeat(120),
+      columnCount: 2,
+    },
+    {
+      ...compositionSettings,
+      insidePageStyle: { headlineToBodyGap: -5 } as any,
+    },
+  );
+  const insideHeadlineBottom = Math.max(
+    ...insideImageLayout.headline.lineBoxes.map((line) => line.y + line.height),
+  );
+
+  assert(insideImageLayout.image !== null, "inside image story must render an image");
+  assert(
+    (insideImageLayout.image?.y ?? 0) - insideHeadlineBottom >= 4,
+    "inside-page image stories spanning two columns must keep at least 4pt between headline and image",
+  );
+
   const naturalWordLayout = composeArticleBox(
     {
       ...createStoryBox(420),

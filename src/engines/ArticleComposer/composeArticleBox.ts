@@ -4245,6 +4245,10 @@ function composeArticleBoxPass(
       : settings.editorialPageStyle && [2, 5, 6].includes(editorialStoryNumber)
       ? 5
       : (settings.editorialPageStyle?.headlineToBodyGap ?? 0);
+  const insideImageHeadlineBottomGap =
+    settings.insidePageStyle && hasImage && storyColumnSpan >= 2
+      ? 4
+      : houseStyle?.headlineToBodyGap;
   const headlineToDatelineGap = settings.editorialPageStyle
     // Flat, and small. The scaling rule below exists to keep a big headline
     // clear of a byline; an editorial headline has no byline under it and the
@@ -4254,8 +4258,8 @@ function composeArticleBoxPass(
     // headlines showed the same hole, because the scaled gap and the baseline
     // snap compound. The front page leaves it undefined and keeps the rule
     // below exactly.
-    : houseStyle?.headlineToBodyGap !== undefined
-    ? houseStyle.headlineToBodyGap
+    : insideImageHeadlineBottomGap !== undefined
+    ? insideImageHeadlineBottomGap
     : narrowTitleFill
     ? spacing.datelineToContent
     : isFrontPageTwoColumnBox
