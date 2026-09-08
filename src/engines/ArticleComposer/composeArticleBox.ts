@@ -4245,7 +4245,7 @@ function composeArticleBoxPass(
       : settings.editorialPageStyle && [2, 5, 6].includes(editorialStoryNumber)
       ? 5
       : (settings.editorialPageStyle?.headlineToBodyGap ?? 0);
-  const insidePageImageHeadlineGap = 1;
+  const insidePageImageHeadlineGap = -1;
   const insideImageHeadlineBottomGap =
     settings.insidePageStyle && hasImage && storyColumnSpan >= 2
       ? insidePageImageHeadlineGap

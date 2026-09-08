@@ -242,8 +242,8 @@ export const runArticleComposerTests = async () => {
 
   assert(insideImageLayout.image !== null, "inside image story must render an image");
   assert(
-    (insideImageLayout.image?.y ?? 0) - insideHeadlineBottom >= 1,
-    "inside-page image stories spanning two columns must keep at least 1pt between headline and image",
+    (insideImageLayout.image?.y ?? 0) - insideHeadlineBottom >= -1,
+    "inside-page image stories spanning two columns may tuck the image up to -1pt under the headline",
   );
 
   const naturalWordLayout = composeArticleBox(
