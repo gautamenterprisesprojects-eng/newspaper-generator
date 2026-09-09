@@ -4095,6 +4095,16 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           1,
           Math.min(EDITORIAL_IMAGE.columnSpan, slot.columnSpan - 1),
         );
+        const useTwoColumnImageForThreeColumnBox =
+          resolvedImageEnabled &&
+          slot.columnSpan === 3 &&
+          options?.pageKind !== "editorial" &&
+          !isEightColumnTemplate &&
+          !isCliffInsideSixColumnTemplate &&
+          !isYouthUpdateInsideStory &&
+          !isAkhandEditorial5A &&
+          !isAkhandVicharManthanImageSlot &&
+          nestedSlots.length === 0;
 
         // A box with a writer's rail is composed on one extra column, so the
         // rail occupies a whole column rather than part of one. See
@@ -4233,6 +4243,21 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             : {}),
           ...(isFrontPageBottomThreeColumn && resolvedImageEnabled
             ? { imageAlignment: "top-right" as const, imageColumnSpan: 1 as StoryColumnSpan }
+            : {}),
+          ...(useTwoColumnImageForThreeColumnBox
+            ? {
+                imageAlignment: "top-left" as const,
+                imageColumnSpan: 2 as StoryColumnSpan,
+                imageHeight:
+                  slot.priority === "lead"
+                    ? 156
+                    : slot.priority === "major"
+                      ? 132
+                      : 112,
+                imageHeightMode: "fixed" as const,
+                autoSizeImage: false,
+                imageWrapMode: "newspaper" as const,
+              }
             : {}),
           ...(isEightColumnTemplate && resolvedImageEnabled
             ? {
