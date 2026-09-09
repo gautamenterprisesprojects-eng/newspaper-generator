@@ -4935,9 +4935,9 @@ function composeArticleBoxPass(
     image.y <= bodyY + bodyLineHeight,
   );
   const bodyFirstLineCapGap = (() => {
-    if (!twoColumnLeftPhoto && !settings.tightBylineToBodyGap && !tightWideEightColumnBylineToBodyGap) return 0;
+    if (twoColumnLeftPhoto || (!settings.tightBylineToBodyGap && !tightWideEightColumnBylineToBodyGap)) return 0;
     const ink = measureTextInkMetrics({
-      text: twoColumnLeftPhoto && /[\u0900-\u097f]/u.test(bodyText) ? "क" : "H",
+      text: "H",
       fontFamily: resolvedBodyStyle.fontFamily,
       fontSize: resolvedBodyStyle.fontSize,
       fontStyle: resolvedBodyStyle.fontStyle,
@@ -4963,13 +4963,10 @@ function composeArticleBoxPass(
     if (clipped && twoColumnLeftPhoto && image) {
       const isBelowPhoto = Math.abs(clipped.x - inset) <= 0.5 &&
         clipped.y >= image.y + image.height - 0.5 && clipped.y <= imageObstacleBottom + 0.5;
-      const isBesidePhoto = clipped.x >= image.x + image.width && clipped.y <= bodyY + bodyLineHeight;
-      if (isBelowPhoto || isBesidePhoto) {
-        const y = isBelowPhoto
-          ? (caption && captionConsumesVerticalSpace && articleData.caption.position === "below-image"
+      if (isBelowPhoto) {
+        const y = caption && captionConsumesVerticalSpace && articleData.caption.position === "below-image"
             ? caption.y + caption.height + spacing.captionToBody
-            : image.y + image.height + 2)
-          : image.y - bodyFirstLineCapGap;
+            : image.y + image.height + 2;
         return [{ ...clipped, y, height: Math.max(0, clipped.y + clipped.height - y) }];
       }
     }
@@ -5366,29 +5363,13 @@ function composeArticleBoxPass(
           )
           .filter((region) => region.height >= bodyLineHeight)
       : initialBodyRegions;
-  if (twoColumnLeftPhoto && image && byline.text) {
-    // Keep the right column beside the photo. Only advance the left body
-    // start to a matching row; the independently positioned byline stays put.
-    const besidePhotoStart = bodyRegions.find((region) =>
-      region.x >= firstColumnRight - 0.5 && region.y <= image.y + image.height,
-    )?.y;
-    if (besidePhotoStart !== undefined) {
-      bodyRegions = bodyRegions
-        .map((region) => {
-          if (Math.abs(region.x - firstColumnX) > 0.5 || region.y < image.y + image.height) {
-            return region;
-          }
-          const row = Math.ceil((region.y - besidePhotoStart) / bodyLineHeight - 1e-9);
-          const y = besidePhotoStart + row * bodyLineHeight;
-          const bottom = region.y + region.height;
-          return {
-            ...region,
-            y,
-            height: Math.max(0, bottom - y),
-          };
-        })
-        .filter((region) => region.height >= bodyLineHeight);
-    }
+  if (twoColumnLeftPhoto) {
+    // Body copy uses the normal text grid, not the photo's raised top edge.
+    // Snap after reserving the byline; its independent 2pt photo gap stays intact.
+    bodyRegions = bodyRegions.flatMap((region) => {
+      const snapped = snapRegionToBaseline(region, lineAdvanceGrid);
+      return snapped && snapped.height >= bodyLineHeight ? [snapped] : [];
+    });
   }
   const regionUsabilityRules: RegionUsabilityRules = {
     minRegionWidth: Math.max(1, columnWidth * 0.2),
