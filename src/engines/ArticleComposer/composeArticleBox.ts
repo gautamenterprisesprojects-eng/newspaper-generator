@@ -1583,7 +1583,6 @@ const createBodyColumns = (
   nativeBodyJustifyText = false,
   preserveBodyLineAdvance = false,
   contentLanguage: SentenceBoundaryLanguage = "hindi",
-  useRawBodyLineAdvance = false,
 ) => {
   const enableEnglishHyphenation =
     enableEnglishBodyHyphenation &&
@@ -1591,9 +1590,7 @@ const createBodyColumns = (
     typographyControls.bodyJustifyEngineMode === "browser";
   const normContent = normalizeRunBoundaries(content);
   const sentenceBoundaryOptions = { language: contentLanguage };
-  const baseLineHeightPx = useRawBodyLineAdvance
-    ? getLineHeightPx(resolvedBodyStyle)
-    : getBaselineLineAdvance(getLineHeightPx(resolvedBodyStyle), baselineGrid);
+  const baseLineHeightPx = getBaselineLineAdvance(getLineHeightPx(resolvedBodyStyle), baselineGrid);
   const { usableRegions } = partitionRegionsByUsability({
     regions,
     lineHeight: baseLineHeightPx,
@@ -2953,10 +2950,7 @@ function composeArticleBoxPass(
     10,
     30,
   );
-  const isHindiBodyExtraCondensedTrial = articleBox.contentLanguage !== "english";
-  const bodySize = isHindiBodyExtraCondensedTrial
-    ? 9
-    : clamp(typographySettings.bodyFontSize, 8, 16);
+  const bodySize = clamp(typographySettings.bodyFontSize, 8, 16);
   // English body copy justifies with visibly wide, uneven word-gaps in the
   // Devanagari-tuned default sans (no hyphenation, wide Latin metrics) --
   // swap to a proper English newspaper serif instead. Gated strictly on
@@ -2974,9 +2968,7 @@ function composeArticleBoxPass(
     bodySize,
     headlineLineHeight: hierarchyConfig.lineHeight,
     subheadlineLineHeight: clamp(typographySettings.subheadlineLineHeight, 0.8, 1.4),
-    bodyLineHeight: isHindiBodyExtraCondensedTrial
-      ? 10 / 9
-      : clamp(typographySettings.bodyLineHeight, 1.25, 1.6),
+    bodyLineHeight: clamp(typographySettings.bodyLineHeight, 1.25, 1.6),
     headlineWeight: hierarchyConfig.headlineWeight,
     subheadlineWeight: typographySettings.subheadlineWeight,
     bodyFontFamily,
@@ -3025,7 +3017,7 @@ function composeArticleBoxPass(
   // that snapping to the shared grid actually lands the baselines together —
   // see `FrontPageArticleStyle.bodyType`. Inside pages keep the per-priority
   // body sizes the hierarchy hands out.
-  const pinnedBodyType = isHindiBodyExtraCondensedTrial ? undefined : houseStyle?.bodyType;
+  const pinnedBodyType = houseStyle?.bodyType;
   const bodyFontSize = pinnedBodyType?.fontSizePt ?? editorialStyles.body.fontSize;
   const resolvedBodyStyle = {
     ...editorialStyles.body,
@@ -4311,9 +4303,7 @@ function composeArticleBoxPass(
       : headlineFlowBottom + headlineToDatelineGap) + headlineToBylineExtraGap;
 
   const captionStyle = editorialStyles.caption;
-  const bodyLineHeight = isHindiBodyExtraCondensedTrial
-    ? getLineHeightPx(resolvedBodyStyle)
-    : getBaselineLineAdvance(getLineHeightPx(resolvedBodyStyle), baselineGrid);
+  const bodyLineHeight = getBaselineLineAdvance(getLineHeightPx(resolvedBodyStyle), baselineGrid);
   const lineAdvanceGrid = createBaselineGrid(bodyLineHeight);
   const mediaY = snapToBaseline(contentStartY, baselineGrid);
   const availableStackHeight = snapMinMeasurementToBaseline(
@@ -5415,9 +5405,8 @@ function composeArticleBoxPass(
     Boolean(settings.constrainBodySegments && articleBox.contentLanguage === "english"),
     settings.bodyColumnEdgeInsetPt ?? 0,
     Boolean(settings.nativeBodyJustifyText && articleBox.contentLanguage === "english"),
-    twoColumnLeftPhoto || isHindiBodyExtraCondensedTrial,
+    twoColumnLeftPhoto,
     articleBox.contentLanguage === "english" ? "english" : "hindi",
-    isHindiBodyExtraCondensedTrial,
   );
   const generatedColumnIndexes = new Set(bodyRegions.map((region) => region.columnIndex));
   const usableColumnIndexes = new Set(bodyFlow.flow.regions.map((region) => region.region.columnIndex));
