@@ -32,7 +32,10 @@ import type {
   PrintPDFOptions,
   PrintPDFPreflightIssue,
   PrintPDFResult,
+  PrintPDFFontRole,
 } from "./PrintPDFTypes";
+
+type PdfFontsByRole = Partial<Record<PrintPDFFontRole, PDFFont>>;
 
 const defaultOptions: PrintPDFOptions = {
   bleed: 18,
@@ -169,6 +172,10 @@ const toPdfY = (mediaHeight: number, trimOffset: number, y: number, height: numb
 const getFontRole = (style: ArticleTextStyle) => {
   const family = style.fontFamily.toLowerCase();
 
+  if (family.includes("extra condensed")) {
+    return "bodySerifCondensed";
+  }
+
   if (family.includes("serif")) {
     return "serif";
   }
@@ -224,11 +231,16 @@ const getTextX = (
   return line.x + remainingWidth / 2;
 };
 
-const createFontFallback = async (pdfDoc: PDFDocument) => ({
-  serif: await pdfDoc.embedFont(StandardFonts.TimesRoman),
-  sans: await pdfDoc.embedFont(StandardFonts.Helvetica),
-  mono: await pdfDoc.embedFont(StandardFonts.Courier),
-});
+const createFontFallback = async (pdfDoc: PDFDocument) => {
+  const serif = await pdfDoc.embedFont(StandardFonts.TimesRoman);
+
+  return {
+    serif,
+    bodySerifCondensed: serif,
+    sans: await pdfDoc.embedFont(StandardFonts.Helvetica),
+    mono: await pdfDoc.embedFont(StandardFonts.Courier),
+  };
+};
 
 const embedFonts = async (
   pdfDoc: PDFDocument,
@@ -285,6 +297,7 @@ const embedFonts = async (
   return {
     fontsByRole: {
       serif: fontsByRole.get("serif"),
+      bodySerifCondensed: fontsByRole.get("bodySerifCondensed") ?? fontsByRole.get("serif"),
       sans: fontsByRole.get("sans"),
       mono: fontsByRole.get("mono"),
     },
@@ -520,11 +533,7 @@ const drawTextSegmentLine = ({
   line: ArticleLayoutTextLine;
   articleX: number;
   articleY: number;
-  fontsByRole: {
-    serif?: PDFFont;
-    sans?: PDFFont;
-    mono?: PDFFont;
-  };
+  fontsByRole: PdfFontsByRole;
   justifySegments?: boolean;
   blockX?: number;
   blockWidth?: number;
@@ -724,11 +733,7 @@ const drawTextBlock = ({
   trimOffset: number;
   articleX: number;
   articleY: number;
-  fontsByRole: {
-    serif?: PDFFont;
-    sans?: PDFFont;
-    mono?: PDFFont;
-  };
+  fontsByRole: PdfFontsByRole;
 }) => {
   const frameLayout = layoutFrameTextBlock(block);
   const displayBlock = frameLayout.block;
@@ -849,7 +854,7 @@ const drawFactBox = (
   trimOffset: number,
   articleX: number,
   articleY: number,
-  fontsByRole: { serif?: PDFFont; sans?: PDFFont; mono?: PDFFont },
+  fontsByRole: PdfFontsByRole,
 ) => {
   drawRectangle({
     page,
@@ -877,7 +882,7 @@ const drawPullQuote = (
   trimOffset: number,
   articleX: number,
   articleY: number,
-  fontsByRole: { serif?: PDFFont; sans?: PDFFont; mono?: PDFFont },
+  fontsByRole: PdfFontsByRole,
 ) => {
   drawRectangle({
     page,
@@ -901,7 +906,7 @@ const drawEditorialLabel = (
   trimOffset: number,
   articleX: number,
   articleY: number,
-  fontsByRole: { serif?: PDFFont; sans?: PDFFont; mono?: PDFFont },
+  fontsByRole: PdfFontsByRole,
 ) => {
   drawRectangle({
     page,
@@ -925,7 +930,7 @@ const drawCaption = (
   trimOffset: number,
   articleX: number,
   articleY: number,
-  fontsByRole: { serif?: PDFFont; sans?: PDFFont; mono?: PDFFont },
+  fontsByRole: PdfFontsByRole,
 ) => {
   if (caption.fill || (caption.strokeWidth && caption.strokeWidth > 0)) {
     drawRectangle({
@@ -981,7 +986,7 @@ const drawArticle = ({
   page: PDFPage;
   mediaHeight: number;
   trimOffset: number;
-  fontsByRole: { serif?: PDFFont; sans?: PDFFont; mono?: PDFFont };
+  fontsByRole: PdfFontsByRole;
   imageMap: Map<string, PDFImage>;
   imageAssetsById: Map<string, PrintPDFImageAsset>;
   imageMetrics: PrintPDFImageMetric[];
@@ -1380,3 +1385,4 @@ export const PrintPDFEngine = {
   generatePrintPDF,
   parsePrintColor,
 };
+

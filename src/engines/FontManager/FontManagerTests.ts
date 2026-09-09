@@ -7,6 +7,10 @@ import {
 
 assert.equal(getNewspaperFontStack("sans"), `${NEWSPAPER_FONT_FAMILIES.sans}, sans-serif`);
 assert.equal(getNewspaperFontStack("serif"), `${NEWSPAPER_FONT_FAMILIES.serif}, serif`);
+assert.equal(
+  getNewspaperFontStack("bodySerifCondensed"),
+  `${NEWSPAPER_FONT_FAMILIES.bodySerifCondensed}, ${NEWSPAPER_FONT_FAMILIES.serif}, serif`,
+);
 
 assert(
   NEWSPAPER_FONT_DEFINITIONS.some(
@@ -22,11 +26,20 @@ assert(
   "serif Devanagari regular font must be registered",
 );
 
+assert(
+  NEWSPAPER_FONT_DEFINITIONS.some(
+    (font) =>
+      font.role === "bodySerifCondensed" &&
+      font.source.endsWith("NotoSerifDevanagari-ExtraCondensed.ttf") &&
+      font.pdfRole === "bodySerifCondensed",
+  ),
+  "body ExtraCondensed Devanagari regular font must be registered",
+);
+
 assert.equal(
   NEWSPAPER_FONT_DEFINITIONS.filter((font) => font.weight === 400).length,
-  2,
+  3,
   "PDF pipeline should receive one regular font per text role",
 );
 
 console.log("FontManager tests passed");
-

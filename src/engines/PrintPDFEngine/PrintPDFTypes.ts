@@ -17,7 +17,7 @@ export type PrintPDFColor = {
   key: number;
 };
 
-export type PrintPDFFontRole = "serif" | "sans" | "mono";
+export type PrintPDFFontRole = "serif" | "sans" | "mono" | "bodySerifCondensed";
 
 export type PrintPDFFontAsset = {
   id: string;

@@ -13,12 +13,14 @@ export const NEWSPAPER_FONT_FAMILIES = {
   sans: "Cliff Noto Sans Devanagari",
   serif: "Cliff Noto Serif Devanagari",
   editorialHeadline: "Tiro Devanagari Hindi",
+  bodySerifCondensed: "Cliff Noto Serif Devanagari ExtraCondensed",
 } as const;
 
 export const NEWSPAPER_FONT_STACKS = {
   sans: `${NEWSPAPER_FONT_FAMILIES.sans}, sans-serif`,
   serif: `${NEWSPAPER_FONT_FAMILIES.serif}, serif`,
   editorialHeadline: `${NEWSPAPER_FONT_FAMILIES.editorialHeadline}, ${NEWSPAPER_FONT_FAMILIES.serif}, serif`,
+  bodySerifCondensed: `${NEWSPAPER_FONT_FAMILIES.bodySerifCondensed}, ${NEWSPAPER_FONT_FAMILIES.serif}, serif`,
 } as const;
 
 export const NEWSPAPER_FONT_DEFINITIONS: NewspaperFontDefinition[] = [
@@ -61,6 +63,16 @@ export const NEWSPAPER_FONT_DEFINITIONS: NewspaperFontDefinition[] = [
     weight: 700,
     style: "normal",
     pdfRole: "serif",
+  },
+  {
+    id: "cliff-noto-serif-devanagari-extra-condensed-regular",
+    role: "bodySerifCondensed",
+    family: NEWSPAPER_FONT_FAMILIES.bodySerifCondensed,
+    cssFamily: NEWSPAPER_FONT_STACKS.bodySerifCondensed,
+    source: "/fonts/NotoSerifDevanagari-ExtraCondensed.ttf",
+    weight: 400,
+    style: "normal",
+    pdfRole: "bodySerifCondensed",
   },
 ];
 
