@@ -3019,20 +3019,23 @@ function composeArticleBoxPass(
   // body sizes the hierarchy hands out.
   const pinnedBodyType = houseStyle?.bodyType;
   const bodyFontSize = pinnedBodyType?.fontSizePt ?? editorialStyles.body.fontSize;
+  const resolvedBodyFontSize = articleBox.contentLanguage === "english"
+    ? bodyFontSize
+    : Math.max(8, bodyFontSize - 1);
   const resolvedBodyStyle = {
     ...editorialStyles.body,
     ...(pinnedBodyType
       ? {
-          fontSize: pinnedBodyType.fontSizePt,
+          fontSize: resolvedBodyFontSize,
           lineHeight: isLowerFrontPagePackage ? 11 / pinnedBodyType.fontSizePt : pinnedBodyType.lineHeight,
         }
-      : {}),
+      : { fontSize: resolvedBodyFontSize }),
     ...(articleBox.contentLanguage === "english" ? {} : { fontStyle: "500" }),
     align: typographyControls.bodyAlignment,
     letterSpacing: resolveCharacterSpacing({
       tracking: typographyControls.bodyTracking,
       letterSpacing: typographyControls.bodyLetterSpacing,
-      fontSize: bodyFontSize,
+      fontSize: resolvedBodyFontSize,
     }),
     wordSpacing: typographyControls.wordSpacing,
   };
