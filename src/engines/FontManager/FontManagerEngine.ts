@@ -74,10 +74,20 @@ export const NEWSPAPER_FONT_DEFINITIONS: NewspaperFontDefinition[] = [
     style: "normal",
     pdfRole: "bodySerifCondensed",
   },
+  {
+    id: "cliff-noto-serif-devanagari-extra-condensed-medium",
+    role: "bodySerifCondensed",
+    family: NEWSPAPER_FONT_FAMILIES.bodySerifCondensed,
+    cssFamily: NEWSPAPER_FONT_STACKS.bodySerifCondensed,
+    source: "/fonts/NotoSerifDevanagari-ExtraCondensedMedium.ttf",
+    weight: 500,
+    style: "normal",
+    pdfRole: "bodySerifCondensed",
+  },
 ];
 
 const REQUIRED_FONT_DEFINITIONS = NEWSPAPER_FONT_DEFINITIONS.filter(
-  (font) => font.weight === 400,
+  (font) => font.weight === 400 || font.id === "cliff-noto-serif-devanagari-extra-condensed-medium",
 );
 
 const toFontCheckString = (font: NewspaperFontDefinition) =>

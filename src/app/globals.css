@@ -52,6 +52,14 @@
 }
 
 @font-face {
+  font-family: "Cliff Noto Serif Devanagari ExtraCondensed";
+  src: url("/fonts/NotoSerifDevanagari-ExtraCondensedMedium.ttf") format("truetype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
   font-family: "Tiro Devanagari Hindi";
   src: url("/fonts/TiroDevanagariHindi-Regular.ttf") format("truetype");
   font-weight: 400;

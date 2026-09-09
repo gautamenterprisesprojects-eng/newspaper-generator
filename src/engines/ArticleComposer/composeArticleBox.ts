@@ -3027,6 +3027,7 @@ function composeArticleBoxPass(
           lineHeight: isLowerFrontPagePackage ? 11 / pinnedBodyType.fontSizePt : pinnedBodyType.lineHeight,
         }
       : {}),
+    ...(articleBox.contentLanguage === "english" ? {} : { fontStyle: "500" }),
     align: typographyControls.bodyAlignment,
     letterSpacing: resolveCharacterSpacing({
       tracking: typographyControls.bodyTracking,

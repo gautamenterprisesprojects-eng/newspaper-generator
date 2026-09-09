@@ -124,7 +124,7 @@ export const createEditorialStyles = ({
     wrap: "none",
   },
   body: {
-    fill: "#29251f",
+    fill: "#000000",
     fontFamily: bodyFontFamily ?? baseSans,
     fontSize: bodySize,
     letterSpacing: 0,
