@@ -4915,10 +4915,17 @@ function composeArticleBoxPass(
   // reach. Measured, not assumed -- the same reason the headline's descender
   // reclaim is measured. Sampled with a capital because body copy opens with
   // one. Clamped to half an em so an unusual face cannot yank the column up.
+  // Only a two-column story with a single-column photo at the upper left.
+  const twoColumnLeftPhoto = Boolean(
+    image && storyColumnSpan === 2 && safeColumnCount === 2 &&
+    ["top-left", "left"].includes(resolvedImageSettings.imageAlignment) &&
+    Math.abs(image.x - inset) <= 0.5 && image.width <= columnWidth + 0.5 &&
+    image.y <= bodyY + bodyLineHeight,
+  );
   const bodyFirstLineCapGap = (() => {
-    if (!settings.tightBylineToBodyGap && !tightWideEightColumnBylineToBodyGap) return 0;
+    if (!twoColumnLeftPhoto && !settings.tightBylineToBodyGap && !tightWideEightColumnBylineToBodyGap) return 0;
     const ink = measureTextInkMetrics({
-      text: "H",
+      text: twoColumnLeftPhoto && /[\u0900-\u097f]/u.test(bodyText) ? "क" : "H",
       fontFamily: resolvedBodyStyle.fontFamily,
       fontSize: resolvedBodyStyle.fontSize,
       fontStyle: resolvedBodyStyle.fontStyle,
@@ -4941,6 +4948,19 @@ function composeArticleBoxPass(
       width: contentWidth,
       height: bodyHeight,
     });
+    if (clipped && twoColumnLeftPhoto && image) {
+      const isBelowPhoto = Math.abs(clipped.x - inset) <= 0.5 &&
+        clipped.y >= image.y + image.height - 0.5 && clipped.y <= imageObstacleBottom + 0.5;
+      const isBesidePhoto = clipped.x >= image.x + image.width && clipped.y <= bodyY + bodyLineHeight;
+      if (isBelowPhoto || isBesidePhoto) {
+        const y = isBelowPhoto
+          ? (caption && captionConsumesVerticalSpace && articleData.caption.position === "below-image"
+            ? caption.y + caption.height + spacing.captionToBody
+            : image.y + image.height + 2)
+          : image.y - bodyFirstLineCapGap;
+        return [{ ...clipped, y, height: Math.max(0, clipped.y + clipped.height - y) }];
+      }
+    }
     const baselineRegion = clipped ? snapRegionToBaseline(clipped, lineAdvanceGrid) : null;
 
     return baselineRegion ? [baselineRegion] : [];
@@ -4959,7 +4979,7 @@ function composeArticleBoxPass(
     // all columns move together and stay row-aligned with each other -- the
     // grid's origin shifts, its rhythm does not.
     .map((region) => {
-      if (!bodyFirstLineCapGap) return region;
+      if (!bodyFirstLineCapGap || twoColumnLeftPhoto) return region;
       return {
         ...region,
         y: region.y - bodyFirstLineCapGap,
@@ -5169,7 +5189,7 @@ function composeArticleBoxPass(
   // moves the boxes that ask for it.
   const forcedBylineY =
     rawLeadRegion && image && forceBylineBelowFirstColumnImage
-      ? Math.max(currentLeadY, image.y + image.height + Math.max(2, bylineDividerToBody))
+      ? Math.max(currentLeadY, image.y + image.height + (twoColumnLeftPhoto ? 2 : Math.max(2, bylineDividerToBody)))
       : currentLeadY + (shouldShowInlineSubheadline ? headlineToBylineExtraGap : 0);
   const shouldUseCompactBylineY = (compactHeadlineByline || (settings.tightBylineToBodyGap && !shouldShowInlineSubheadline)) && !forceBylineBelowFirstColumnImage;
   const bylineRegion = leadRegionIndex >= 0 && rawLeadRegion
@@ -5201,7 +5221,7 @@ function composeArticleBoxPass(
           ...bylineMetrics,
           overflow: false,
         },
-        compactHeadlineByline ? { gridSize: 1 } : baselineGrid,
+        compactHeadlineByline || twoColumnLeftPhoto ? { gridSize: 1 } : baselineGrid,
       ), bylineStyle)
     : byline;
 
@@ -5215,7 +5235,7 @@ function composeArticleBoxPass(
     }
     const textWidth = segments.length > 0 ? maxX - minX : (bylineMetrics.lines[0]?.width || byline.width);
     const textX = segments.length > 0 ? minX : byline.x + (byline.width - textWidth) / 2;
-    const paddingTop = 6;
+    const paddingTop = twoColumnLeftPhoto ? 0 : 6;
 
     const tightByline = {
       ...byline,
