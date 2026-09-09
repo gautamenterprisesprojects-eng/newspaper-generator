@@ -47,13 +47,25 @@ assert(
   "body ExtraCondensed Devanagari medium font must be registered",
 );
 
+assert(
+  NEWSPAPER_FONT_DEFINITIONS.some(
+    (font) =>
+      font.role === "bodySerifCondensed" &&
+      font.source.endsWith("NotoSerifDevanagari-ExtraCondensedSemiBold.ttf") &&
+      font.weight === 600 &&
+      font.pdfRole === "bodySerifCondensed",
+  ),
+  "body ExtraCondensed Devanagari semibold font must be registered",
+);
+
 assert.equal(
   NEWSPAPER_FONT_DEFINITIONS.filter(
     (font) =>
       font.weight === 400 ||
-      font.id === "cliff-noto-serif-devanagari-extra-condensed-medium",
+      font.id === "cliff-noto-serif-devanagari-extra-condensed-medium" ||
+      font.id === "cliff-noto-serif-devanagari-extra-condensed-semibold",
   ).length,
-  4,
+  5,
   "PDF pipeline should receive one regular font per text role",
 );
 
