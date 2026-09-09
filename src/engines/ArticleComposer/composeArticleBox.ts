@@ -77,6 +77,7 @@ import {
   findNextSentenceBoundary,
   findPreviousSentenceBoundary,
   isAlreadyAtSentenceEnd,
+  type SentenceBoundaryLanguage,
 } from "@/engines/TypographyEngine/SentenceBoundaryEngine";
 
 import type {
@@ -1581,12 +1582,14 @@ const createBodyColumns = (
   bodyColumnEdgeInsetPt = 0,
   nativeBodyJustifyText = false,
   preserveBodyLineAdvance = false,
+  contentLanguage: SentenceBoundaryLanguage = "hindi",
 ) => {
   const enableEnglishHyphenation =
     enableEnglishBodyHyphenation &&
     typographyControls.bodyAlignment === "justify" &&
     typographyControls.bodyJustifyEngineMode === "browser";
   const normContent = normalizeRunBoundaries(content);
+  const sentenceBoundaryOptions = { language: contentLanguage };
   const baseLineHeightPx = getBaselineLineAdvance(getLineHeightPx(resolvedBodyStyle), baselineGrid);
   const { usableRegions } = partitionRegionsByUsability({
     regions,
@@ -1701,8 +1704,8 @@ const createBodyColumns = (
     const visibleLines = flow.visibleLines;
     const cutoffIndex = findCutoffIndexInFullText(visibleLines, fullText);
 
-    if (cutoffIndex >= 0 && !isAlreadyAtSentenceEnd(fullText, cutoffIndex, visibleLines)) {
-      const nextBoundary = findNextSentenceBoundary(fullText, cutoffIndex);
+    if (cutoffIndex >= 0 && !isAlreadyAtSentenceEnd(fullText, cutoffIndex, visibleLines, sentenceBoundaryOptions)) {
+      const nextBoundary = findNextSentenceBoundary(fullText, cutoffIndex, sentenceBoundaryOptions);
       let fittedLayout = false;
 
       if (nextBoundary !== -1) {
@@ -1777,7 +1780,7 @@ const createBodyColumns = (
         // does that. Rolling back to a real sentence boundary is now unconditional; the
         // blank space it leaves is closed afterwards by the copyfitter (which reflows real
         // text by adjusting tracking) rather than by inventing an ending here.
-        const prevSentenceBoundary = findPreviousSentenceBoundary(fullText, cutoffIndex - 1);
+        const prevSentenceBoundary = findPreviousSentenceBoundary(fullText, cutoffIndex - 1, sentenceBoundaryOptions);
 
         if (prevSentenceBoundary !== -1) {
           const prevSentenceText = fullText.slice(0, prevSentenceBoundary + 1).trim();
@@ -1802,7 +1805,7 @@ const createBodyColumns = (
 
   // Ensure active text ends cleanly at a sentence boundary
   if (!flow.overflow) {
-    const fullStopText = ensureTextEndsWithFullStop(activeText);
+    const fullStopText = ensureTextEndsWithFullStop(activeText, sentenceBoundaryOptions);
     if (fullStopText !== activeText) {
       const fsMetrics = wrapBodyText(fullStopText, activeBodyStyle, activeLineHeightPx);
       const fsFlow = flowLinesThroughRegions({
@@ -1896,7 +1899,7 @@ const createBodyColumns = (
       // box still reads as a finished piece of copy.
       let cursor = activeText.trim().length;
       for (let appended = 0; appended < 12 && cursor < fullSourceText.length; appended += 1) {
-        const boundary = findNextSentenceBoundary(fullSourceText, cursor);
+        const boundary = findNextSentenceBoundary(fullSourceText, cursor, sentenceBoundaryOptions);
         if (boundary === -1) {
           break;
         }
@@ -2085,11 +2088,11 @@ const createBodyColumns = (
   }
 
   if (nativeBodyJustifyText && !/[.!?।॥]\s*$/u.test(activeText.trim())) {
-    const previousBoundary = findPreviousSentenceBoundary(activeText);
+    const previousBoundary = findPreviousSentenceBoundary(activeText, undefined, sentenceBoundaryOptions);
     const candidateText =
       previousBoundary !== -1
         ? activeText.slice(0, previousBoundary + 1).trim()
-        : ensureTextEndsWithFullStop(activeText);
+        : ensureTextEndsWithFullStop(activeText, sentenceBoundaryOptions);
     const candidateMetrics = wrapBodyText(candidateText, activeBodyStyle, activeLineHeightPx);
     const candidateFlow = flowLinesThroughRegions({
       wrappedLines: candidateMetrics.wrappedLines,
@@ -5403,6 +5406,7 @@ function composeArticleBoxPass(
     settings.bodyColumnEdgeInsetPt ?? 0,
     Boolean(settings.nativeBodyJustifyText && articleBox.contentLanguage === "english"),
     twoColumnLeftPhoto,
+    articleBox.contentLanguage === "english" ? "english" : "hindi",
   );
   const generatedColumnIndexes = new Set(bodyRegions.map((region) => region.columnIndex));
   const usableColumnIndexes = new Set(bodyFlow.flow.regions.map((region) => region.region.columnIndex));
@@ -5576,8 +5580,6 @@ function composeArticleBoxPass(
     ) {
       if (caption && image && !captionDivider) {
         addDivider(caption.x + 8, caption.y + caption.height + 3, Math.max(1, Math.min(caption.width, image.width) - 16));
-      } else if (image) {
-        addDivider(image.x + 8, image.y + image.height + 4, image.width - 16);
       } else if (subheadline.text) {
         addDivider(inset, subheadline.y + subheadline.height + 4, contentWidth);
       }
@@ -5603,7 +5605,12 @@ function composeArticleBoxPass(
         containerBorderRadius: 6,
       },
     };
-  } else if (!settings.suppressArticleContainerBorder && (priority === "brief" || priority === "filler") && baseArticleContainerStyle) {
+  } else if (
+    !settings.suppressArticleContainerBorder &&
+    !isSingleColumnBox &&
+    (priority === "brief" || priority === "filler") &&
+    baseArticleContainerStyle
+  ) {
     // A brief/filler box reads as a distinct "boxed" item on a real
     // newspaper page — a plain hairline rule framing it, sharp corners (real
     // print boxes are never rounded, unlike the narrow-kicker badge above,

@@ -5,6 +5,7 @@ import {
   findPreviousSentenceBoundary,
   isAlreadyAtSentenceEnd,
   isSentenceBoundaryAt,
+  type SentenceBoundaryLanguage,
 } from "@/engines/TypographyEngine/SentenceBoundaryEngine";
 import { getBaselineLineAdvance } from "@/engines/BaselineGridEngine/BaselineGridEngine";
 
@@ -22,6 +23,8 @@ import type {
 } from "@/types/editor";
 
 const getLineHeightPx = (style: ArticleTextStyle) => style.fontSize * style.lineHeight;
+const getSentenceBoundaryLanguage = (articleBox: unknown): SentenceBoundaryLanguage =>
+  (articleBox as { contentLanguage?: "hindi" | "english" }).contentLanguage === "english" ? "english" : "hindi";
 
 export type ArticleFitOverrides = {
   bodyFontSize?: number;
@@ -194,10 +197,11 @@ export const adjustArticleSentenceEnd = ({
   if (cutoffIndex < 0) {
     return baseLayout;
   }
+  const boundaryOptions = { language: getSentenceBoundaryLanguage(articleBox) };
 
   // Step 2 Check: Already ends on sentence boundary and remaining line count < 1?
   if (
-    isAlreadyAtSentenceEnd(fullText, cutoffIndex, visibleLines) &&
+    isAlreadyAtSentenceEnd(fullText, cutoffIndex, visibleLines, boundaryOptions) &&
     baseLayout.body.remainingLineCount < 1
   ) {
     return baseLayout;
@@ -261,7 +265,7 @@ export const adjustArticleSentenceEnd = ({
   };
 
   // Step 3: Locate NEXT sentence boundary after cutoff.
-  const nextBoundaryIndex = findNextSentenceBoundary(fullText, cutoffIndex);
+  const nextBoundaryIndex = findNextSentenceBoundary(fullText, cutoffIndex, boundaryOptions);
 
   if (nextBoundaryIndex !== -1) {
     const nextSentenceText = fullText.slice(0, nextBoundaryIndex + 1).trim();
@@ -356,7 +360,7 @@ export const adjustArticleSentenceEnd = ({
   // sentence that stops early yet looks finished. Rolling back to a real sentence boundary
   // is now unconditional; any blank space left behind is closed by the copyfitter reflowing
   // real text, never by inventing an ending.
-  const prevSentenceBoundary = findPreviousSentenceBoundary(fullText, cutoffIndex - 1);
+  const prevSentenceBoundary = findPreviousSentenceBoundary(fullText, cutoffIndex - 1, boundaryOptions);
 
   if (prevSentenceBoundary !== -1) {
     const prevSentenceText = fullText.slice(0, prevSentenceBoundary + 1).trim();
@@ -399,7 +403,9 @@ export const validatePageQuality = (
   const fullText = richTextToPlainText(articleData.body).trim();
   const visibleLines = layout.body.columns.flatMap((col) => col.lines);
   const cutoffIndex = findCutoffIndexInFullText(visibleLines, fullText);
-  const sentenceEndingStatus = isAlreadyAtSentenceEnd(fullText, cutoffIndex, visibleLines);
+  const sentenceEndingStatus = isAlreadyAtSentenceEnd(fullText, cutoffIndex, visibleLines, {
+    language: getSentenceBoundaryLanguage(articleBox),
+  });
   const remainingLines = layout.body.remainingLineCount;
   const bodyOverflow = layout.body.overflow;
   const headlineOverflow = Boolean(layout.headline && layout.headline.lineBoxes.some((l) => l.width > articleBox.width + 2));

@@ -20,6 +20,12 @@ const runTests = () => {
   // Test 2: Valid sentence boundaries
   assert(isSentenceBoundaryAt("This is sentence one. This is sentence two.", 20), "English period should be boundary");
   assert(isSentenceBoundaryAt("यह पहला वाक्य है। यह दूसरा वाक्य है।", 16), "Hindi purna viram should be boundary");
+  const hindiWithLatinPeriod = "यह पहला वाक्य है. यह दूसरा वाक्य है।";
+  assert(!isSentenceBoundaryAt(hindiWithLatinPeriod, hindiWithLatinPeriod.indexOf(".")), "Hindi period should not be boundary");
+  assert(
+    findNextSentenceBoundary(hindiWithLatinPeriod, 0) === hindiWithLatinPeriod.indexOf("।"),
+    "Hindi boundary search should skip period and stop at danda",
+  );
 
   // Test 3: Continuation to sentence end
   const englishText =
@@ -45,6 +51,7 @@ const runTests = () => {
 
   // Test 5: ensureTextEndsWithFullStop
   assert(ensureTextEndsWithFullStop("यह वाक्य पूरा नहीं है") === "यह वाक्य पूरा नहीं है ।", "Hindi missing full stop");
+  assert(ensureTextEndsWithFullStop("यह वाक्य पूरा नहीं है.") === "यह वाक्य पूरा नहीं है ।", "Hindi period is normalized to danda");
   assert(ensureTextEndsWithFullStop("Sentence incomplete") === "Sentence incomplete.", "English missing full stop");
 
   console.log("SentenceBoundaryTests passed!");

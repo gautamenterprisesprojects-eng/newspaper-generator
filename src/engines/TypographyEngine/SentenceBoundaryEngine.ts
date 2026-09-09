@@ -36,20 +36,42 @@ const ABBREVIATIONS = new Set([
   "सं",
 ]);
 
-const TERMINATOR_REGEX = /[।॥.!?]/u;
+export type SentenceBoundaryLanguage = "hindi" | "english";
+
+export type SentenceBoundaryOptions = {
+  language?: SentenceBoundaryLanguage;
+};
+
+const hasDevanagariText = (text: string) => /[\u0900-\u097F]/u.test(text);
+
+const resolveBoundaryLanguage = (
+  text: string,
+  options?: SentenceBoundaryOptions,
+): SentenceBoundaryLanguage =>
+  options?.language ?? (hasDevanagariText(text) ? "hindi" : "english");
+
+const isTerminatorForLanguage = (
+  char: string,
+  language: SentenceBoundaryLanguage,
+) => (language === "hindi" ? /[।॥!?]/u : /[।॥.!?]/u).test(char);
 
 /**
  * Checks if character at `index` in `text` is a valid sentence-ending punctuation.
  * Ignores abbreviations (e.g. Dr., Mr., U.S., डॉ.) and numeric decimals (e.g. 3.14, 36,441).
  */
-export const isSentenceBoundaryAt = (text: string, index: number): boolean => {
+export const isSentenceBoundaryAt = (
+  text: string,
+  index: number,
+  options?: SentenceBoundaryOptions,
+): boolean => {
   if (index < 0 || index >= text.length) {
     return false;
   }
 
   const char = text[index];
+  const language = resolveBoundaryLanguage(text, options);
 
-  if (!TERMINATOR_REGEX.test(char)) {
+  if (!isTerminatorForLanguage(char, language)) {
     return false;
   }
 
@@ -87,9 +109,13 @@ export const isSentenceBoundaryAt = (text: string, index: number): boolean => {
 /**
  * Finds the index of the next valid sentence-ending punctuation at or after `startIndex`.
  */
-export const findNextSentenceBoundary = (text: string, startIndex = 0): number => {
+export const findNextSentenceBoundary = (
+  text: string,
+  startIndex = 0,
+  options?: SentenceBoundaryOptions,
+): number => {
   for (let index = Math.max(0, startIndex); index < text.length; index += 1) {
-    if (isSentenceBoundaryAt(text, index)) {
+    if (isSentenceBoundaryAt(text, index, options)) {
       return index;
     }
   }
@@ -100,9 +126,13 @@ export const findNextSentenceBoundary = (text: string, startIndex = 0): number =
 /**
  * Finds the index of the previous valid sentence-ending punctuation at or before `startIndex`.
  */
-export const findPreviousSentenceBoundary = (text: string, startIndex = text.length - 1): number => {
+export const findPreviousSentenceBoundary = (
+  text: string,
+  startIndex = text.length - 1,
+  options?: SentenceBoundaryOptions,
+): number => {
   for (let index = Math.min(text.length - 1, startIndex); index >= 0; index -= 1) {
-    if (isSentenceBoundaryAt(text, index)) {
+    if (isSentenceBoundaryAt(text, index, options)) {
       return index;
     }
   }
@@ -164,7 +194,10 @@ export const findNearbyPreviousClauseBoundary = (
 /**
  * Ensures text ends cleanly at a sentence-ending punctuation mark (। or . or ! or ?).
  */
-export const ensureTextEndsWithFullStop = (text: string): string => {
+export const ensureTextEndsWithFullStop = (
+  text: string,
+  options?: SentenceBoundaryOptions,
+): string => {
   const trimmed = text.trim();
 
   if (!trimmed) {
@@ -172,14 +205,20 @@ export const ensureTextEndsWithFullStop = (text: string): string => {
   }
 
   const lastCharIndex = trimmed.length - 1;
+  const language = resolveBoundaryLanguage(trimmed, options);
 
-  if (isSentenceBoundaryAt(trimmed, lastCharIndex) || /[।॥.!?]\s*$/u.test(trimmed)) {
+  if (
+    isSentenceBoundaryAt(trimmed, lastCharIndex, { language }) ||
+    (language === "hindi" ? /[।॥!?]\s*$/u : /[।॥.!?]\s*$/u).test(trimmed)
+  ) {
     return trimmed;
   }
 
-  const isHindi = /[\u0900-\u097F]/u.test(trimmed);
+  if (language === "hindi") {
+    return `${trimmed.replace(/[.]+$/u, "").trimEnd()} ।`;
+  }
 
-  return `${trimmed}${isHindi ? " ।" : "."}`;
+  return `${trimmed}.`;
 };
 
 /**
@@ -195,32 +234,35 @@ export const extractTextToSentenceEnd = ({
   text,
   targetWordCount,
   maxOverflowWords = 80,
+  language,
 }: {
   text: string;
   targetWordCount?: number;
   maxOverflowWords?: number;
+  language?: SentenceBoundaryLanguage;
 }): string => {
   const cleaned = text.replace(/\r/g, "").trim();
+  const boundaryOptions: SentenceBoundaryOptions = { language: resolveBoundaryLanguage(cleaned, { language }) };
 
   if (!cleaned) {
     return "";
   }
 
   if (!targetWordCount || targetWordCount <= 0) {
-    return ensureTextEndsWithFullStop(cleaned);
+    return ensureTextEndsWithFullStop(cleaned, boundaryOptions);
   }
 
   const words = cleaned.split(/\s+/u);
 
   if (words.length <= targetWordCount) {
-    return ensureTextEndsWithFullStop(cleaned);
+    return ensureTextEndsWithFullStop(cleaned, boundaryOptions);
   }
 
   // Determine character position for targetWordCount
   const targetCharIndex = words.slice(0, targetWordCount).join(" ").length;
 
   // Search for the first valid sentence boundary AT or AFTER targetCharIndex
-  const boundaryAfter = findNextSentenceBoundary(cleaned, targetCharIndex);
+  const boundaryAfter = findNextSentenceBoundary(cleaned, targetCharIndex, boundaryOptions);
 
   if (boundaryAfter !== -1) {
     const candidateText = cleaned.slice(0, boundaryAfter + 1).trim();
@@ -228,25 +270,25 @@ export const extractTextToSentenceEnd = ({
 
     // Check edge case: runaway sentence (> maxOverflowWords beyond target)
     if (candidateWords - targetWordCount <= maxOverflowWords) {
-      return ensureTextEndsWithFullStop(candidateText);
+      return ensureTextEndsWithFullStop(candidateText, boundaryOptions);
     }
 
     // Runaway sentence fallback: check if paragraph break exists before boundaryAfter
     const nextParagraphIndex = cleaned.indexOf("\n\n", targetCharIndex);
     if (nextParagraphIndex !== -1 && nextParagraphIndex < boundaryAfter) {
       const paragraphCandidate = cleaned.slice(0, nextParagraphIndex).trim();
-      return ensureTextEndsWithFullStop(paragraphCandidate);
+      return ensureTextEndsWithFullStop(paragraphCandidate, boundaryOptions);
     }
   }
 
   // Fallback 1: check if a valid sentence boundary exists before targetCharIndex
-  const boundaryBefore = findPreviousSentenceBoundary(cleaned, targetCharIndex);
+  const boundaryBefore = findPreviousSentenceBoundary(cleaned, targetCharIndex, boundaryOptions);
   if (boundaryBefore !== -1 && boundaryBefore > targetCharIndex * 0.4) {
-    return ensureTextEndsWithFullStop(cleaned.slice(0, boundaryBefore + 1).trim());
+    return ensureTextEndsWithFullStop(cleaned.slice(0, boundaryBefore + 1).trim(), boundaryOptions);
   }
 
   // Fallback 2: include up to targetWordCount and append full stop
-  return ensureTextEndsWithFullStop(words.slice(0, targetWordCount).join(" "));
+  return ensureTextEndsWithFullStop(words.slice(0, targetWordCount).join(" "), boundaryOptions);
 };
 
 /**
@@ -291,12 +333,18 @@ export const isAlreadyAtSentenceEnd = (
   fullText: string,
   cutoffIndex: number,
   visibleLines: (string | { text: string })[],
+  options?: SentenceBoundaryOptions,
 ): boolean => {
-  if (isSentenceBoundaryAt(fullText, cutoffIndex)) {
+  const language = resolveBoundaryLanguage(fullText, options);
+
+  if (isSentenceBoundaryAt(fullText, cutoffIndex, { language })) {
     return true;
   }
 
-  if (cutoffIndex >= fullText.length - 2 && /[।॥.!?]\s*$/u.test(fullText)) {
+  if (
+    cutoffIndex >= fullText.length - 2 &&
+    (language === "hindi" ? /[।॥!?]\s*$/u : /[।॥.!?]\s*$/u).test(fullText)
+  ) {
     return true;
   }
 
@@ -311,11 +359,11 @@ export const isAlreadyAtSentenceEnd = (
     // a wrap boundary — a bare regex would misread either as a real
     // sentence end and skip the trim-to-boundary logic below, leaving text
     // that's genuinely mid-sentence.
-    if (lastLineText && /[।॥.!?]$/u.test(lastLineText)) {
+    if (lastLineText && (language === "hindi" ? /[।॥!?]$/u : /[।॥.!?]$/u).test(lastLineText)) {
       const terminatorChar = lastLineText[lastLineText.length - 1];
       const terminatorIndex = fullText.lastIndexOf(terminatorChar, Math.max(0, cutoffIndex));
 
-      if (terminatorIndex !== -1 && isSentenceBoundaryAt(fullText, terminatorIndex)) {
+      if (terminatorIndex !== -1 && isSentenceBoundaryAt(fullText, terminatorIndex, { language })) {
         return true;
       }
     }
@@ -336,4 +384,3 @@ export const SentenceBoundaryEngine = {
   isClauseBoundaryAt,
   findNearbyPreviousClauseBoundary,
 };
-
