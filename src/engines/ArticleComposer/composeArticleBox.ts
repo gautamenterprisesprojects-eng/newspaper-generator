@@ -1580,6 +1580,7 @@ const createBodyColumns = (
   constrainBodySegments = false,
   bodyColumnEdgeInsetPt = 0,
   nativeBodyJustifyText = false,
+  preserveBodyLineAdvance = false,
 ) => {
   const enableEnglishHyphenation =
     enableEnglishBodyHyphenation &&
@@ -2105,6 +2106,17 @@ const createBodyColumns = (
   }
 
 
+  if (preserveBodyLineAdvance) {
+    activeLineHeightPx = baseLineHeightPx;
+    activeBodyStyle = { ...activeBodyStyle, lineHeight: baseLineHeightPx / activeBodyStyle.fontSize };
+    metrics = wrapBodyText(activeText, activeBodyStyle, activeLineHeightPx);
+    flow = flowLinesThroughRegions({
+      wrappedLines: metrics.wrappedLines,
+      lineHeight: activeLineHeightPx,
+      regions,
+      usabilityRules,
+    });
+  }
   const bodyWrappedLines = metrics.wrappedLines;
   const bodyParagraphs = splitBodyParagraphs(normContent);
   const paragraphLineStarts = bodyParagraphs.reduce<number[]>((starts, paragraph, paragraphIndex) => {
@@ -5336,7 +5348,7 @@ function composeArticleBoxPass(
           "ceil",
         )
     : 0;
-  const bodyRegions =
+  let bodyRegions =
     totalLeadConsumedHeight > 0
       ? [
           ...initialBodyRegions.slice(leadRegionIndex, leadRegionIndex + 1),
@@ -5354,6 +5366,30 @@ function composeArticleBoxPass(
           )
           .filter((region) => region.height >= bodyLineHeight)
       : initialBodyRegions;
+  if (twoColumnLeftPhoto && image && byline.text) {
+    // Keep the right column beside the photo. Only advance the left body
+    // start to a matching row; the independently positioned byline stays put.
+    const besidePhotoStart = bodyRegions.find((region) =>
+      region.x >= firstColumnRight - 0.5 && region.y <= image.y + image.height,
+    )?.y;
+    if (besidePhotoStart !== undefined) {
+      bodyRegions = bodyRegions
+        .map((region) => {
+          if (Math.abs(region.x - firstColumnX) > 0.5 || region.y < image.y + image.height) {
+            return region;
+          }
+          const row = Math.ceil((region.y - besidePhotoStart) / bodyLineHeight - 1e-9);
+          const y = besidePhotoStart + row * bodyLineHeight;
+          const bottom = region.y + region.height;
+          return {
+            ...region,
+            y,
+            height: Math.max(0, bottom - y),
+          };
+        })
+        .filter((region) => region.height >= bodyLineHeight);
+    }
+  }
   const regionUsabilityRules: RegionUsabilityRules = {
     minRegionWidth: Math.max(1, columnWidth * 0.2),
     minRegionLines: 1,
@@ -5374,7 +5410,7 @@ function composeArticleBoxPass(
     baselineGrid,
     resolvedBodyStyle,
     typographyControls,
-    isLowerFrontPagePackage ? 0.18 : 1,
+    twoColumnLeftPhoto ? 0 : isLowerFrontPagePackage ? 0.18 : 1,
     // Re-wrap per region on the editorial page only, where a box's copy runs
     // around a portrait and its regions are therefore different widths. Every
     // other page's regions are equal-width columns, so the single wrap they
@@ -5385,6 +5421,7 @@ function composeArticleBoxPass(
     Boolean(settings.constrainBodySegments && articleBox.contentLanguage === "english"),
     settings.bodyColumnEdgeInsetPt ?? 0,
     Boolean(settings.nativeBodyJustifyText && articleBox.contentLanguage === "english"),
+    twoColumnLeftPhoto,
   );
   const generatedColumnIndexes = new Set(bodyRegions.map((region) => region.columnIndex));
   const usableColumnIndexes = new Set(bodyFlow.flow.regions.map((region) => region.region.columnIndex));
