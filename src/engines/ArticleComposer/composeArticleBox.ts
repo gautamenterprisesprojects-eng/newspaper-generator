@@ -1160,7 +1160,7 @@ const createCaptionLayout = ({
     containerStyles.caption,
     caption.captionStyle.backgroundColor === "transparent" ? undefined : caption.captionStyle.backgroundColor,
   );
-  const verticalPadding = isOverlayPosition ? 4 : 0.5;
+  const verticalPadding = isOverlayPosition ? 4 : 1.5;
   const horizontalPadding = isOverlayPosition ? 6 : 0;
 
   captionContainerStyle.framePaddingTop = verticalPadding;
@@ -1198,7 +1198,7 @@ const createCaptionLayout = ({
       letterSpacing: typographyControls.captionLetterSpacing,
       fontSize: caption.captionStyle.fontSize,
     }),
-    lineHeight: 1.15,
+    lineHeight: isOverlayPosition ? 1.15 : 1.24,
   };
 
   // Side strips are narrow but tall, and bottom/top strips are short but
@@ -1318,7 +1318,7 @@ const createCaptionLayout = ({
       currentStyle = {
         ...baseStyle,
         fontSize: Math.max(candidate, captionFloor),
-        lineHeight: isOverlayPosition ? 1.02 : 1.08,
+        lineHeight: isOverlayPosition ? 1.02 : 1.24,
       };
       metrics = measure(contentStr, currentStyle);
 
@@ -1335,7 +1335,7 @@ const createCaptionLayout = ({
     currentStyle = {
       ...baseStyle,
       fontSize: isOverlayPosition ? 4.6 : CAPTION_MIN_FONT_SIZE,
-      lineHeight: isOverlayPosition ? 1 : 1.04,
+      lineHeight: isOverlayPosition ? 1 : 1.24,
     };
     metrics = measure(contentStr, currentStyle);
     if (metrics.lines.length <= maxLines) {
