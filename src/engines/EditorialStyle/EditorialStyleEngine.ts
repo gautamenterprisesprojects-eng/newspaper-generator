@@ -134,7 +134,7 @@ export const createEditorialStyles = ({
   caption: {
     fill: "#4f4a43",
     fontFamily: baseSans,
-    fontSize: Math.min(9, Math.max(8.5, bodySize * 0.72)),
+    fontSize: Math.min(7.5, Math.max(7, bodySize * 0.72 - 1.5)),
     fontStyle: "normal",
     letterSpacing: 0,
     lineHeight: 1.12,

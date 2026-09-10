@@ -35,7 +35,7 @@ assert(lead.dateline.fontStyle === "bold", "dateline must be bold");
 assert(lead.dateline.fill !== lead.body.fill, "dateline must be visually distinct");
 assert(lead.reporter.fontSize < lead.body.fontSize, "reporter line must be smaller than body");
 assert(lead.caption.fontSize < lead.body.fontSize, "caption must be smaller than body");
-assert(lead.caption.fontSize >= 8.5 && lead.caption.fontSize <= 9, "caption must be 8.5-9 pt");
+assert(lead.caption.fontSize >= 7 && lead.caption.fontSize <= 7.5, "caption must be 7-7.5 pt");
 assert(lead.caption.fill !== lead.body.fill, "caption must be gray toned");
 assert(rule.strokeWidth < 1, "newspaper separator must be thin");
 
