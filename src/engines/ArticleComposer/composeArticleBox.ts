@@ -2980,9 +2980,9 @@ function composeArticleBoxPass(
     ...(isWideBottomFrontPackage
       ? { lineHeight: 1.12 }
       : isFrontPageTwoColumnBox
-        ? { lineHeight: 1.26 }
+        ? { lineHeight: 1.32 }
         : isFrontPageThreeColumnBox
-          ? { lineHeight: 1.24 }
+          ? { lineHeight: 1.32 }
           : {}),
     ...(isEditorialBox2
       ? {
