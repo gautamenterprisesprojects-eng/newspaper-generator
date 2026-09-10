@@ -4291,6 +4291,8 @@ function composeArticleBoxPass(
   // every story except the few that explicitly set it, so this never moves
   // anything by default.
   const headlineToBylineExtraGap = articleData.headlineToBylineExtraGap ?? 0;
+  const frontPageHeadlineBylineClearance =
+    settings.frontPageStyle && !hasSubheadlineText && !shouldShowInlineSubheadline ? 2 : 0;
   // A banner already carries its own framePaddingBottom inside
   // `subheadline.height`, so adding `spacing.datelineToContent` on top pays for
   // the same breathing room twice -- and that figure was measured for the
@@ -4304,7 +4306,7 @@ function composeArticleBoxPass(
   const contentStartY =
     (hasSubheadlineText
       ? subheadline.y + subheadline.height + subheadlineToContentGap
-      : headlineFlowBottom + headlineToDatelineGap) + headlineToBylineExtraGap;
+      : headlineFlowBottom + headlineToDatelineGap) + headlineToBylineExtraGap + frontPageHeadlineBylineClearance;
 
   const captionStyle = editorialStyles.caption;
   const bodyLineHeight = getBaselineLineAdvance(getLineHeightPx(resolvedBodyStyle), baselineGrid);
