@@ -522,14 +522,25 @@ const drawTextLine = ({
     return;
   }
 
-  page.drawText(printableText, {
-    x: trimOffset + articleX + getTextX(line, font, line.style),
-    y: getLineTextY(mediaHeight, trimOffset, { ...line, y: articleY + line.y }, line.style),
+  const x = trimOffset + articleX + getTextX(line, font, line.style);
+  const y = getLineTextY(mediaHeight, trimOffset, { ...line, y: articleY + line.y }, line.style);
+  const drawOptions = {
+    x,
+    y,
     size: line.style.fontSize,
     font,
     color: toCmyk(color),
     characterSpacing: line.style.letterSpacing ?? 0,
-  } as Parameters<PDFPage["drawText"]>[1] & { characterSpacing?: number });
+  } as Parameters<PDFPage["drawText"]>[1] & { characterSpacing?: number };
+
+  page.drawText(printableText, drawOptions);
+
+  if (shouldDrawSyntheticRozhaBold(line.style)) {
+    page.drawText(printableText, {
+      ...drawOptions,
+      x: x + getSyntheticBoldOffset(line.style.fontSize),
+    });
+  }
 };
 
 export const sanitizePdfRenderedText = (text: string) =>
@@ -539,6 +550,13 @@ export const sanitizePdfRenderedText = (text: string) =>
     .trim();
 
 const sanitizeRenderedText = sanitizePdfRenderedText;
+
+const shouldDrawSyntheticRozhaBold = (style: ArticleTextStyle) =>
+  style.fontFamily.toLowerCase().includes("rozha one") &&
+  /\b(700|800|900|bold)\b/i.test(style.fontStyle ?? "");
+
+const getSyntheticBoldOffset = (fontSize: number) =>
+  Math.min(0.42, Math.max(0.18, fontSize * 0.012));
 
 const drawTextSegmentLine = ({
   page,
@@ -721,14 +739,23 @@ const drawTextSegmentLine = ({
       });
     }
 
-    page.drawText(printableText, {
+    const drawOptions = {
       x: textX,
       y,
       size: fittedFontSize,
       font,
       color: toCmyk(color),
       characterSpacing: segment.style.letterSpacing ?? 0,
-    } as Parameters<PDFPage["drawText"]>[1] & { characterSpacing?: number });
+    } as Parameters<PDFPage["drawText"]>[1] & { characterSpacing?: number };
+
+    page.drawText(printableText, drawOptions);
+
+    if (shouldDrawSyntheticRozhaBold(segment.style)) {
+      page.drawText(printableText, {
+        ...drawOptions,
+        x: textX + getSyntheticBoldOffset(fittedFontSize),
+      });
+    }
 
     if (segment.style.textDecoration === "underline") {
       page.drawLine({

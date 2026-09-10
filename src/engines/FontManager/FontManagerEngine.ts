@@ -44,7 +44,7 @@ export type NewspaperHeadlineFontSelection = {
 };
 
 const headlineDisplayFonts: NewspaperHeadlineFontSelection[] = [
-  { fontFamily: NEWSPAPER_FONT_STACKS.headlineRozha, fontStyle: "400" },
+  { fontFamily: NEWSPAPER_FONT_STACKS.headlineRozha, fontStyle: "700" },
   { fontFamily: NEWSPAPER_FONT_STACKS.headlineRanga, fontStyle: "700" },
   { fontFamily: NEWSPAPER_FONT_STACKS.headlineAmita, fontStyle: "700" },
   { fontFamily: NEWSPAPER_FONT_STACKS.headlineKalam, fontStyle: "700" },

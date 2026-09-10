@@ -84,6 +84,14 @@
 }
 
 @font-face {
+  font-family: "Rozha One";
+  src: url("/fonts/RozhaOne-Regular.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
   font-family: "Ranga";
   src: url("/fonts/Ranga-Bold.ttf") format("truetype");
   font-weight: 700;
