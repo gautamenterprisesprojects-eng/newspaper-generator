@@ -28,7 +28,7 @@ import {
   optimizeImageForEditorialQuality,
 } from "@/engines/EditorialLayoutQuality/EditorialLayoutQualityEngine";
 import { composeFactBox } from "@/engines/FactBoxEngine/FactBoxEngine";
-import { getNewspaperFontStack } from "@/engines/FontManager/FontManagerEngine";
+import { getNewspaperFontStack, selectNewspaperHeadlineFont } from "@/engines/FontManager/FontManagerEngine";
 import { getHyphenationJustificationSettings } from "@/engines/HyphenationJustification/HyphenationJustificationTypes";
 import { placeImage } from "@/engines/ImagePlacement/ImagePlacementEngine";
 import { computeImageCoverCrop } from "@/engines/ImagePlacement/computeImageCoverCrop";
@@ -2975,8 +2975,16 @@ function composeArticleBoxPass(
   });
   const isEditorialBox2 =
     usesLegacyEditorialFurniture && editorialStoryNumber === 2;
+  const selectedHeadlineFont = selectNewspaperHeadlineFont({
+    text: headlineText,
+    priority,
+    columnSpan: storyColumnSpan,
+    contentLanguage: articleBox.contentLanguage,
+  });
   const headlineStyle = {
     ...editorialStyles.headline,
+    fontFamily: selectedHeadlineFont.fontFamily,
+    fontStyle: selectedHeadlineFont.fontStyle,
     ...(isWideBottomFrontPackage
       ? { lineHeight: 1.12 }
       : isFrontPageTwoColumnBox

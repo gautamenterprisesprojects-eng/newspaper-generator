@@ -172,6 +172,26 @@ const toPdfY = (mediaHeight: number, trimOffset: number, y: number, height: numb
 const getFontRole = (style: ArticleTextStyle) => {
   const family = style.fontFamily.toLowerCase();
 
+  if (family.includes("rozha one")) {
+    return "headlineRozha";
+  }
+
+  if (family.includes("ranga")) {
+    return "headlineRanga";
+  }
+
+  if (family.includes("kalam")) {
+    return "headlineKalam";
+  }
+
+  if (family.includes("amita")) {
+    return "headlineAmita";
+  }
+
+  if (family.includes("tiro devanagari hindi")) {
+    return "editorialHeadline";
+  }
+
   if (family.includes("extra condensed")) {
     return "bodySerifCondensed";
   }
@@ -298,6 +318,11 @@ const embedFonts = async (
     fontsByRole: {
       serif: fontsByRole.get("serif"),
       bodySerifCondensed: fontsByRole.get("bodySerifCondensed") ?? fontsByRole.get("serif"),
+      editorialHeadline: fontsByRole.get("editorialHeadline") ?? fontsByRole.get("serif"),
+      headlineRozha: fontsByRole.get("headlineRozha") ?? fontsByRole.get("serif"),
+      headlineRanga: fontsByRole.get("headlineRanga") ?? fontsByRole.get("serif"),
+      headlineKalam: fontsByRole.get("headlineKalam") ?? fontsByRole.get("serif"),
+      headlineAmita: fontsByRole.get("headlineAmita") ?? fontsByRole.get("serif"),
       sans: fontsByRole.get("sans"),
       mono: fontsByRole.get("mono"),
     },

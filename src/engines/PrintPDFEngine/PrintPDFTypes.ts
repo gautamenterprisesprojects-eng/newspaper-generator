@@ -17,7 +17,16 @@ export type PrintPDFColor = {
   key: number;
 };
 
-export type PrintPDFFontRole = "serif" | "sans" | "mono" | "bodySerifCondensed";
+export type PrintPDFFontRole =
+  | "serif"
+  | "sans"
+  | "mono"
+  | "bodySerifCondensed"
+  | "editorialHeadline"
+  | "headlineRozha"
+  | "headlineRanga"
+  | "headlineKalam"
+  | "headlineAmita";
 
 export type PrintPDFFontAsset = {
   id: string;

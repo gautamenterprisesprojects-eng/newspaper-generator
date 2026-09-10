@@ -1,4 +1,12 @@
-export type NewspaperFontRole = "sans" | "serif" | "editorialHeadline" | "bodySerifCondensed";
+export type NewspaperFontRole =
+  | "sans"
+  | "serif"
+  | "editorialHeadline"
+  | "bodySerifCondensed"
+  | "headlineRozha"
+  | "headlineRanga"
+  | "headlineKalam"
+  | "headlineAmita";
 
 export type NewspaperFontDefinition = {
   id: string;
@@ -8,7 +16,7 @@ export type NewspaperFontDefinition = {
   source: string;
   weight: number;
   style: "normal" | "italic";
-  pdfRole: "sans" | "serif" | "bodySerifCondensed";
+  pdfRole: NewspaperFontRole;
 };
 
 export type FontAvailabilityStatus = "loading" | "loaded" | "fallback" | "error";

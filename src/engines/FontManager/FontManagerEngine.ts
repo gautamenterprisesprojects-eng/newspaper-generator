@@ -14,6 +14,10 @@ export const NEWSPAPER_FONT_FAMILIES = {
   serif: "Cliff Noto Serif Devanagari",
   editorialHeadline: "Tiro Devanagari Hindi",
   bodySerifCondensed: "Cliff Noto Serif Devanagari ExtraCondensed",
+  headlineRozha: "Rozha One",
+  headlineRanga: "Ranga",
+  headlineKalam: "Kalam",
+  headlineAmita: "Amita",
 } as const;
 
 export const NEWSPAPER_FONT_STACKS = {
@@ -21,7 +25,66 @@ export const NEWSPAPER_FONT_STACKS = {
   serif: `${NEWSPAPER_FONT_FAMILIES.serif}, serif`,
   editorialHeadline: `${NEWSPAPER_FONT_FAMILIES.editorialHeadline}, ${NEWSPAPER_FONT_FAMILIES.serif}, serif`,
   bodySerifCondensed: `${NEWSPAPER_FONT_FAMILIES.bodySerifCondensed}, ${NEWSPAPER_FONT_FAMILIES.serif}, serif`,
+  headlineRozha: `${NEWSPAPER_FONT_FAMILIES.headlineRozha}, ${NEWSPAPER_FONT_FAMILIES.serif}, serif`,
+  headlineRanga: `${NEWSPAPER_FONT_FAMILIES.headlineRanga}, ${NEWSPAPER_FONT_FAMILIES.serif}, serif`,
+  headlineKalam: `${NEWSPAPER_FONT_FAMILIES.headlineKalam}, ${NEWSPAPER_FONT_FAMILIES.serif}, serif`,
+  headlineAmita: `${NEWSPAPER_FONT_FAMILIES.headlineAmita}, ${NEWSPAPER_FONT_FAMILIES.serif}, serif`,
 } as const;
+
+type HeadlineFontSelectionInput = {
+  text: string;
+  priority: string;
+  columnSpan: number;
+  contentLanguage?: "hindi" | "english";
+};
+
+export type NewspaperHeadlineFontSelection = {
+  fontFamily: string;
+  fontStyle: "400" | "700";
+};
+
+const headlineDisplayFonts: NewspaperHeadlineFontSelection[] = [
+  { fontFamily: NEWSPAPER_FONT_STACKS.headlineRozha, fontStyle: "400" },
+  { fontFamily: NEWSPAPER_FONT_STACKS.headlineRanga, fontStyle: "700" },
+  { fontFamily: NEWSPAPER_FONT_STACKS.headlineAmita, fontStyle: "700" },
+  { fontFamily: NEWSPAPER_FONT_STACKS.headlineKalam, fontStyle: "700" },
+];
+
+const hashStableText = (value: string) => {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return hash >>> 0;
+};
+
+export const selectNewspaperHeadlineFont = ({
+  text,
+  priority,
+  columnSpan,
+  contentLanguage,
+}: HeadlineFontSelectionInput): NewspaperHeadlineFontSelection => {
+  if (contentLanguage === "english") {
+    return { fontFamily: NEWSPAPER_FONT_STACKS.serif, fontStyle: priority === "lead" ? "700" : "700" };
+  }
+
+  if (priority === "lead" || priority === "major" || columnSpan >= 4) {
+    return headlineDisplayFonts[0];
+  }
+
+  const safeColumnSpan = Number.isFinite(columnSpan) ? Math.max(1, Math.round(columnSpan)) : 2;
+  const palette =
+    safeColumnSpan <= 1
+      ? headlineDisplayFonts.slice(0, 2)
+      : safeColumnSpan === 2
+        ? headlineDisplayFonts.slice(0, 3)
+        : headlineDisplayFonts;
+  const index = hashStableText(`${priority}|${safeColumnSpan}|${text}`) % palette.length;
+
+  return palette[index];
+};
 
 export const NEWSPAPER_FONT_DEFINITIONS: NewspaperFontDefinition[] = [
   {
@@ -94,12 +157,65 @@ export const NEWSPAPER_FONT_DEFINITIONS: NewspaperFontDefinition[] = [
     style: "normal",
     pdfRole: "bodySerifCondensed",
   },
+  {
+    id: "tiro-devanagari-hindi-regular",
+    role: "editorialHeadline",
+    family: NEWSPAPER_FONT_FAMILIES.editorialHeadline,
+    cssFamily: NEWSPAPER_FONT_STACKS.editorialHeadline,
+    source: "/fonts/TiroDevanagariHindi-Regular.ttf",
+    weight: 400,
+    style: "normal",
+    pdfRole: "editorialHeadline",
+  },
+  {
+    id: "rozha-one-regular",
+    role: "headlineRozha",
+    family: NEWSPAPER_FONT_FAMILIES.headlineRozha,
+    cssFamily: NEWSPAPER_FONT_STACKS.headlineRozha,
+    source: "/fonts/RozhaOne-Regular.ttf",
+    weight: 400,
+    style: "normal",
+    pdfRole: "headlineRozha",
+  },
+  {
+    id: "ranga-bold",
+    role: "headlineRanga",
+    family: NEWSPAPER_FONT_FAMILIES.headlineRanga,
+    cssFamily: NEWSPAPER_FONT_STACKS.headlineRanga,
+    source: "/fonts/Ranga-Bold.ttf",
+    weight: 700,
+    style: "normal",
+    pdfRole: "headlineRanga",
+  },
+  {
+    id: "kalam-bold",
+    role: "headlineKalam",
+    family: NEWSPAPER_FONT_FAMILIES.headlineKalam,
+    cssFamily: NEWSPAPER_FONT_STACKS.headlineKalam,
+    source: "/fonts/Kalam-Bold.ttf",
+    weight: 700,
+    style: "normal",
+    pdfRole: "headlineKalam",
+  },
+  {
+    id: "amita-bold",
+    role: "headlineAmita",
+    family: NEWSPAPER_FONT_FAMILIES.headlineAmita,
+    cssFamily: NEWSPAPER_FONT_STACKS.headlineAmita,
+    source: "/fonts/Amita-Bold.ttf",
+    weight: 700,
+    style: "normal",
+    pdfRole: "headlineAmita",
+  },
 ];
 
 const REQUIRED_FONT_DEFINITIONS = NEWSPAPER_FONT_DEFINITIONS.filter(
   (font) =>
     font.weight === 400 ||
-    font.id === "cliff-noto-serif-devanagari-extra-condensed-medium",
+    font.id === "cliff-noto-serif-devanagari-extra-condensed-medium" ||
+    font.id === "ranga-bold" ||
+    font.id === "kalam-bold" ||
+    font.id === "amita-bold",
 );
 
 const toFontCheckString = (font: NewspaperFontDefinition) =>
@@ -226,7 +342,6 @@ export const waitForNewspaperFonts = async (): Promise<FontManagerState> => {
     // blocked page.
     document.fonts.load(`400 16px "Tinos"`).catch(() => undefined),
     document.fonts.load(`700 16px "Tinos"`).catch(() => undefined),
-    document.fonts.load(`400 16px "${NEWSPAPER_FONT_FAMILIES.editorialHeadline}"`).catch(() => undefined),
   ]);
   await document.fonts.ready;
 
