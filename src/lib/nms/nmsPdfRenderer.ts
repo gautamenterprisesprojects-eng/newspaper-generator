@@ -1,4 +1,5 @@
-﻿import { mkdir, readFile, writeFile } from "node:fs/promises";
+﻿import "regenerator-runtime/runtime";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import fontkit from "@pdf-lib/fontkit";
 import { cmyk, PDFDocument, rgb, StandardFonts, type PDFFont, type PDFImage, type PDFPage } from "pdf-lib";
@@ -281,3 +282,4 @@ export const generateNmsPdf = async (payload: NmsBundlePayload, articles: NmsRen
 
   return { pdfPath, filename };
 };
+
