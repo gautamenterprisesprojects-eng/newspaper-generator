@@ -5356,8 +5356,14 @@ function composeArticleBoxPass(
             byline.y + byline.height + bylineDividerGap + bylineDividerToBody - rawLeadRegion.y,
           )
         : inlineConsumedHeight + bylineReserveHeight;
+  // This case has the byline anchored directly below the photo with its own
+  // measured divider gap. Rounding that small reserve up to a full body-line
+  // rung creates a visible hole before the first body row in otherwise-good
+  // two-column boxes. Keep the measured reserve here and let the final region
+  // snap below enforce the safe baseline.
+  const shouldKeepMeasuredLeadReserve = tightWideEightColumnBylineToBodyGap || twoColumnLeftPhoto;
   const totalLeadConsumedHeight = rawTotalLeadHeight > 0
-    ? tightWideEightColumnBylineToBodyGap
+    ? shouldKeepMeasuredLeadReserve
       ? rawTotalLeadHeight
       : snapMeasurementToBaseline(
           rawTotalLeadHeight,
