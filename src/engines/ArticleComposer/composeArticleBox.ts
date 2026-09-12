@@ -2980,6 +2980,9 @@ function composeArticleBoxPass(
     priority,
     columnSpan: storyColumnSpan,
     contentLanguage: articleBox.contentLanguage,
+    slotKey: Number.isFinite(editorialStoryNumber)
+      ? editorialStoryNumber
+      : `${articleBox.x}|${articleBox.y}|${articleBox.width}|${articleBox.height}|${headlineText}`,
   });
   const headlineStyle = {
     ...editorialStyles.headline,

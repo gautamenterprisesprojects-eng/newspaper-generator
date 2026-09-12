@@ -36,6 +36,7 @@ type HeadlineFontSelectionInput = {
   priority: string;
   columnSpan: number;
   contentLanguage?: "hindi" | "english";
+  slotKey?: string | number;
 };
 
 export type NewspaperHeadlineFontSelection = {
@@ -65,25 +66,19 @@ export const selectNewspaperHeadlineFont = ({
   priority,
   columnSpan,
   contentLanguage,
+  slotKey,
 }: HeadlineFontSelectionInput): NewspaperHeadlineFontSelection => {
   if (contentLanguage === "english") {
-    return { fontFamily: NEWSPAPER_FONT_STACKS.serif, fontStyle: priority === "lead" ? "700" : "700" };
-  }
-
-  if (priority === "lead" || priority === "major" || columnSpan >= 4) {
-    return headlineDisplayFonts[0];
+    return { fontFamily: NEWSPAPER_FONT_STACKS.serif, fontStyle: "700" };
   }
 
   const safeColumnSpan = Number.isFinite(columnSpan) ? Math.max(1, Math.round(columnSpan)) : 2;
-  const palette =
-    safeColumnSpan <= 1
-      ? headlineDisplayFonts.slice(0, 2)
-      : safeColumnSpan === 2
-        ? headlineDisplayFonts.slice(0, 3)
-        : headlineDisplayFonts;
-  const index = hashStableText(`${priority}|${safeColumnSpan}|${text}`) % palette.length;
+  const numericSlot = Number(slotKey);
+  const index = Number.isFinite(numericSlot) && numericSlot > 0
+    ? (Math.round(numericSlot) - 1) % headlineDisplayFonts.length
+    : hashStableText(`${priority}|${safeColumnSpan}|${slotKey ?? ""}|${text}`) % headlineDisplayFonts.length;
 
-  return palette[index];
+  return headlineDisplayFonts[index];
 };
 
 export const NEWSPAPER_FONT_DEFINITIONS: NewspaperFontDefinition[] = [
