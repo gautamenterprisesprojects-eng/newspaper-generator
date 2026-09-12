@@ -4954,6 +4954,7 @@ function composeArticleBoxPass(
     Math.abs(image.x - inset) <= 0.5 && image.width <= columnWidth + 0.5 &&
     image.y <= bodyY + bodyLineHeight,
   );
+  const twoColumnRoundedLeftPhoto = Boolean(twoColumnLeftPhoto && image && image.cornerRadius > 0);
   const bodyFirstLineCapGap = (() => {
     if (twoColumnLeftPhoto || (!settings.tightBylineToBodyGap && !tightWideEightColumnBylineToBodyGap)) return 0;
     const ink = measureTextInkMetrics({
@@ -5392,9 +5393,29 @@ function composeArticleBoxPass(
   if (twoColumnLeftPhoto) {
     // Body copy uses the normal text grid, not the photo's raised top edge.
     // Snap after reserving the byline; its independent 2pt photo gap stays intact.
-    bodyRegions = bodyRegions.flatMap((region) => {
+    bodyRegions = bodyRegions.flatMap((region, index) => {
       const snapped = snapRegionToBaseline(region, lineAdvanceGrid);
-      return snapped && snapped.height >= bodyLineHeight ? [snapped] : [];
+      if (!snapped) return [];
+
+      if (twoColumnRoundedLeftPhoto && index === 0) {
+        const previousBaselineY = snapToBaseline(region.y, lineAdvanceGrid, "floor");
+        const regionBottom = snapToBaseline(region.y + region.height, lineAdvanceGrid, "floor");
+        const minimumSafeBodyTop = bylineDivider
+          ? bylineDivider.y + Math.max(2, bylineDividerToBody)
+          : byline.y + byline.height + bylineDividerGap + Math.max(2, bylineDividerToBody);
+
+        if (previousBaselineY < snapped.y && previousBaselineY >= minimumSafeBodyTop) {
+          const lifted = {
+            ...region,
+            y: previousBaselineY,
+            height: Math.max(0, regionBottom - previousBaselineY),
+          };
+
+          return lifted.height >= bodyLineHeight ? [lifted] : [];
+        }
+      }
+
+      return snapped.height >= bodyLineHeight ? [snapped] : [];
     });
   }
   const regionUsabilityRules: RegionUsabilityRules = {
