@@ -4954,6 +4954,7 @@ function composeArticleBoxPass(
     Math.abs(image.x - inset) <= 0.5 && image.width <= columnWidth + 0.5 &&
     image.y <= bodyY + bodyLineHeight,
   );
+  const twoColumnRoundedLeftPhoto = Boolean(twoColumnLeftPhoto && image && image.cornerRadius > 0);
   const bodyFirstLineCapGap = (() => {
     if (twoColumnLeftPhoto || (!settings.tightBylineToBodyGap && !tightWideEightColumnBylineToBodyGap)) return 0;
     const ink = measureTextInkMetrics({
@@ -5356,12 +5357,12 @@ function composeArticleBoxPass(
             byline.y + byline.height + bylineDividerGap + bylineDividerToBody - rawLeadRegion.y,
           )
         : inlineConsumedHeight + bylineReserveHeight;
-  // This case has the byline anchored directly below the photo with its own
-  // measured divider gap. Rounding that small reserve up to a full body-line
-  // rung creates a visible hole before the first body row in otherwise-good
-  // two-column boxes. Keep the measured reserve here and let the final region
-  // snap below enforce the safe baseline.
-  const shouldKeepMeasuredLeadReserve = tightWideEightColumnBylineToBodyGap || twoColumnLeftPhoto;
+  // A rounded photo's bottom edge reads visually lighter than the rectangular
+  // layout box used for spacing. In the two-column left-photo shape, rounding
+  // the byline reserve up to a full body-line rung then leaves a visible hole
+  // before the first body row. Keep the measured reserve only for that rounded
+  // variant; non-rounded two-column photos keep the existing baseline reserve.
+  const shouldKeepMeasuredLeadReserve = tightWideEightColumnBylineToBodyGap || twoColumnRoundedLeftPhoto;
   const totalLeadConsumedHeight = rawTotalLeadHeight > 0
     ? shouldKeepMeasuredLeadReserve
       ? rawTotalLeadHeight
