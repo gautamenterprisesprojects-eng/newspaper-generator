@@ -19,6 +19,5 @@ services:
       NMS_USED_BUNDLE_RETENTION_HOURS: ${NMS_USED_BUNDLE_RETENTION_HOURS:-1}
       NMS_GENERATED_PDF_RETENTION_HOURS: ${NMS_GENERATED_PDF_RETENTION_HOURS:-30}
     volumes:
-      - ./.env.production:/app/.env.production:ro
       - ./data/nms-bundles:/app/data/nms-bundles
       - ./data/nms-generated-pdfs:/app/data/nms-generated-pdfs
