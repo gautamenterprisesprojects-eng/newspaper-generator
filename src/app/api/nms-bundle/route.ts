@@ -2,7 +2,7 @@
 import path from "node:path";
 import { NextRequest, NextResponse } from "next/server";
 import { isAllowedNmsPageMintTarget, validateNmsBundlePayload } from "@/lib/nms/nmsBundleTypes";
-import { readLatestNmsBundleSummary, storeNmsBundle, getNmsBundleDir } from "@/lib/nms/nmsBundleStorage";
+import { getNmsExportPayloadFile, readLatestNmsBundleSummary, storeNmsBundle, getNmsBundleDir } from "@/lib/nms/nmsBundleStorage";
 import { cleanupOldNmsArtifacts } from "@/lib/nms/nmsRetention";
 import { startNmsPdfJob } from "@/lib/nms/nmsPdfJob";
 
@@ -67,7 +67,9 @@ export async function GET(request: NextRequest) {
   const { latest, files } = await readLatestNmsBundleSummary();
   if (request.nextUrl.searchParams.get("includePayload") === "1") {
     try {
-      const payload = JSON.parse(await readFile(path.join(getNmsBundleDir(), "latest.json"), "utf8"));
+      const job = request.nextUrl.searchParams.get("job")?.trim();
+      const payloadFile = job ? getNmsExportPayloadFile(job) : path.join(getNmsBundleDir(), "latest.json");
+      const payload = JSON.parse(await readFile(payloadFile, "utf8"));
       return json({ success: true, latest, payload, files });
     } catch (error) {
       return json({

@@ -70,6 +70,17 @@ export const storeNmsBundle = async (payload: NmsBundlePayload): Promise<StoredN
   return { payloadFile, summaryFile, latestPayloadFile, latestSummaryFile, summary };
 };
 
+export const getNmsExportPayloadFile = (jobId: unknown) =>
+  path.join(getNmsBundleDir(), `export-${sanitizeFilePart(jobId)}.json`);
+
+export const storeNmsExportPayload = async (payload: NmsBundlePayload) => {
+  const bundleDir = getNmsBundleDir();
+  await mkdir(bundleDir, { recursive: true });
+  const exportPayloadFile = getNmsExportPayloadFile(payload.job_id || payload.bundle_id || Date.now());
+  await writeFile(exportPayloadFile, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+  return exportPayloadFile;
+};
+
 export const readLatestNmsBundleSummary = async () => {
   try {
     const bundleDir = getNmsBundleDir();

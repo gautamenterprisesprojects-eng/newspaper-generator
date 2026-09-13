@@ -2,7 +2,7 @@
 import path from "node:path";
 import type { NmsBundleArticle, NmsBundlePayload } from "./nmsBundleTypes";
 import { getNumericTargetUserId } from "./nmsBundleTypes";
-import { getNmsGeneratedPdfDir, sanitizeFilePart } from "./nmsBundleStorage";
+import { getNmsGeneratedPdfDir, sanitizeFilePart, storeNmsExportPayload } from "./nmsBundleStorage";
 
 type HeadlessWindow = typeof window & {
   __NMS_EXPORT_READY?: boolean;
@@ -28,7 +28,13 @@ export const generateNmsRealEditorPdf = async (payload: NmsBundlePayload, articl
   const filename = `nms-37-real-${sanitizeFilePart(payload.job_id || payload.bundle_id || Date.now())}.pdf`;
   const pdfPath = path.join(pdfDir, filename);
   const baseUrl = getInternalBaseUrl().replace(/\/+$/, "");
-  const exportUrl = `${baseUrl}/?nmsExport=1&job=${encodeURIComponent(String(payload.job_id || payload.bundle_id || "latest"))}`;
+  const exportJobId = String(payload.job_id || payload.bundle_id || Date.now());
+  const exportPayloadFile = await storeNmsExportPayload({
+    ...payload,
+    count: articles.length,
+    articles,
+  });
+  const exportUrl = `${baseUrl}/?nmsExport=1&job=${encodeURIComponent(exportJobId)}`;
   const timeoutMs = Number(process.env.NMS_HEADLESS_EXPORT_TIMEOUT_MS || 120000);
 
   console.log("[NMS real PDF] starting PageMint editor export", {
@@ -36,6 +42,7 @@ export const generateNmsRealEditorPdf = async (payload: NmsBundlePayload, articl
     bundle_id: payload.bundle_id ?? null,
     target_user_id: getNumericTargetUserId(payload),
     articleCount: articles.length,
+    exportPayloadFile,
     exportUrl,
   });
   const { chromium } = await import("playwright");
