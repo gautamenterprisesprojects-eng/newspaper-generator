@@ -34,7 +34,20 @@ export const generateNmsRealEditorPdf = async (payload: NmsBundlePayload, articl
     count: articles.length,
     articles,
   });
-  const exportUrl = `${baseUrl}/?nmsExport=1&job=${encodeURIComponent(exportJobId)}`;
+  const exportPageCount = Math.max(1, Math.ceil(articles.length / 7));
+  const pageSections = Array.from({ length: exportPageCount }, (_, index) => ({
+    page_number: index + 1,
+    section: index === 0 ? "Front Page" : "City",
+    header_type: index === 0 ? "front" : "inside",
+  }));
+  const exportParams = new URLSearchParams({
+    nmsExport: "1",
+    job: exportJobId,
+    newspaperName: "THE CLIFF NEWS",
+    pageCount: String(exportPageCount),
+    pageSections: JSON.stringify(pageSections),
+  });
+  const exportUrl = `${baseUrl}/?${exportParams.toString()}`;
   const timeoutMs = Number(process.env.NMS_HEADLESS_EXPORT_TIMEOUT_MS || 120000);
 
   console.log("[NMS real PDF] starting PageMint editor export", {

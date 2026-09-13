@@ -138,6 +138,17 @@ export function NmsHeadlessExportBridge() {
           });
         });
         useEditorStore.getState().setActivePage(useEditorStore.getState().document.pages[0]?.id ?? store.activePageId);
+        useEditorStore.setState((state) => ({
+          document: {
+            ...state.document,
+            pages: state.document.pages.map((page, index) => ({
+              ...page,
+              pageType: index === 0 ? "front" : "city",
+              sectionName: index === 0 ? "Front Page" : page.sectionName || "City",
+            })),
+          },
+          pageType: "front",
+        }));
 
         await document.fonts?.ready;
         await wait(2500);
