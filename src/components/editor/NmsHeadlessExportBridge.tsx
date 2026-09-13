@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useEditorStore } from "@/store/editorStore";
 import type { NewswireStory } from "@/lib/newswire";
 import type { PageType } from "@/types/page";
+import { FRONT_HEADER_HEIGHT_PT } from "@/engines/HeaderSystem/HeaderGeometry";
 import type { NmsBundleArticle, NmsBundlePayload } from "@/lib/nms/nmsBundleTypes";
 import { textValue } from "@/lib/nms/nmsBundleTypes";
 
@@ -96,6 +97,25 @@ const namespaceActivePageStories = (pageIndex: number) => {
             : page,
         ),
       },
+    };
+  });
+};
+
+
+const ensureActivePageStoriesBelowFrontMasthead = () => {
+  useEditorStore.setState((state) => {
+    if (state.stories.length === 0) return {};
+    const minY = Math.min(...state.stories.map((story) => story.y));
+    const delta = FRONT_HEADER_HEIGHT_PT - minY;
+    if (delta <= 0.5) return {};
+    const pageBottom = (state.document.pages.find((page) => page.id === state.activePageId)?.masterPage.height ?? 21) * 72 - 18;
+
+    return {
+      stories: state.stories.map((story) => ({
+        ...story,
+        y: story.y + delta,
+        height: Math.max(28, Math.min(story.height, pageBottom - (story.y + delta))),
+      })),
     };
   });
 };
@@ -196,6 +216,9 @@ export function NmsHeadlessExportBridge() {
             subheadingStyle,
           });
           namespaceActivePageStories(pageIndex);
+          if (pageIndex === 0) {
+            ensureActivePageStoriesBelowFrontMasthead();
+          }
           (window as typeof window & { __PAGEMINT_CAPTURE_ACTIVE_PAGE_SNAPSHOT_FOR_EXPORT?: () => void })
             .__PAGEMINT_CAPTURE_ACTIVE_PAGE_SNAPSHOT_FOR_EXPORT?.();
         });
