@@ -1,8 +1,11 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+﻿import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { NextRequest, NextResponse } from "next/server";
 import { isAllowedNmsPageMintTarget, validateNmsBundlePayload } from "@/lib/nms/nmsBundleTypes";
-import { readLatestNmsBundleSummary, storeNmsBundle } from "@/lib/nms/nmsBundleStorage";
+import { readLatestNmsBundleSummary, storeNmsBundle, getNmsBundleDir } from "@/lib/nms/nmsBundleStorage";
 import { cleanupOldNmsArtifacts } from "@/lib/nms/nmsRetention";
 import { generateNmsPdfJob } from "@/lib/nms/nmsPdfJob";
+
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -82,4 +85,5 @@ export async function GET(request: NextRequest) {
   const { latest, files } = await readLatestNmsBundleSummary();
   return json({ success: true, latest, files });
 }
+
 
