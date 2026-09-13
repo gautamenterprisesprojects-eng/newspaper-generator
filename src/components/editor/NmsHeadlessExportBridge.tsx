@@ -177,7 +177,7 @@ export function NmsHeadlessExportBridge() {
         // The live front-header SVG is very large and can fail inside the
         // unattended canvas/PDF path. NMS exports use the existing flat masthead
         // artwork so the real front-page band is always present in callbacks.
-        useEditorStore.getState().setHeaderBannerImage("front", "/header front.jpg");
+        useEditorStore.getState().setHeaderBannerImage("front", "/header%20front.jpg");
         const bylineName = textValue(payload.targetUser?.nameHi) || textValue(payload.targetUser?.fullName) || "द क्लिफ न्यूज़";
         const subheadingStyle = {
           backgroundColor: "#111111",
