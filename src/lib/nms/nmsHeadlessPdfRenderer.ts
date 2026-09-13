@@ -116,6 +116,7 @@ export const generateNmsRealEditorPdf = async (payload: NmsBundlePayload, articl
       articleCount: articles.length,
       generatedAt: new Date().toISOString(),
       exportUrl,
+      exportDebug,
     }, null, 2)}\n`, "utf8");
 
     return { pdfPath, filename };

@@ -4112,6 +4112,7 @@ export function EditorCanvas() {
     if (typeof window === "undefined") return;
     (window as typeof window & {
       __PAGEMINT_EXPORT_CURRENT_DOCUMENT_PDF?: () => Promise<number[]>;
+      __PAGEMINT_CAPTURE_ACTIVE_PAGE_SNAPSHOT_FOR_EXPORT?: () => void;
     }).__PAGEMINT_EXPORT_CURRENT_DOCUMENT_PDF = async () => {
       const { pdfBytes, failedPages } = await buildDocumentPdfBytes();
       if (failedPages.length > 0) {
@@ -4119,10 +4120,32 @@ export function EditorCanvas() {
       }
       return Array.from(pdfBytes);
     };
+    (window as typeof window & {
+      __PAGEMINT_CAPTURE_ACTIVE_PAGE_SNAPSHOT_FOR_EXPORT?: () => void;
+    }).__PAGEMINT_CAPTURE_ACTIVE_PAGE_SNAPSHOT_FOR_EXPORT = () => {
+      const snapshotState = useEditorStore.getState();
+      const activePageId = snapshotState.activePageId;
+      batchPageStoriesSnapshotRef.current.set(activePageId, snapshotState.stories);
+      const imageSources: Record<string, string> = {};
+      for (const storyFrame of snapshotState.stories) {
+        const documentStory = snapshotState.document.stories[storyFrame.id];
+        const photoAssetId = documentStory?.photo ?? null;
+        const asset = photoAssetId ? snapshotState.document.assets[photoAssetId] : null;
+        const source = asset?.previewUrl || asset?.thumbnailUrl || asset?.source || "";
+        if (source) {
+          imageSources[storyFrame.id] = getPrintableImageSource(source);
+        }
+      }
+      batchPageImageSourcesRef.current.set(activePageId, imageSources);
+    };
     return () => {
       delete (window as typeof window & {
         __PAGEMINT_EXPORT_CURRENT_DOCUMENT_PDF?: () => Promise<number[]>;
+        __PAGEMINT_CAPTURE_ACTIVE_PAGE_SNAPSHOT_FOR_EXPORT?: () => void;
       }).__PAGEMINT_EXPORT_CURRENT_DOCUMENT_PDF;
+      delete (window as typeof window & {
+        __PAGEMINT_CAPTURE_ACTIVE_PAGE_SNAPSHOT_FOR_EXPORT?: () => void;
+      }).__PAGEMINT_CAPTURE_ACTIVE_PAGE_SNAPSHOT_FOR_EXPORT;
     };
   });
   async function exportCurrentPagePdf() {

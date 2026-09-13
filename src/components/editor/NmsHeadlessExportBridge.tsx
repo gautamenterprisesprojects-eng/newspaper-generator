@@ -192,6 +192,8 @@ export function NmsHeadlessExportBridge() {
             subheadingStyle,
           });
           namespaceActivePageStories(pageIndex);
+          (window as typeof window & { __PAGEMINT_CAPTURE_ACTIVE_PAGE_SNAPSHOT_FOR_EXPORT?: () => void })
+            .__PAGEMINT_CAPTURE_ACTIVE_PAGE_SNAPSHOT_FOR_EXPORT?.();
         });
         useEditorStore.setState((state) => ({
           document: {
