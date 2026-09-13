@@ -9,6 +9,7 @@ type HeadlessWindow = typeof window & {
   __NMS_EXPORT_ERROR?: string;
   __PAGEMINT_EXPORT_CURRENT_DOCUMENT_PDF?: () => Promise<number[]>;
   __NMS_EXPORT_DEBUG?: unknown;
+  __PAGEMINT_EXPORT_CLOSURE_DEBUG?: unknown;
 };
 
 const getInternalBaseUrl = () =>
@@ -98,6 +99,7 @@ export const generateNmsRealEditorPdf = async (payload: NmsBundlePayload, articl
       if (!exporter) throw new Error("PageMint editor PDF exporter is not available.");
       return exporter();
     });
+    const exportClosureDebug = await page.evaluate(() => (window as HeadlessWindow).__PAGEMINT_EXPORT_CLOSURE_DEBUG ?? null);
 
     if (!Array.isArray(bytes) || bytes.length < 1000) {
       throw new Error("PageMint real editor export returned an empty PDF.");
@@ -117,6 +119,7 @@ export const generateNmsRealEditorPdf = async (payload: NmsBundlePayload, articl
       generatedAt: new Date().toISOString(),
       exportUrl,
       exportDebug,
+      exportClosureDebug,
     }, null, 2)}\n`, "utf8");
 
     return { pdfPath, filename };

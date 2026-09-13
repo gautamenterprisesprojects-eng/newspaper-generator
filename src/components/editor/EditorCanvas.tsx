@@ -2982,8 +2982,9 @@ export function EditorCanvas() {
     context: CanvasRenderingContext2D,
     page: NewspaperPageObject,
     pageWidth: number,
+    sourceDocument = document,
   ) => {
-    const headerPrintModel = await buildHeaderPrintModel(document, page.id);
+    const headerPrintModel = await buildHeaderPrintModel(sourceDocument, page.id);
 
     if (!headerPrintModel) {
       if (masterHeaderEnabled) {
@@ -2992,7 +2993,7 @@ export function EditorCanvas() {
 
       context.fillStyle = "#111111";
       context.font = "700 12px 'Noto Serif Devanagari', serif";
-      context.fillText(document.metadata.newspaperName, 18, 22);
+      context.fillText(sourceDocument.metadata.newspaperName, 18, 22);
       context.strokeStyle = "#111111";
       context.lineWidth = 1;
       context.beginPath();
@@ -3646,6 +3647,7 @@ export function EditorCanvas() {
     // undefined outside batch mode, where imageSourcesByStoryId is already
     // correctly scoped to the one page being rendered.
     imageSourceOverrides?: Record<string, string>,
+    sourceDocument = document,
   ) => {
     // English-language stories (see composeArticleBox.ts's contentLanguage
     // check) compose with Tinos, but canvas text -- unlike DOM text -- never
@@ -3692,7 +3694,7 @@ export function EditorCanvas() {
         : Boolean(getYouthUpdateInsideTemplateIdFromLayoutShape(pageStoryLayouts)));
 
     if (!youthUpdateFlatStyle) {
-      await drawResolvedHeaderToCanvas(context, page, pageWidth);
+      await drawResolvedHeaderToCanvas(context, page, pageWidth, sourceDocument);
     }
 
     context.save();
@@ -4019,6 +4021,7 @@ export function EditorCanvas() {
     pdfDoc: import("pdf-lib").PDFDocument,
     pageModel: (typeof document.pages)[number],
     exportCompositionCache: StoryCompositionCache,
+    sourceDocument = document,
   ): Promise<{ added: true } | { added: false; error: Error }> {
     try {
       // In batch mode, importNewswireStories names every page's story frames
@@ -4035,7 +4038,7 @@ export function EditorCanvas() {
         batchPageStoriesSnapshotRef.current.get(pageModel.id) ??
         (pageModel.id === activePageId
           ? stories
-          : loadStoriesForPage(document, pageModel.id));
+          : loadStoriesForPage(sourceDocument, pageModel.id));
       const pageStoryLayouts = composeStoriesIncrementally({
         stories: pageStories,
         productionView: true,
@@ -4046,6 +4049,7 @@ export function EditorCanvas() {
         pageStoryLayouts,
         300,
         batchPageImageSourcesRef.current.get(pageModel.id),
+        sourceDocument,
       );
       const page = pdfDoc.addPage([pageWidth, pageHeight]);
       const pageImage = await pdfDoc.embedPng(await dataUrlToArrayBuffer(dataUrl));
@@ -4060,10 +4064,13 @@ export function EditorCanvas() {
     }
   }
 
-  async function buildDocumentPdfBytes(onProgress?: (completed: number, total: number) => void) {
+  async function buildDocumentPdfBytes(
+    onProgress?: (completed: number, total: number) => void,
+    sourceDocument = document,
+  ) {
     const pdfDoc = await PDFDocument.create();
     const exportCompositionCache: StoryCompositionCache = new Map();
-    const pages = document.pages.length > 0 ? document.pages : activePage ? [activePage] : [];
+    const pages = sourceDocument.pages.length > 0 ? sourceDocument.pages : activePage ? [activePage] : [];
 
     if (pages.length === 0) {
       throw new Error("No pages are available to export.");
@@ -4073,7 +4080,7 @@ export function EditorCanvas() {
 
     for (let index = 0; index < pages.length; index += 1) {
       const pageModel = pages[index];
-      const result = await addPageToPdf(pdfDoc, pageModel, exportCompositionCache);
+      const result = await addPageToPdf(pdfDoc, pageModel, exportCompositionCache, sourceDocument);
       if (!result.added) {
         failedPages.push({ pageId: pageModel.id, error: result.error });
       }
@@ -4114,7 +4121,20 @@ export function EditorCanvas() {
       __PAGEMINT_EXPORT_CURRENT_DOCUMENT_PDF?: () => Promise<number[]>;
       __PAGEMINT_CAPTURE_ACTIVE_PAGE_SNAPSHOT_FOR_EXPORT?: () => void;
     }).__PAGEMINT_EXPORT_CURRENT_DOCUMENT_PDF = async () => {
-      const { pdfBytes, failedPages } = await buildDocumentPdfBytes();
+      const exportState = useEditorStore.getState();
+      (window as typeof window & { __PAGEMINT_EXPORT_CLOSURE_DEBUG?: unknown }).__PAGEMINT_EXPORT_CLOSURE_DEBUG = {
+        activePageId: exportState.activePageId,
+        pageType: exportState.pageType,
+        pageCount: exportState.document.pages.length,
+        pages: exportState.document.pages.map((page) => ({
+          id: page.id,
+          pageNumber: page.pageNumber,
+          pageType: page.pageType,
+          sectionName: page.sectionName,
+          storyIds: page.stories.map((placement) => placement.storyId),
+        })),
+      };
+      const { pdfBytes, failedPages } = await buildDocumentPdfBytes(undefined, exportState.document);
       if (failedPages.length > 0) {
         throw new Error(`PageMint PDF export had ${failedPages.length} failed page(s).`);
       }
