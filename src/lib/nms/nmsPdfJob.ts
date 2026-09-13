@@ -1,7 +1,6 @@
 ﻿import type { NmsBundlePayload, StoredNmsBundle } from "./nmsBundleTypes";
 import { isAllowedNmsPageMintTarget } from "./nmsBundleTypes";
 import { ensureNmsArticleCapacity } from "./nmsNewsFill";
-import { generateNmsRealEditorPdf } from "./nmsHeadlessPdfRenderer";
 import { postNmsPdfCallback } from "./nmsPdfCallback";
 import { markNmsBundleUsed } from "./nmsBundleStorage";
 import { cleanupOldNmsArtifacts } from "./nmsRetention";
@@ -13,6 +12,7 @@ export const generateNmsPdfJob = async (payload: NmsBundlePayload, stored?: Stor
 
   const originalCount = Array.isArray(payload.articles) ? payload.articles.length : 0;
   const { articles, filledArticleCount } = await ensureNmsArticleCapacity(payload);
+  const { generateNmsRealEditorPdf } = await import("./nmsHeadlessPdfRenderer");
   const { pdfPath, filename } = await generateNmsRealEditorPdf(payload, articles.map((article, index) => ({
     ...article,
     nmsFilled: index >= originalCount,

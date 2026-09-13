@@ -1,6 +1,5 @@
 ﻿import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { chromium } from "playwright";
 import type { NmsBundleArticle, NmsBundlePayload } from "./nmsBundleTypes";
 import { getNumericTargetUserId } from "./nmsBundleTypes";
 import { getNmsGeneratedPdfDir, sanitizeFilePart } from "./nmsBundleStorage";
@@ -31,6 +30,7 @@ export const generateNmsRealEditorPdf = async (payload: NmsBundlePayload, articl
   const baseUrl = getInternalBaseUrl().replace(/\/+$/, "");
   const exportUrl = `${baseUrl}/?nmsExport=1&job=${encodeURIComponent(String(payload.job_id || payload.bundle_id || "latest"))}`;
 
+  const { chromium } = await import("playwright");
   const browser = await chromium.launch({
     headless: true,
     executablePath: getChromeExecutablePath(),
