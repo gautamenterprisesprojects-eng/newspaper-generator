@@ -45,6 +45,60 @@ const chunkArticlesForPages = (articles: NewswireStory[]) => {
   return chunks.filter((chunk) => chunk.length > 0);
 };
 
+const namespaceActivePageStories = (pageIndex: number) => {
+  const prefix = `nms-p${pageIndex + 1}-`;
+  useEditorStore.setState((state) => {
+    const pageId = state.activePageId;
+    const idMap = new Map(state.stories.map((story) => [story.id, `${prefix}${story.id}`]));
+    if (idMap.size === 0) return {};
+
+    const stories = state.stories.map((story) => ({
+      ...story,
+      id: idMap.get(story.id) ?? story.id,
+    }));
+    const documentStories = { ...state.document.stories };
+    idMap.forEach((newId, oldId) => {
+      const story = documentStories[oldId];
+      if (story) {
+        documentStories[newId] = { ...story, id: newId };
+        delete documentStories[oldId];
+      }
+    });
+
+    return {
+      stories,
+      selectedStoryId: state.selectedStoryId ? idMap.get(state.selectedStoryId) ?? state.selectedStoryId : state.selectedStoryId,
+      selectedObjects: state.selectedObjects.map((selection) => ({
+        ...selection,
+        storyId: idMap.get(selection.storyId) ?? selection.storyId,
+      })),
+      document: {
+        ...state.document,
+        stories: documentStories,
+        frames: Object.fromEntries(
+          Object.entries(state.document.frames).map(([frameId, frame]) => [
+            frameId,
+            frame.pageId === pageId && frame.storyId && idMap.has(frame.storyId)
+              ? { ...frame, storyId: idMap.get(frame.storyId) }
+              : frame,
+          ]),
+        ),
+        pages: state.document.pages.map((page) =>
+          page.id === pageId
+            ? {
+                ...page,
+                stories: page.stories.map((placement) => ({
+                  ...placement,
+                  storyId: idMap.get(placement.storyId) ?? placement.storyId,
+                })),
+              }
+            : page,
+        ),
+      },
+    };
+  });
+};
+
 const toNewswireStory = (article: NmsBundleArticle, index: number): NewswireStory => {
   const headline = textValue(article.headline) || textValue(article.originalHeadline) || `NMS Story ${index + 1}`;
   const body = cleanNmsBody(textValue(article.body) || textValue(article.originalBody) || "", headline);
@@ -136,6 +190,7 @@ export function NmsHeadlessExportBridge() {
             pageKind: pageIndex === 0 ? "front" : "inside",
             subheadingStyle,
           });
+          namespaceActivePageStories(pageIndex);
         });
         useEditorStore.getState().setActivePage(useEditorStore.getState().document.pages[0]?.id ?? store.activePageId);
         useEditorStore.setState((state) => ({
