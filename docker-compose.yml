@@ -14,3 +14,11 @@ services:
       NEWSWIRE_API_BASE_URL: ${NEWSWIRE_API_BASE_URL:-https://api.gautamenterprises.org}
       NEWSWIRE_API_BASE_URLS: ${NEWSWIRE_API_BASE_URLS:-https://api.gautamenterprises.org}
       NEWSWIRE_API_KEY: ${NEWSWIRE_API_KEY:?NEWSWIRE_API_KEY must be set}
+      NMS_BUNDLE_DIR: /app/data/nms-bundles
+      NMS_GENERATED_PDF_DIR: /app/data/nms-generated-pdfs
+      NMS_USED_BUNDLE_RETENTION_HOURS: ${NMS_USED_BUNDLE_RETENTION_HOURS:-1}
+      NMS_GENERATED_PDF_RETENTION_HOURS: ${NMS_GENERATED_PDF_RETENTION_HOURS:-30}
+    volumes:
+      - ./.env.production:/app/.env.production:ro
+      - ./data/nms-bundles:/app/data/nms-bundles
+      - ./data/nms-generated-pdfs:/app/data/nms-generated-pdfs

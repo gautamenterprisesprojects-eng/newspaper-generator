@@ -29,7 +29,15 @@ export const generateNmsRealEditorPdf = async (payload: NmsBundlePayload, articl
   const pdfPath = path.join(pdfDir, filename);
   const baseUrl = getInternalBaseUrl().replace(/\/+$/, "");
   const exportUrl = `${baseUrl}/?nmsExport=1&job=${encodeURIComponent(String(payload.job_id || payload.bundle_id || "latest"))}`;
+  const timeoutMs = Number(process.env.NMS_HEADLESS_EXPORT_TIMEOUT_MS || 120000);
 
+  console.log("[NMS real PDF] starting PageMint editor export", {
+    job_id: payload.job_id ?? null,
+    bundle_id: payload.bundle_id ?? null,
+    target_user_id: getNumericTargetUserId(payload),
+    articleCount: articles.length,
+    exportUrl,
+  });
   const { chromium } = await import("playwright");
   const browser = await chromium.launch({
     headless: true,
@@ -39,14 +47,29 @@ export const generateNmsRealEditorPdf = async (payload: NmsBundlePayload, articl
 
   try {
     const page = await browser.newPage();
-    page.setDefaultTimeout(Number(process.env.NMS_HEADLESS_EXPORT_TIMEOUT_MS || 120000));
+    page.setDefaultTimeout(timeoutMs);
+    page.setDefaultNavigationTimeout(timeoutMs);
+    page.on("console", (message) => {
+      console.log(`[NMS real PDF browser:${message.type()}] ${message.text()}`);
+    });
+    page.on("pageerror", (error) => {
+      console.error("[NMS real PDF browser error]", error);
+    });
+    page.on("requestfailed", (request) => {
+      const failure = request.failure();
+      console.warn("[NMS real PDF request failed]", request.url(), failure?.errorText);
+    });
     await page.setViewportSize({ width: 1400, height: 1800 });
-    await page.goto(exportUrl, { waitUntil: "networkidle" });
+    await page.goto(exportUrl, { waitUntil: "domcontentloaded", timeout: timeoutMs });
+    await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {
+      console.warn("[NMS real PDF] network did not become idle before readiness wait; continuing.");
+    });
     await page.waitForFunction(() => {
       const nmsWindow = window as HeadlessWindow;
       if (nmsWindow.__NMS_EXPORT_ERROR) throw new Error(nmsWindow.__NMS_EXPORT_ERROR);
       return Boolean(nmsWindow.__NMS_EXPORT_READY && nmsWindow.__PAGEMINT_EXPORT_CURRENT_DOCUMENT_PDF);
-    });
+    }, undefined, { timeout: timeoutMs });
+    console.log("[NMS real PDF] editor export bridge is ready");
     await page.evaluate(async () => document.fonts?.ready);
     const bytes = await page.evaluate(async () => {
       const exporter = (window as HeadlessWindow).__PAGEMINT_EXPORT_CURRENT_DOCUMENT_PDF;
@@ -59,6 +82,7 @@ export const generateNmsRealEditorPdf = async (payload: NmsBundlePayload, articl
     }
 
     await writeFile(pdfPath, Buffer.from(bytes));
+    console.log("[NMS real PDF] wrote PageMint editor PDF", { pdfPath, bytes: bytes.length });
     await writeFile(`${pdfPath}.json`, `${JSON.stringify({
       renderer: "pagemint-editor-headless",
       job_id: payload.job_id ?? null,

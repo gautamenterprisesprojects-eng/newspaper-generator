@@ -50,6 +50,7 @@ export function NmsHeadlessExportBridge() {
 
     (async () => {
       try {
+        console.log("[NMS export bridge] loading latest bundle payload");
         const response = await fetch("/api/nms-bundle?includePayload=1", { cache: "no-store" });
         if (!response.ok) throw new Error(`NMS export payload fetch failed: ${response.status}`);
         const envelope = await response.json() as { payload?: NmsBundlePayload };
@@ -57,6 +58,7 @@ export function NmsHeadlessExportBridge() {
         if (!payload || !Array.isArray(payload.articles)) throw new Error("NMS export payload missing articles.");
 
         const articles = payload.articles.map(toNewswireStory);
+        console.log("[NMS export bridge] importing articles", articles.length);
         const pageCount = Math.max(1, Math.ceil(articles.length / 7));
         const store = useEditorStore.getState();
         while (useEditorStore.getState().document.pages.length < pageCount) {
@@ -92,8 +94,10 @@ export function NmsHeadlessExportBridge() {
 
         await document.fonts?.ready;
         await wait(2500);
+        console.log("[NMS export bridge] ready for editor PDF export");
         (window as typeof window & { __NMS_EXPORT_READY?: boolean; __NMS_EXPORT_ERROR?: string }).__NMS_EXPORT_READY = true;
       } catch (error) {
+        console.error("[NMS export bridge] failed", error);
         (window as typeof window & { __NMS_EXPORT_ERROR?: string }).__NMS_EXPORT_ERROR = error instanceof Error ? error.message : String(error);
       }
     })();
