@@ -8,6 +8,7 @@ type HeadlessWindow = typeof window & {
   __NMS_EXPORT_READY?: boolean;
   __NMS_EXPORT_ERROR?: string;
   __PAGEMINT_EXPORT_CURRENT_DOCUMENT_PDF?: () => Promise<number[]>;
+  __NMS_EXPORT_DEBUG?: unknown;
 };
 
 const getInternalBaseUrl = () =>
@@ -91,6 +92,7 @@ export const generateNmsRealEditorPdf = async (payload: NmsBundlePayload, articl
     }, undefined, { timeout: timeoutMs });
     console.log("[NMS real PDF] editor export bridge is ready");
     await page.evaluate(async () => document.fonts?.ready);
+    const exportDebug = await page.evaluate(() => (window as HeadlessWindow).__NMS_EXPORT_DEBUG ?? null);
     const bytes = await page.evaluate(async () => {
       const exporter = (window as HeadlessWindow).__PAGEMINT_EXPORT_CURRENT_DOCUMENT_PDF;
       if (!exporter) throw new Error("PageMint editor PDF exporter is not available.");

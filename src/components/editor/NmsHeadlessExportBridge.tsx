@@ -1,9 +1,10 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { useEditorStore } from "@/store/editorStore";
 import type { NewswireStory } from "@/lib/newswire";
+import type { PageType } from "@/types/page";
 import type { NmsBundleArticle, NmsBundlePayload } from "@/lib/nms/nmsBundleTypes";
 import { textValue } from "@/lib/nms/nmsBundleTypes";
 
@@ -192,18 +193,35 @@ export function NmsHeadlessExportBridge() {
           });
           namespaceActivePageStories(pageIndex);
         });
-        useEditorStore.getState().setActivePage(useEditorStore.getState().document.pages[0]?.id ?? store.activePageId);
         useEditorStore.setState((state) => ({
           document: {
             ...state.document,
             pages: state.document.pages.map((page, index) => ({
               ...page,
-              pageType: index === 0 ? "front" : "city",
+              pageType: (index === 0 ? "front" : "city") as PageType,
               sectionName: index === 0 ? "Front Page" : page.sectionName || "City",
             })),
           },
-          pageType: "front",
         }));
+        const finalPages = useEditorStore.getState().document.pages;
+        useEditorStore.getState().setActivePage(finalPages[finalPages.length - 1]?.id ?? finalPages[0]?.id ?? store.activePageId);
+
+        await wait(750);
+        const finalState = useEditorStore.getState();
+        (window as typeof window & { __NMS_EXPORT_DEBUG?: unknown }).__NMS_EXPORT_DEBUG = {
+          activePageId: finalState.activePageId,
+          pageType: finalState.pageType,
+          pageCount: finalState.document.pages.length,
+          pages: finalState.document.pages.map((page) => ({
+            id: page.id,
+            pageNumber: page.pageNumber,
+            pageType: page.pageType,
+            sectionName: page.sectionName,
+            storyIds: page.stories.map((placement) => placement.storyId),
+          })),
+          activeStoryIds: finalState.stories.map((story) => story.id),
+          documentStoryCount: Object.keys(finalState.document.stories).length,
+        };
 
         await document.fonts?.ready;
         await wait(2500);
