@@ -42,10 +42,14 @@ export const generateNmsPdfJob = async (payload: NmsBundlePayload, stored?: Stor
 };
 
 export const startNmsPdfJob = (payload: NmsBundlePayload, stored: StoredNmsBundle) => {
-  queueMicrotask(() => {
-    generateNmsPdfJob(payload, stored).catch((error: unknown) => {
-      console.error("[NMS PDF job] failed", error);
-    });
+  console.log("[NMS PDF job] queued real editor export", {
+    job_id: payload.job_id ?? null,
+    bundle_id: payload.bundle_id ?? null,
+    target_user_id: payload.target_user_id ?? null,
+    pagemint_user_id: payload.pagemint_user_id ?? null,
+  });
+  void generateNmsPdfJob(payload, stored).catch((error: unknown) => {
+    console.error("[NMS PDF job] failed", error);
   });
 };
 
