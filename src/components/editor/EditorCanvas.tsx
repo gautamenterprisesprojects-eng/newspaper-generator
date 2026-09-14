@@ -591,16 +591,19 @@ const getWizardTabForPortalPage = (page: PortalPagePlan): WizardTab => {
   return "inside";
 };
 
-// FRONT_PAGE_TEMPLATE_IDS[1] ("CliffFront11A") is excluded from batch mode's
-// automatic page-1 rotation on request -- left selectable from the manual
-// wizard design picker, just never auto-chosen for an unattended batch run.
+// CliffFront11A and CliffFrontSep15 are excluded from batch mode's
+// automatic page-1 rotation -- left selectable from the manual wizard
+// design picker, just never auto-chosen for an unattended batch run.
 // An unattended "generate all pages" run is also restricted to 6-column
 // layouts only (publisher request) -- a template with no declared
 // columnCount defaults to 6 here (matches every plain front/inside design),
 // so this only actually drops the handful of templates that explicitly
 // declare something else (the 8-column front designs).
 const BATCH_FRONT_PAGE_TEMPLATE_IDS = FRONT_PAGE_TEMPLATE_IDS.filter(
-  (templateId) => templateId !== "CliffFront11A" && getTemplateColumnCount(templateId, 6) === 6,
+  (templateId) =>
+    templateId !== "CliffFront11A" &&
+    templateId !== "CliffFrontSep15" &&
+    getTemplateColumnCount(templateId, 6) === 6,
 );
 
 /**

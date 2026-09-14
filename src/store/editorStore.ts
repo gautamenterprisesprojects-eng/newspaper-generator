@@ -4052,7 +4052,17 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         // photo has to stay clear of the sidebar — reservedRegions only steer body
         // text. Pin the image left and cap it to the columns the sidebar leaves.
         const nestedSlots = insetSlotsByParent.get(slot.storyNumber) ?? [];
-        const nestedColumnSpan = nestedSlots.reduce(
+        // Sidebars sit *inside* the parent rectangle (CliffFront11A, L-Wrap).
+        // Full-width packages nested *below* the copy (`trimToInsets`, as on
+        // CliffFrontSep15 and the editorial comment) land at or past the
+        // parent's trimmed foot — they are not beside the photograph, so they
+        // must not shrink imageColumnSpan. Filtering on intersection keeps
+        // every existing sidebar template on the previous path.
+        const nestedInsideParent = nestedSlots.filter(
+          (nested: { y?: number; height?: number }) =>
+            typeof nested.y === "number" && nested.y + 0.5 < slot.y + slot.height,
+        );
+        const nestedColumnSpan = nestedInsideParent.reduce(
           (total: number, nested: any) => total + Math.max(1, nested.columnSpan ?? 1),
           0,
         );
@@ -4104,7 +4114,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           !isYouthUpdateInsideStory &&
           !isAkhandEditorial5A &&
           !isAkhandVicharManthanImageSlot &&
-          nestedSlots.length === 0;
+          nestedInsideParent.length === 0;
 
         // A box with a writer's rail is composed on one extra column, so the
         // rail occupies a whole column rather than part of one. See
@@ -4297,7 +4307,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
                 imageWrapMode: "none" as const,
               }
             : {}),
-          ...(nestedSlots.length > 0
+          ...(nestedInsideParent.length > 0
             ? {
                 imageAlignment: "top-left" as const,
                 imageColumnSpan: imageColumnsClearOfNested as StoryColumnSpan,
@@ -4491,7 +4501,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
               ? { articleEndBreathingSpaceEnabled: false }
               : {}),
             ...(() => {
-              const nested = nestedSlots.map((slot: any) => ({
+              const nested = nestedInsideParent.map((slot: any) => ({
                 x: slot.x,
                 y: slot.y,
                 width: slot.width,

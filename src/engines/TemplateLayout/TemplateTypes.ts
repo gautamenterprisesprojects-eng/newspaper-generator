@@ -40,6 +40,7 @@ export type TemplateId =
   // Dedicated front-page templates (masthead band reserved above row 1)
   | "CliffFront11A"
   | "CliffFront8A"
+  | "CliffFrontSep15"
   // Front-page shape catalogue — one archetype each, see TemplateRegistry
   | "CliffFrontTwinRail10A"
   | "CliffFrontBannerLead9A"

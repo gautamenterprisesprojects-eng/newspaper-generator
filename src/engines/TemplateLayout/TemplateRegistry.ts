@@ -990,6 +990,82 @@ const CLIFF_FRONT_8A: TemplateDefinition = {
   ],
 };
 
+/**
+ * CliffFrontSep15
+ * The Cliff News front page traced off the 15 Sep 2026 Hindi page-1 sheet.
+ *
+ * Distinct from CliffFront8A / CliffFront11A, which follow the 01 Aug 2026
+ * edition. This page's body is three bands below the existing masthead:
+ *
+ *   masthead band            reserved, not a slot
+ *   row 1  top package       ratio 0.54
+ *     col 1        सार-समाचार rail
+ *     cols 2-4     lead package
+ *       └ cols 2-4 nested article across the lead's full width, below the
+ *                  headline/inner well (topFraction 0.52)
+ *     cols 5-6     right package
+ *       └ cols 5-6 nested article at the foot (topFraction 0.74)
+ *   row 2  full-width        ratio 0.28
+ *     cols 1-6     major package
+ *       └ col 1    nested fact/content box (topFraction 0.23)
+ *   row 3  bottom            ratio 0.18
+ *     col 1        आज का मुक्का cartoon
+ *     cols 2-6     economy package
+ *
+ * Nested packages that span the parent's full width sit in a band *below*
+ * the parent's copy, so those parents are listed in `trimToInsets` — the
+ * same device the editorial page uses — rather than having body flow
+ * through them. The mid-band fact box is a true sidebar (one column inside
+ * a six-column parent) and is not trimmed.
+ *
+ * Nested multi-column packages are `secondary`, not `brief`: the lead-row
+ * invariant forbids a multi-column brief as a peer of the lead. A nested
+ * package is not a peer.
+ */
+const CLIFF_FRONT_SEP15: TemplateDefinition = {
+  id: "CliffFrontSep15",
+  name: "The Cliff News Front Page (15 Sep 2026)",
+  storyCount: 9,
+  trimToInsets: [2, 4],
+  rowRhythm: [
+    { row: 1, baseRatio: 0.54, receivesRemainingSpace: false, minimumHeight: 240 },
+    { row: 2, baseRatio: 0.28, receivesRemainingSpace: false, minimumHeight: 180 },
+    { row: 3, baseRatio: 0.18, receivesRemainingSpace: true, minimumHeight: 140 },
+  ],
+  slots: [
+    { storyNumber: 1, row: 1, columnStart: 1, columnSpan: 1, priority: "brief" },
+    { storyNumber: 2, row: 1, columnStart: 2, columnSpan: 3, priority: "lead" },
+    {
+      storyNumber: 3,
+      row: 1,
+      columnStart: 2,
+      columnSpan: 3,
+      priority: "secondary",
+      insetInto: { parentStoryNumber: 2, topFraction: 0.52 },
+    },
+    { storyNumber: 4, row: 1, columnStart: 5, columnSpan: 2, priority: "major" },
+    {
+      storyNumber: 5,
+      row: 1,
+      columnStart: 5,
+      columnSpan: 2,
+      priority: "secondary",
+      insetInto: { parentStoryNumber: 4, topFraction: 0.74 },
+    },
+    { storyNumber: 6, row: 2, columnStart: 1, columnSpan: 6, priority: "major" },
+    {
+      storyNumber: 7,
+      row: 2,
+      columnStart: 1,
+      columnSpan: 1,
+      priority: "brief",
+      insetInto: { parentStoryNumber: 6, topFraction: 0.23 },
+    },
+    { storyNumber: 8, row: 3, columnStart: 1, columnSpan: 1, priority: "brief" },
+    { storyNumber: 9, row: 3, columnStart: 2, columnSpan: 5, priority: "major" },
+  ],
+};
+
 /* ────────────────────────────────────────────────────────────────────────────
  * Front-page shape catalogue
  *
@@ -2435,6 +2511,7 @@ export const TEMPLATE_REGISTRY: Record<TemplateId, TemplateDefinition> = {
   // Front page only
   CliffFront11A: CLIFF_FRONT_11A,
   CliffFront8A: CLIFF_FRONT_8A,
+  CliffFrontSep15: CLIFF_FRONT_SEP15,
   // Front-page shape catalogue
   CliffFrontTwinRail10A: CLIFF_FRONT_TWIN_RAIL_10A,
   CliffFrontBannerLead9A: CLIFF_FRONT_BANNER_LEAD_9A,
@@ -2498,6 +2575,7 @@ export const FRONT_PAGE_TEMPLATE_IDS: TemplateId[] = [
   "CliffFrontEightColumn8D",
   "CliffFront8A",
   "CliffFront11A",
+  "CliffFrontSep15",
   "CliffFrontTwinRail10A",
   "CliffFrontBannerLead9A",
   "CliffFrontPhotoAnchor8A",
