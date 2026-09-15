@@ -13,6 +13,7 @@
     "test:bodyflow": "tsx src/engines/BodyFlowEngine/BodyFlowTests.ts",
     "test:byline": "tsx src/engines/BylineEngine/BylineTests.ts",
     "test:captionlayout": "tsx src/engines/ArticleComposer/CaptionLayoutTests.ts",
+    "test:cliffdemo3": "tsx src/lib/nms/cliffDemo3PublisherTests.ts",
     "test:columngrid": "tsx src/engines/PageMaster/ColumnGridTests.ts",
     "test:customlayout": "tsx src/engines/CustomLayoutGenerator/CustomLayoutGeneratorTests.ts",
     "test:dropcap": "tsx src/engines/DropCapEngine/DropCapTests.ts",

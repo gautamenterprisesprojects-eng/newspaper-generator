@@ -127,6 +127,11 @@ import {
 } from "@/lib/newswire";
 import { computeEvenCategoryTargets, computeWeightedCategoryTargets, shuffleNewswireStories } from "@/lib/newswireCategoryMix";
 import {
+  CLIFFDEMO3_NMS_CATEGORY,
+  isCliffDemo3PublisherSession,
+  shouldUseNmsBundleFeed,
+} from "@/lib/nms/cliffDemo3Publisher";
+import {
   buildPortalIssueArticleSession,
   isIssueArticleExcluded,
   loadFullIssueUsedArticles,
@@ -4336,6 +4341,11 @@ export function EditorCanvas() {
     let cancelled = false;
     const plannedPages = parseBatchPlannedPages(getPortalLaunchParam("pageSections"));
     const languageMode: PageLanguageMode = "hindi";
+    const isCliffDemo3Publisher = isCliffDemo3PublisherSession({
+      publisherId: getPortalLaunchParam("publisherId"),
+      newspaperName: getPortalLaunchParam("newspaperName") || useEditorStore.getState().document.metadata.newspaperName,
+      username: getPortalLaunchParam("username") || getPortalLaunchParam("publisherUsername"),
+    });
     // Every page in a batch run used to share NEWSWIRE_SUBHEADING_PRESETS[0]
     // (the same black "Classic Daily" palette on every single page) --
     // publisher request is a different palette per page instead, each at
@@ -4466,17 +4476,25 @@ export function EditorCanvas() {
         // below rather than falling through to specificCategory (a single
         // category) or the all-7-category Mixed fallback.
         const plannedCategoriesRaw = planned?.categories ?? [];
-        const explicitCategories: NewswireCategory[] = isFront
+        const plannedCategory = planned?.category;
+        const useNmsBundle = shouldUseNmsBundleFeed({
+          isCliffDemo3: isCliffDemo3Publisher,
+          isFrontPage: isFront,
+          plannedCategories: plannedCategoriesRaw,
+          plannedCategory,
+        });
+        const explicitCategories: NewswireCategory[] = isFront || useNmsBundle
           ? []
           : plannedCategoriesRaw.filter(isNewswireCategory);
 
-        const plannedCategory = planned?.category;
-        const specificCategory: NewswireCategory | null = isFront || explicitCategories.length > 1
+        const specificCategory: NewswireCategory | null = isFront || useNmsBundle || explicitCategories.length > 1
           ? null
           : explicitCategories[0]
             || (plannedCategory && isNewswireCategory(plannedCategory) ? plannedCategory : null)
             || inferCategoryFromSection(planned?.section ?? "");
-        const categoryLabel = explicitCategories.length > 1 ? explicitCategories.join(" + ") : specificCategory ?? "Mixed";
+        const categoryLabel = useNmsBundle
+          ? CLIFFDEMO3_NMS_CATEGORY
+          : explicitCategories.length > 1 ? explicitCategories.join(" + ") : specificCategory ?? "Mixed";
 
         useEditorStore.getState().setActivePage(pageModel.id);
 
@@ -4557,7 +4575,16 @@ export function EditorCanvas() {
             let freshLive: NewswireStory[] = [];
 
             if (remaining > 0) {
-              if (explicitCategories.length > 1) {
+              if (useNmsBundle) {
+                const overfetchLimit = 80;
+                const primaryLive = await fetchLiveNewswireOnce(CLIFFDEMO3_NMS_CATEGORY, languageMode, overfetchLimit);
+                if (cancelled) {
+                  return;
+                }
+                freshLive = (primaryLive ?? []).filter(
+                  (a) => !isArticleUsed(a, batchUsedArticleIdsRef.current, batchUsedHeadlinesRef.current),
+                );
+              } else if (explicitCategories.length > 1) {
                 // Publisher chose more than one category for this page
                 // (e.g. Sports + Business) â€” an even split across exactly
                 // those categories, reusing the same weighted-target/rounding
@@ -4619,7 +4646,7 @@ export function EditorCanvas() {
                 );
               }
 
-              // Still short â€” pull the remainder from whatever categories
+              // Still short — pull the remainder from whatever categories
               // haven't already been drained on this page. Still entirely
               // live content either way; nothing here ever touches the
               // deterministic preloaded pool. Applies even when the page has
@@ -4629,7 +4656,9 @@ export function EditorCanvas() {
               // come from, and importNewswireStories would then throw "Not
               // enough Hindi articles" outright instead of finishing the
               // page with a few cross-category live stories mixed in.
-              if (freshLive.length < remaining) {
+              // cliffdemo3 NMS pages stay on the stored bundle only — mixing
+              // National/Sports/etc. would undo the "NMS Bundle only" front.
+              if (freshLive.length < remaining && !useNmsBundle) {
                 const stillNeeded = remaining - freshLive.length;
                 const mixedIn = await fetchLiveArticlesFromOtherCategories(
                   specificCategory ?? "",
