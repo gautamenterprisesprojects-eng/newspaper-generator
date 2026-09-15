@@ -3,11 +3,20 @@
 import { useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { useEditorStore } from "@/store/editorStore";
-import type { NewswireStory } from "@/lib/newswire";
+import {
+  NEWSWIRE_SUBHEADING_PRESETS,
+  getPaletteInlineAccent,
+  getPaletteSubheadingStyle,
+  getPaletteTintColor,
+  type NewswireStory,
+  type NewswireSubheadingPreset,
+} from "@/lib/newswire";
 import type { PageType } from "@/types/page";
 import type { TemplateId } from "@/engines/TemplateLayout/TemplateTypes";
 import type { NmsBundleArticle, NmsBundlePayload } from "@/lib/nms/nmsBundleTypes";
 import { textValue } from "@/lib/nms/nmsBundleTypes";
+import { waitForNewspaperFonts } from "@/engines/FontManager/FontManagerEngine";
+import { clearTextMeasurementCache } from "@/engines/TypographyEngine/TextMeasure";
 
 const words = (text: string) => text.trim().split(/\s+/u).filter(Boolean);
 
@@ -122,6 +131,53 @@ const toNewswireStory = (article: NmsBundleArticle, index: number): NewswireStor
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * Blocks until the Devanagari @font-face files are really loaded, then throws
+ * away every width this page measured before that happened.
+ *
+ * Canvas text never triggers @font-face loading on its own, so composition
+ * measures whatever face is resolvable at the moment it runs. In a publisher's
+ * own browser the files are warm and that is always the real face. In the
+ * headless container this bridge runs in they arrive over HTTP on a cold cache,
+ * and composition — which starts the instant the bundle payload lands — used to
+ * win the race: lines were broken and justified against fallback metrics, then
+ * drawn with the real face, so every word after the first landed at an x
+ * computed for glyphs of a different width and the copy printed on top of
+ * itself. Gating composition on the fonts is what makes the headless sheet
+ * identical to the one the editor exports by hand.
+ */
+const awaitNewspaperFontsBeforeComposing = async () => {
+  const fontState = await waitForNewspaperFonts();
+  await document.fonts?.ready;
+  clearTextMeasurementCache();
+  console.log("[NMS export bridge] fonts ready before composition", {
+    status: fontState.status,
+    ready: fontState.ready,
+    fallbacks: fontState.diagnostics.filter((font) => font.fallback).map((font) => font.id),
+  });
+  return fontState;
+};
+
+/**
+ * The same palette rotation, tint and justification settings the manual
+ * "generate all pages" run uses (see EditorCanvas.tsx's buildOptions) — one
+ * unused palette per page, 60% background behind the subheading bands.
+ */
+const NMS_PALETTE_BACKGROUND_OPACITY = 0.6;
+
+const createNmsPalettePicker = () => {
+  const pool = NEWSWIRE_SUBHEADING_PRESETS.filter((preset) => preset.id !== "custom");
+  const used = new Set<string>();
+
+  return (): NewswireSubheadingPreset => {
+    const unused = pool.filter((preset) => !used.has(preset.id));
+    const candidates = unused.length > 0 ? unused : pool;
+    const picked = candidates[Math.floor(Math.random() * candidates.length)];
+    used.add(picked.id);
+    return picked;
+  };
+};
+
 const resizeDocumentToPageCount = (pageCount: number) => {
   while (useEditorStore.getState().document.pages.length < pageCount) {
     useEditorStore.getState().addEditionPage("end");
@@ -143,6 +199,8 @@ export function NmsHeadlessExportBridge() {
 
     (async () => {
       try {
+        await awaitNewspaperFontsBeforeComposing();
+
         const job = searchParams.get("job")?.trim() || "";
         console.log("[NMS export bridge] loading bundle payload", job);
         const response = await fetch(`/api/nms-bundle?includePayload=1${job ? `&job=${encodeURIComponent(job)}` : ""}`, { cache: "no-store" });
@@ -177,12 +235,7 @@ export function NmsHeadlessExportBridge() {
           },
         }));
         const bylineName = textValue(payload.targetUser?.nameHi) || textValue(payload.targetUser?.fullName) || "द क्लिफ न्यूज़";
-        const subheadingStyle = {
-          backgroundColor: "#111111",
-          textColor: "#ffffff",
-          borderColor: "#111111",
-          backgroundOpacity: 1,
-        };
+        const pickPalette = createNmsPalettePicker();
 
         for (let pageIndex = 0; pageIndex < plannedPages.length; pageIndex += 1) {
           const planned = plannedPages[pageIndex];
@@ -205,6 +258,7 @@ export function NmsHeadlessExportBridge() {
             articleCount: chunk.length,
           });
 
+          const palette = pickPalette();
           useEditorStore.getState().importNewswireStories(
             "NMS Bundle",
             chunk,
@@ -213,7 +267,15 @@ export function NmsHeadlessExportBridge() {
               bylineName,
               pageKind: planned.pageKind,
               templateId: planned.templateId as TemplateId,
-              subheadingStyle,
+              colouredHeadings: false,
+              tintedStoryBackground: true,
+              tintColor: getPaletteTintColor(palette),
+              inlineColumnSubheadings: true,
+              inlineSubheadingColor: getPaletteInlineAccent(palette),
+              palettePreset: palette,
+              subheadingStyle: getPaletteSubheadingStyle(palette, NMS_PALETTE_BACKGROUND_OPACITY),
+              bodyAlignment: "justify",
+              professionalJustification: true,
               isBatchGeneration: true,
             },
           );
