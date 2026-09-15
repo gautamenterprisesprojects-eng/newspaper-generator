@@ -208,6 +208,8 @@ const REQUIRED_FONT_DEFINITIONS = NEWSPAPER_FONT_DEFINITIONS.filter(
   (font) =>
     font.weight === 400 ||
     font.id === "cliff-noto-serif-devanagari-extra-condensed-medium" ||
+    font.id === "cliff-noto-sans-devanagari-bold" ||
+    font.id === "cliff-noto-serif-devanagari-bold" ||
     font.id === "ranga-bold" ||
     font.id === "kalam-bold" ||
     font.id === "amita-bold",
@@ -253,6 +255,51 @@ export const getNewspaperFontStack = (role: NewspaperFontRole) =>
 
 export const getNewspaperFontFamily = (role: NewspaperFontRole) =>
   NEWSPAPER_FONT_FAMILIES[role];
+
+/**
+ * Maps leftover / inspector / CSS-unquoted family names onto the same Cliff
+ * stacks the live editor paints: Rozha/Ranga/Amita/Kalam headlines, ExtraCondensed
+ * body, Sans kickers. Unknown umbrella names like "Cliff Noto Devanagari" used
+ * to fall through to a system face and print as overlapping Devanagari.
+ */
+export const resolveNewspaperFontFamily = (fontFamily: string): string => {
+  const raw = fontFamily?.trim() ?? "";
+  if (!raw) {
+    return NEWSPAPER_FONT_STACKS.serif;
+  }
+
+  const lower = raw.toLowerCase().replace(/['"]/g, "");
+
+  if (
+    lower.includes("tinos") ||
+    lower.includes("georgia") ||
+    lower.includes("times new roman") ||
+    lower.includes("arial") ||
+    lower.includes("anton")
+  ) {
+    return raw;
+  }
+
+  if (lower.includes("rozha")) return NEWSPAPER_FONT_STACKS.headlineRozha;
+  if (lower.includes("ranga")) return NEWSPAPER_FONT_STACKS.headlineRanga;
+  if (lower.includes("amita")) return NEWSPAPER_FONT_STACKS.headlineAmita;
+  if (lower.includes("kalam")) return NEWSPAPER_FONT_STACKS.headlineKalam;
+  if (lower.includes("tiro")) return NEWSPAPER_FONT_STACKS.editorialHeadline;
+  if (lower.includes("extracondensed") || lower.includes("extra condensed")) {
+    return NEWSPAPER_FONT_STACKS.bodySerifCondensed;
+  }
+  if (lower.includes("cliff noto sans") || lower.includes("noto sans")) {
+    return NEWSPAPER_FONT_STACKS.sans;
+  }
+  if (lower.includes("cliff noto serif") || lower.includes("noto serif")) {
+    return NEWSPAPER_FONT_STACKS.serif;
+  }
+  if (lower.includes("cliff noto") || lower.includes("noto devanagari")) {
+    return NEWSPAPER_FONT_STACKS.bodySerifCondensed;
+  }
+
+  return raw;
+};
 
 export const getFontDefinitionsForRole = (role: NewspaperFontRole) =>
   NEWSPAPER_FONT_DEFINITIONS.filter((font) => font.role === role);

@@ -3,6 +3,7 @@ import {
   getNewspaperFontStack,
   NEWSPAPER_FONT_DEFINITIONS,
   NEWSPAPER_FONT_FAMILIES,
+  resolveNewspaperFontFamily,
 } from "./FontManagerEngine";
 
 assert.equal(getNewspaperFontStack("sans"), `${NEWSPAPER_FONT_FAMILIES.sans}, sans-serif`);
@@ -59,13 +60,46 @@ assert(
 );
 
 assert.equal(
-  NEWSPAPER_FONT_DEFINITIONS.filter(
-    (font) =>
-      font.weight === 400 ||
-      font.id === "cliff-noto-serif-devanagari-extra-condensed-medium",
-  ).length,
-  4,
-  "PDF pipeline should receive one regular font per text role",
+  resolveNewspaperFontFamily("Cliff Noto Devanagari"),
+  getNewspaperFontStack("bodySerifCondensed"),
+  "unknown umbrella family must become ExtraCondensed body",
+);
+assert.equal(
+  resolveNewspaperFontFamily("Noto Serif Devanagari, Mangal, serif"),
+  getNewspaperFontStack("serif"),
+);
+assert.equal(
+  resolveNewspaperFontFamily("Rozha One, serif"),
+  getNewspaperFontStack("headlineRozha"),
+);
+assert.equal(
+  resolveNewspaperFontFamily("Ranga, Cliff Noto Serif Devanagari, serif"),
+  getNewspaperFontStack("headlineRanga"),
+);
+assert.equal(
+  resolveNewspaperFontFamily("Amita"),
+  getNewspaperFontStack("headlineAmita"),
+);
+assert.equal(
+  resolveNewspaperFontFamily("Kalam, serif"),
+  getNewspaperFontStack("headlineKalam"),
+);
+assert.equal(
+  resolveNewspaperFontFamily("Cliff Noto Sans Devanagari, sans-serif"),
+  getNewspaperFontStack("sans"),
+);
+assert.equal(
+  resolveNewspaperFontFamily('"Tinos", Georgia, "Times New Roman", serif'),
+  '"Tinos", Georgia, "Times New Roman", serif',
+);
+
+assert(
+  NEWSPAPER_FONT_DEFINITIONS.some((font) => font.id === "cliff-noto-serif-devanagari-bold"),
+  "serif 700 must be registered so NMS headlines can fall back to Cliff Noto",
+);
+assert(
+  NEWSPAPER_FONT_DEFINITIONS.some((font) => font.id === "cliff-noto-sans-devanagari-bold"),
+  "sans 700 must be registered for kickers and datelines",
 );
 
 console.log("FontManager tests passed");

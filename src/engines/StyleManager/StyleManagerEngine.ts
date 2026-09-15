@@ -23,6 +23,7 @@ import type {
   StyleUpdateInput,
 } from "./StyleManagerTypes";
 import { DEFAULT_BODY_JUSTIFY_ENGINE } from "@/engines/UniversalTypography/UniversalTypographyEngine";
+import { NEWSPAPER_FONT_FAMILIES } from "@/engines/FontManager/FontManagerEngine";
 
 const now = () => new Date().toISOString();
 
@@ -36,7 +37,7 @@ const createParagraphSettings = (
   alignment: NewspaperParagraphStyleSettings["alignment"] = "left",
 ): NewspaperParagraphStyleSettings => ({
   role,
-  fontFamily: role === "headline" ? "Noto Serif Devanagari" : "Noto Sans Devanagari",
+  fontFamily: role === "headline" ? NEWSPAPER_FONT_FAMILIES.serif : NEWSPAPER_FONT_FAMILIES.sans,
   fontWeight: weight,
   fontSize,
   leading: fontSize,

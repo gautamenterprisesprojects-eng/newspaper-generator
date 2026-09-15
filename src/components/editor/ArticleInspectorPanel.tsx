@@ -1566,8 +1566,8 @@ export function ArticleInspectorPanel({
             </div>
 
             <Field label="Font Family">
-              <select disabled value="Cliff Noto Devanagari">
-                <option>Cliff Noto Devanagari</option>
+              <select disabled value="Cliff Noto Serif Devanagari ExtraCondensed">
+                <option>Cliff Noto Serif Devanagari ExtraCondensed</option>
               </select>
             </Field>
 

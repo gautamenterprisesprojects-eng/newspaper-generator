@@ -64,6 +64,7 @@ import {
   createInitialFontManagerState,
   getNewspaperFontStack,
   loadAllNewspaperFontFaces,
+  resolveNewspaperFontFamily,
   waitForNewspaperFonts,
 } from "@/engines/FontManager/FontManagerEngine";
 import type { FontManagerState } from "@/engines/FontManager/FontManagerTypes";
@@ -3067,7 +3068,7 @@ export function EditorCanvas() {
     const italic = style.fontStyle?.includes("italic") ? "italic " : "";
 
     context.font = createCanvasFontString(
-      style.fontFamily,
+      resolveNewspaperFontFamily(style.fontFamily),
       style.fontSize,
       `${italic}${weight}`.trim() || "400",
     );
