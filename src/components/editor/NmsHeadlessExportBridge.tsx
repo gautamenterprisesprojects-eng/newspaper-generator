@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useEditorStore } from "@/store/editorStore";
 import type { NewswireStory } from "@/lib/newswire";
 import type { PageType } from "@/types/page";
+import type { TemplateId } from "@/engines/TemplateLayout/TemplateTypes";
 import type { NmsBundleArticle, NmsBundlePayload } from "@/lib/nms/nmsBundleTypes";
 import { textValue } from "@/lib/nms/nmsBundleTypes";
 
@@ -32,18 +33,6 @@ const cleanNmsBody = (body: string, headline: string) => {
   }
 
   return cleaned.join("\n\n").trim() || body;
-};
-
-const chunkArticlesForPages = (articles: NewswireStory[]) => {
-  const chunks: NewswireStory[][] = [];
-  const frontCount = Math.min(7, Math.max(1, articles.length));
-  chunks.push(articles.slice(0, frontCount));
-
-  for (let index = frontCount; index < articles.length; index += 7) {
-    chunks.push(articles.slice(index, index + 7));
-  }
-
-  return chunks.filter((chunk) => chunk.length > 0);
 };
 
 const namespaceActivePageStories = (pageIndex: number) => {
@@ -133,6 +122,17 @@ const toNewswireStory = (article: NmsBundleArticle, index: number): NewswireStor
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const resizeDocumentToPageCount = (pageCount: number) => {
+  while (useEditorStore.getState().document.pages.length < pageCount) {
+    useEditorStore.getState().addEditionPage("end");
+  }
+  while (useEditorStore.getState().document.pages.length > pageCount && useEditorStore.getState().document.pages.length > 1) {
+    const pages = useEditorStore.getState().document.pages;
+    useEditorStore.getState().setActivePage(pages[pages.length - 1].id);
+    useEditorStore.getState().deleteActivePage();
+  }
+};
+
 export function NmsHeadlessExportBridge() {
   const searchParams = useSearchParams();
   const started = useRef(false);
@@ -151,19 +151,21 @@ export function NmsHeadlessExportBridge() {
         const payload = envelope.payload;
         if (!payload || !Array.isArray(payload.articles)) throw new Error("NMS export payload missing articles.");
 
-        const articles = payload.articles.map(toNewswireStory);
-        const pageArticleChunks = chunkArticlesForPages(articles);
-        console.log("[NMS export bridge] importing articles", articles.length, "pages", pageArticleChunks.length);
-        const pageCount = Math.max(1, pageArticleChunks.length);
-        const store = useEditorStore.getState();
-        while (useEditorStore.getState().document.pages.length < pageCount) {
-          useEditorStore.getState().addEditionPage("end");
+        const plannedPages = payload.editionPlan?.pages;
+        if (!Array.isArray(plannedPages) || plannedPages.length === 0) {
+          throw new Error("NMS export payload missing sequential edition plan.");
         }
-        while (useEditorStore.getState().document.pages.length > pageCount && useEditorStore.getState().document.pages.length > 1) {
-          const pages = useEditorStore.getState().document.pages;
-          useEditorStore.getState().setActivePage(pages[pages.length - 1].id);
-          useEditorStore.getState().deleteActivePage();
-        }
+
+        console.log("[NMS export bridge] sequential pages", plannedPages.map((page) => ({
+          pageNumber: page.pageNumber,
+          templateId: page.templateId,
+          templateName: page.templateName,
+          boxes: page.boxCount,
+          nms: page.nmsArticleCount,
+          fill: page.fillArticleCount,
+        })));
+
+        resizeDocumentToPageCount(plannedPages.length);
 
         useEditorStore.setState((state) => ({
           document: {
@@ -182,31 +184,63 @@ export function NmsHeadlessExportBridge() {
           backgroundOpacity: 1,
         };
 
-        pageArticleChunks.forEach((chunk, pageIndex) => {
+        for (let pageIndex = 0; pageIndex < plannedPages.length; pageIndex += 1) {
+          const planned = plannedPages[pageIndex];
           const page = useEditorStore.getState().document.pages[pageIndex];
-          useEditorStore.getState().setActivePage(page?.id ?? store.activePageId);
-          useEditorStore.getState().importNewswireStories(pageIndex === 0 ? "National" : "Madhya Pradesh", chunk, {
-            languageMode: "hindi",
-            bylineName,
-            pageKind: pageIndex === 0 ? "front" : "inside",
-            subheadingStyle,
-          });
-          namespaceActivePageStories(pageIndex);
-        });
-        useEditorStore.setState((state) => ({
-          document: {
-            ...state.document,
-            pages: state.document.pages.map((page, index) => ({
-              ...page,
-              pageType: (index === 0 ? "front" : "city") as PageType,
-              sectionName: index === 0 ? "Front Page" : page.sectionName || "City",
-            })),
-          },
-        }));
-        const finalPages = useEditorStore.getState().document.pages;
-        useEditorStore.getState().setActivePage(finalPages[finalPages.length - 1]?.id ?? finalPages[0]?.id ?? store.activePageId);
+          if (!page) throw new Error(`Queued page ${pageIndex + 1} is missing from the document.`);
 
-        await wait(750);
+          useEditorStore.getState().setActivePage(page.id);
+          const chunk = (planned.articles ?? []).map((article, articleIndex) =>
+            toNewswireStory(article, pageIndex * 100 + articleIndex),
+          );
+          if (chunk.length === 0) {
+            throw new Error(`Queued page ${planned.pageNumber} (${planned.templateName}) has no articles.`);
+          }
+
+          console.log("[NMS export bridge] generating queued page", {
+            pageNumber: planned.pageNumber,
+            pageKind: planned.pageKind,
+            templateId: planned.templateId,
+            templateName: planned.templateName,
+            articleCount: chunk.length,
+          });
+
+          useEditorStore.getState().importNewswireStories(
+            "NMS Bundle",
+            chunk,
+            {
+              languageMode: "hindi",
+              bylineName,
+              pageKind: planned.pageKind,
+              templateId: planned.templateId as TemplateId,
+              subheadingStyle,
+              isBatchGeneration: true,
+            },
+          );
+          namespaceActivePageStories(pageIndex);
+          useEditorStore.setState((state) => ({
+            document: {
+              ...state.document,
+              pages: state.document.pages.map((documentPage, index) =>
+                index === pageIndex
+                  ? {
+                      ...documentPage,
+                      pageType: (planned.pageKind === "front" ? "front" : "city") as PageType,
+                      sectionName: planned.pageKind === "front" ? "Front Page" : planned.templateName || "City",
+                    }
+                  : documentPage,
+              ),
+            },
+          }));
+
+          await document.fonts?.ready;
+          await wait(750);
+        }
+
+        const finalPages = useEditorStore.getState().document.pages;
+        useEditorStore.getState().setActivePage(finalPages[finalPages.length - 1]?.id ?? finalPages[0]?.id);
+
+        await wait(2500);
         const finalState = useEditorStore.getState();
         (window as typeof window & { __NMS_EXPORT_DEBUG?: unknown }).__NMS_EXPORT_DEBUG = {
           activePageId: finalState.activePageId,
@@ -219,13 +253,21 @@ export function NmsHeadlessExportBridge() {
             sectionName: page.sectionName,
             storyIds: page.stories.map((placement) => placement.storyId),
           })),
+          editionPlan: plannedPages.map((page) => ({
+            pageNumber: page.pageNumber,
+            templateId: page.templateId,
+            templateName: page.templateName,
+            boxCount: page.boxCount,
+            nmsArticleCount: page.nmsArticleCount,
+            fillArticleCount: page.fillArticleCount,
+          })),
           activeStoryIds: finalState.stories.map((story) => story.id),
           documentStoryCount: Object.keys(finalState.document.stories).length,
         };
 
         await document.fonts?.ready;
-        await wait(2500);
-        console.log("[NMS export bridge] ready for editor PDF export");
+        await wait(400);
+        console.log("[NMS export bridge] ready for combined editor PDF export");
         (window as typeof window & { __NMS_EXPORT_READY?: boolean; __NMS_EXPORT_ERROR?: string }).__NMS_EXPORT_READY = true;
       } catch (error) {
         console.error("[NMS export bridge] failed", error);
@@ -236,5 +278,3 @@ export function NmsHeadlessExportBridge() {
 
   return null;
 }
-
-

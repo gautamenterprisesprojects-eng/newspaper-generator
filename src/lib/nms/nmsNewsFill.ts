@@ -1,8 +1,8 @@
-﻿import type { NmsBundleArticle, NmsBundlePayload } from "./nmsBundleTypes";
+﻿import type { NmsBundleArticle } from "./nmsBundleTypes";
 import { textValue } from "./nmsBundleTypes";
 
 const DEFAULT_API_BASE_URL = "https://api.gautamenterprises.org";
-const CLIFFDEMO3_CATEGORIES = ["National", "Madhya Pradesh", "International", "Business", "Sports", "Health"];
+const NMS_PAGE_FILL_CATEGORIES = ["National", "Madhya Pradesh"] as const;
 
 const getApiBaseUrls = () =>
   (process.env.NEWSWIRE_API_BASE_URLS || process.env.NEWSWIRE_API_BASE_URL || DEFAULT_API_BASE_URL)
@@ -46,7 +46,7 @@ const fetchFallbackCategory = async (category: string, limit: number): Promise<N
       const response = await fetch(url, { headers: { "x-api-key": apiKey }, cache: "no-store" });
       const payload = await response.json().catch(() => null) as { success?: boolean; data?: Record<string, unknown>[] } | null;
       if (!response.ok || !Array.isArray(payload?.data)) continue;
-      return payload.data.slice(0, limit).map((record, index) => normalizeFallbackRecord(record, category, index));
+      return payload.data.slice(0, Math.max(limit, payload.data.length)).map((record, index) => normalizeFallbackRecord(record, category, index));
     } catch {
       // Try the next configured backend.
     }
@@ -55,21 +55,42 @@ const fetchFallbackCategory = async (category: string, limit: number): Promise<N
   return [];
 };
 
-export const ensureNmsArticleCapacity = async (payload: NmsBundlePayload) => {
-  const minimum = Math.max(1, Number(process.env.NMS_MIN_ARTICLE_COUNT || 12));
-  const originalArticles = Array.isArray(payload.articles) ? payload.articles : [];
-  const articles = [...originalArticles];
-  let remaining = Math.max(0, minimum - articles.length);
+/**
+ * Leftover boxes on an NMS PageMint page — after the bundle's own articles
+ * have been placed — are filled from National and Madhya Pradesh only.
+ */
+export const fetchNationalAndMadhyaPradeshFill = async (
+  needed: number,
+  usedIds: ReadonlySet<string>,
+): Promise<NmsBundleArticle[]> => {
+  if (needed <= 0) return [];
 
-  for (const category of CLIFFDEMO3_CATEGORIES) {
-    if (remaining <= 0) break;
-    const fetched = await fetchFallbackCategory(category, remaining);
-    articles.push(...fetched);
-    remaining = Math.max(0, minimum - articles.length);
+  const overfetch = Math.max(needed + 4, 8);
+  const pools = await Promise.all(
+    NMS_PAGE_FILL_CATEGORIES.map((category) => fetchFallbackCategory(category, overfetch)),
+  );
+  const collected: NmsBundleArticle[] = [];
+  const seen = new Set(usedIds);
+  const indexes = pools.map(() => 0);
+
+  while (collected.length < needed) {
+    let added = false;
+    for (let poolIndex = 0; poolIndex < pools.length; poolIndex += 1) {
+      if (collected.length >= needed) break;
+      const pool = pools[poolIndex];
+      while (indexes[poolIndex] < pool.length) {
+        const article = pool[indexes[poolIndex]];
+        indexes[poolIndex] += 1;
+        const id = String(article.newsId ?? article.headline ?? "");
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        collected.push(article);
+        added = true;
+        break;
+      }
+    }
+    if (!added) break;
   }
 
-  return {
-    articles,
-    filledArticleCount: Math.max(0, articles.length - originalArticles.length),
-  };
+  return collected.slice(0, needed);
 };

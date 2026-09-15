@@ -69,6 +69,20 @@ export type NmsBundlePayload = {
   pdfCallback?: NmsCallbackConfig;
   count?: unknown;
   articles?: NmsBundleArticle[];
+  editionPlan?: {
+    pages: Array<{
+      pageNumber: number;
+      pageKind: "front" | "inside";
+      templateId: string;
+      templateName: string;
+      boxCount: number;
+      nmsArticleCount: number;
+      fillArticleCount: number;
+      articles: NmsBundleArticle[];
+    }>;
+    nmsArticleCount: number;
+    filledArticleCount: number;
+  };
 };
 
 export type NmsBundleSummaryArticle = {

@@ -35,11 +35,20 @@ export const generateNmsRealEditorPdf = async (payload: NmsBundlePayload, articl
     count: articles.length,
     articles,
   });
-  const exportPageCount = Math.max(1, Math.ceil(articles.length / 7));
-  const pageSections = Array.from({ length: exportPageCount }, (_, index) => ({
-    page_number: index + 1,
-    section: index === 0 ? "Front Page" : "City",
-    header_type: index === 0 ? "front" : "inside",
+  const plannedPages = Array.isArray(payload.editionPlan?.pages) ? payload.editionPlan.pages : [];
+  const exportPageCount = Math.max(1, plannedPages.length || Math.ceil(articles.length / 8));
+  const pageSections = (plannedPages.length > 0
+    ? plannedPages
+    : Array.from({ length: exportPageCount }, (_, index) => ({
+        pageNumber: index + 1,
+        pageKind: (index === 0 ? "front" : "inside") as "front" | "inside",
+        templateName: index === 0 ? "Front Page" : "City",
+      }))
+  ).map((page) => ({
+    page_number: page.pageNumber,
+    section: page.pageKind === "front" ? "Front Page" : page.templateName || "City",
+    header_type: page.pageKind === "front" ? "front" : "inside",
+    notes: "templateId" in page ? String(page.templateId) : "",
   }));
   const exportParams = new URLSearchParams({
     nmsExport: "1",
@@ -49,13 +58,15 @@ export const generateNmsRealEditorPdf = async (payload: NmsBundlePayload, articl
     pageSections: JSON.stringify(pageSections),
   });
   const exportUrl = `${baseUrl}/?${exportParams.toString()}`;
-  const timeoutMs = Number(process.env.NMS_HEADLESS_EXPORT_TIMEOUT_MS || 120000);
+  const timeoutMs = Number(process.env.NMS_HEADLESS_EXPORT_TIMEOUT_MS || 180000);
 
   console.log("[NMS real PDF] starting PageMint editor export", {
     job_id: payload.job_id ?? null,
     bundle_id: payload.bundle_id ?? null,
     target_user_id: getNumericTargetUserId(payload),
     articleCount: articles.length,
+    pageCount: exportPageCount,
+    filledArticleCount: payload.editionPlan?.filledArticleCount ?? 0,
     exportPayloadFile,
     exportUrl,
   });
@@ -114,6 +125,18 @@ export const generateNmsRealEditorPdf = async (payload: NmsBundlePayload, articl
       pagemint_user_id: payload.pagemint_user_id ?? null,
       pagemint_target_id: payload.pagemint_target_id ?? null,
       articleCount: articles.length,
+      filledArticleCount: payload.editionPlan?.filledArticleCount ?? 0,
+      pageCount: exportPageCount,
+      pages: plannedPages.map((page) => ({
+        pageNumber: page.pageNumber,
+        pageKind: page.pageKind,
+        templateId: page.templateId,
+        templateName: page.templateName,
+        boxCount: page.boxCount,
+        nmsArticleCount: page.nmsArticleCount,
+        fillArticleCount: page.fillArticleCount,
+      })),
+      exportDebug,
       generatedAt: new Date().toISOString(),
       exportUrl,
     }, null, 2)}\n`, "utf8");
