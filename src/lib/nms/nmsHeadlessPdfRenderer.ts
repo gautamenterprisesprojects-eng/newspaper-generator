@@ -3,7 +3,6 @@ import path from "node:path";
 import type { NmsBundleArticle, NmsBundlePayload } from "./nmsBundleTypes";
 import { getNumericTargetUserId } from "./nmsBundleTypes";
 import { getNmsGeneratedPdfDir, sanitizeFilePart, storeNmsExportPayload } from "./nmsBundleStorage";
-import { readNmsFontFileAsBase64, resolveNmsFontDiskPath } from "./nmsHeadlessFonts";
 
 type HeadlessWindow = typeof window & {
   __NMS_EXPORT_READY?: boolean;
@@ -91,25 +90,6 @@ export const generateNmsRealEditorPdf = async (payload: NmsBundlePayload, articl
     page.on("requestfailed", (request) => {
       const failure = request.failure();
       console.warn("[NMS real PDF request failed]", request.url(), failure?.errorText);
-    });
-    await page.exposeFunction("__NMS_READ_FONT_FILE", (source: string) => readNmsFontFileAsBase64(source));
-    await page.route("**/fonts/**", async (route) => {
-      let pathname = "";
-      try {
-        pathname = new URL(route.request().url()).pathname;
-      } catch {
-        pathname = "";
-      }
-      const disk = pathname ? resolveNmsFontDiskPath(pathname) : null;
-      if (disk) {
-        await route.fulfill({
-          path: disk,
-          contentType: "font/ttf",
-          headers: { "Cache-Control": "public, max-age=3600" },
-        });
-        return;
-      }
-      await route.continue();
     });
     await page.setViewportSize({ width: 1400, height: 1800 });
     await page.goto(exportUrl, { waitUntil: "domcontentloaded", timeout: timeoutMs });

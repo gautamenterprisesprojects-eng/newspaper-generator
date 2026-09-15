@@ -192,7 +192,7 @@ const getFontRole = (style: ArticleTextStyle) => {
     return "editorialHeadline";
   }
 
-  if (family.includes("extra condensed") || family.includes("extracondensed")) {
+  if (family.includes("extra condensed")) {
     return "bodySerifCondensed";
   }
 

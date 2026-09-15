@@ -15,7 +15,7 @@ import type { PageType } from "@/types/page";
 import type { TemplateId } from "@/engines/TemplateLayout/TemplateTypes";
 import type { NmsBundleArticle, NmsBundlePayload } from "@/lib/nms/nmsBundleTypes";
 import { textValue } from "@/lib/nms/nmsBundleTypes";
-import { waitUntilNewspaperFontsLoaded, NEWSPAPER_FONT_DEFINITIONS } from "@/engines/FontManager/FontManagerEngine";
+import { waitUntilNewspaperFontsLoaded } from "@/engines/FontManager/FontManagerEngine";
 import { clearTextMeasurementCache } from "@/engines/TypographyEngine/TextMeasure";
 
 const words = (text: string) => text.trim().split(/\s+/u).filter(Boolean);
@@ -145,97 +145,6 @@ const toNewswireStory = (article: NmsBundleArticle, index: number): NewswireStor
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-type NmsFontHostWindow = typeof window & {
-  __NMS_READ_FONT_FILE?: (source: string) => Promise<string>;
-};
-
-const NMS_HOST_FONT_SOURCES = [
-  ...NEWSPAPER_FONT_DEFINITIONS.map((font) => ({
-    family: font.family,
-    source: font.source,
-    weight: String(font.weight),
-    style: font.style,
-  })),
-  { family: "Tinos", source: "/fonts/Tinos-Regular.ttf", weight: "400", style: "normal" as const },
-  { family: "Tinos", source: "/fonts/Tinos-Bold.ttf", weight: "700", style: "normal" as const },
-];
-
-const decodeBase64Font = (base64: string) => {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index);
-  }
-  return bytes.buffer;
-};
-
-/**
- * Playwright exposes __NMS_READ_FONT_FILE so this headless page can register
- * the same Cliff faces the publisher browser already has from /fonts/*.ttf.
- * CSS @font-face alone is not enough here: Chromium headless often paints a
- * generic fallback before the HTTP faces swap in, which is the "unknown font"
- * overlap on NMS PDFs.
- */
-const registerCliffFontsFromNmsHost = async () => {
-  const reader = (window as NmsFontHostWindow).__NMS_READ_FONT_FILE;
-  if (typeof reader !== "function") {
-    return false;
-  }
-
-  let registered = 0;
-  for (const font of NMS_HOST_FONT_SOURCES) {
-    const base64 = await reader(font.source);
-    if (!base64) continue;
-    const face = new FontFace(font.family, decodeBase64Font(base64), {
-      weight: font.weight,
-      style: font.style,
-    });
-    document.fonts.add(await face.load());
-    registered += 1;
-  }
-
-  console.log("[NMS export bridge] registered Cliff fonts from host", { registered, requested: NMS_HOST_FONT_SOURCES.length });
-  return registered > 0;
-};
-
-const collectNmsHeadlineFonts = () => {
-  const Konva = (window as typeof window & {
-    Konva?: { stages?: Array<{ getChildren?: () => unknown[] }> };
-  }).Konva;
-  const stage = Konva?.stages?.[0] as
-    | {
-        getClassName?: () => string;
-        fontFamily?: () => string;
-        fontSize?: () => number;
-        fontStyle?: () => string;
-        text?: () => string;
-        getChildren?: () => unknown[];
-      }
-    | undefined;
-  if (!stage) return [];
-
-  const headlines: Array<{ family: string; size: number; style: string; text: string }> = [];
-  const walk = (node: typeof stage) => {
-    if (!node) return;
-    if ((node.getClassName?.() ?? "") === "Text") {
-      const family = String(node.fontFamily?.() ?? "");
-      if (!family || family === "Arial") return;
-      const size = node.fontSize?.() ?? 0;
-      if (size >= 12 && !family.includes("ExtraCondensed") && !family.includes("Sans")) {
-        headlines.push({
-          family: family.split(",")[0]?.replace(/['"]/g, "").trim() ?? family,
-          size: Math.round(size * 10) / 10,
-          style: String(node.fontStyle?.() ?? ""),
-          text: String(node.text?.() ?? "").replace(/\s+/g, " ").trim().slice(0, 72),
-        });
-      }
-    }
-    for (const child of node.getChildren?.() ?? []) walk(child as typeof stage);
-  };
-  walk(stage);
-  return headlines;
-};
-
 /**
  * Blocks until the Devanagari @font-face files are really loaded, then throws
  * away every width this page measured before that happened.
@@ -252,7 +161,6 @@ const collectNmsHeadlineFonts = () => {
  * identical to the one the editor exports by hand.
  */
 const awaitNewspaperFontsBeforeComposing = async () => {
-  await registerCliffFontsFromNmsHost();
   const fontState = await waitUntilNewspaperFontsLoaded(20000);
   await document.fonts?.ready;
   clearTextMeasurementCache();
@@ -417,7 +325,6 @@ export function NmsHeadlessExportBridge() {
 
         await wait(2500);
         const finalState = useEditorStore.getState();
-        const articleFonts = collectNmsHeadlineFonts();
         (window as typeof window & { __NMS_EXPORT_DEBUG?: unknown }).__NMS_EXPORT_DEBUG = {
           activePageId: finalState.activePageId,
           pageType: finalState.pageType,
@@ -439,12 +346,11 @@ export function NmsHeadlessExportBridge() {
           })),
           activeStoryIds: finalState.stories.map((story) => story.id),
           documentStoryCount: Object.keys(finalState.document.stories).length,
-          articleFonts,
         };
 
         await document.fonts?.ready;
         await wait(400);
-        console.log("[NMS export bridge] ready for combined editor PDF export", { articleFonts });
+        console.log("[NMS export bridge] ready for combined editor PDF export");
         (window as typeof window & { __NMS_EXPORT_READY?: boolean; __NMS_EXPORT_ERROR?: string }).__NMS_EXPORT_READY = true;
       } catch (error) {
         console.error("[NMS export bridge] failed", error);

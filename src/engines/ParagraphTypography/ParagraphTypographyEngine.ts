@@ -7,14 +7,13 @@ import type {
 } from "@/types/editor";
 import type { RichTextContent } from "@/types/RichText";
 import { richTextToPlainText } from "@/engines/RichText/RichTextUtils";
-import { getNewspaperFontStack } from "@/engines/FontManager/FontManagerEngine";
 
 const paragraphSplitPattern = /\n\s*\n|\n/;
 
 export const createDefaultParagraphFormatting = (
   update: Partial<ArticleParagraphFormatting> = {},
 ): ArticleParagraphFormatting => ({
-  fontFamily: getNewspaperFontStack("bodySerifCondensed"),
+  fontFamily: "Cliff Noto Devanagari",
   fontSize: 12,
   fontWeight: "400",
   color: "#111111",
