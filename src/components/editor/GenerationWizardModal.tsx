@@ -40,6 +40,11 @@ import {
 import { getFallbackNewswireStories } from "@/lib/newswireFallback";
 import { computeWeightedCategoryTargets, shuffleNewswireStories } from "@/lib/newswireCategoryMix";
 import {
+  CLIFFDEMO3_NMS_CATEGORY,
+  isCliffDemo3PortalSession,
+  shouldUseNmsBundleFeed,
+} from "@/lib/nms/cliffDemo3Publisher";
+import {
   addIssueArticleToExclusions,
   filterUnusedIssueArticles,
   getPortalLaunchParamFromWindow,
@@ -483,20 +488,33 @@ const isClassifiedLocalMixPage = (): boolean => {
 // usually the front page) for every later page instead, so the manual
 // picker fell back to its hardcoded default rather than the page actually
 // being generated.
-const getPortalPlannedCategoriesForSelectedPage = (pageNumber: number): NewswireCategory[] => {
+const getPortalPlannedPageEntry = (pageNumber: number): { categories: string[]; category: string } => {
   try {
     const raw = getPortalLaunchParamFromWindow("pageSections");
-    if (!raw || !Number.isFinite(pageNumber)) return [];
+    if (!raw || !Number.isFinite(pageNumber)) return { categories: [], category: "" };
     const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
+    if (!Array.isArray(parsed)) return { categories: [], category: "" };
     const entry = parsed.find((item) => Number((item as { page_number?: unknown })?.page_number) === pageNumber) as
-      | { categories?: unknown }
+      | { categories?: unknown; category?: unknown }
       | undefined;
-    const categories = Array.isArray(entry?.categories) ? entry.categories : [];
-    return categories.map((c) => String(c)).filter(isNewswireCategory);
+    const categories = Array.isArray(entry?.categories) ? entry.categories.map((c) => String(c)) : [];
+    return { categories, category: String(entry?.category ?? "") };
   } catch {
-    return [];
+    return { categories: [], category: "" };
   }
+};
+
+const getPortalPlannedCategoriesForSelectedPage = (pageNumber: number): NewswireCategory[] =>
+  getPortalPlannedPageEntry(pageNumber).categories.filter(isNewswireCategory);
+
+const wizardPageUsesNmsBundle = (tab: WizardTab, pageNumber: number) => {
+  const planned = getPortalPlannedPageEntry(pageNumber);
+  return shouldUseNmsBundleFeed({
+    isCliffDemo3: isCliffDemo3PortalSession(),
+    isFrontPage: tab === "front" || pageNumber === 1,
+    plannedCategories: planned.categories,
+    plannedCategory: planned.category,
+  });
 };
 
 const getInsideFetchCategories = (selectedCategory: NewswireCategory, pageNumber: number): NewswireCategory[] => {
@@ -520,6 +538,7 @@ const getPortalLaunchWizardTab = (): WizardTab => {
 
 const getInsideImportCategory = (selectedCategory: NewswireCategory, languageMode: PageLanguageMode, pageNumber: number): string => {
   if (isClassifiedLocalMixPage()) return languageMode === "hindi" ? "आस-पास" : "Classifieds";
+  if (wizardPageUsesNmsBundle("inside", pageNumber)) return CLIFFDEMO3_NMS_CATEGORY;
   const planned = getPortalPlannedCategoriesForSelectedPage(pageNumber);
   // A single Settings-configured category wins over the wizard's own
   // internal category state too -- that state only gets synced from the
@@ -2015,6 +2034,7 @@ function CategoryScreen({
   // category is already decided and the manual picker below is replaced
   // with a read-only note instead (see getPortalPlannedCategoriesForSelectedPage).
   const plannedCategories = useMemo(() => getPortalPlannedCategoriesForSelectedPage(activePageNumber), [activePageNumber]);
+  const useNmsBundle = wizardPageUsesNmsBundle(state.tab, activePageNumber);
 
   // How many boxes are still open for the API to fill, once the manual boxes
   // written on the left are subtracted out — recomputed from the same
@@ -2043,7 +2063,11 @@ function CategoryScreen({
             {remaining.remaining}
           </strong>
           <span>
-            {state.tab === "front"
+            {useNmsBundle
+              ? remaining.seeded > 0
+                ? `${remaining.seeded} बॉक्स हाथ से लिखे गए। बाकी बॉक्स NMS Bundle की खबरों से अपने-आप भर जाएंगे।`
+                : "बॉक्स NMS Bundle की खबरों से अपने-आप भर जाएंगे — cliffdemo3 के लिए मिला-जुला फ्रंट पेज नहीं बनता।"
+              : state.tab === "front"
               ? remaining.seeded > 0
                 ? `${remaining.seeded} बॉक्स हाथ से लिखे गए। बाकी बॉक्स अलग-अलग श्रेणियों की मिली-जुली खबरों से अपने-आप भर जाएंगे — असली फ्रंट पेज की तरह।`
                 : "बॉक्स राष्ट्रीय (30%), मध्य प्रदेश (30%), अंतरराष्ट्रीय (20%), खेल (10%) और व्यापार (10%) खबरों के मिश्रण से अपने-आप भर जाएंगे — असली फ्रंट पेज की तरह।"
@@ -2069,7 +2093,11 @@ function CategoryScreen({
           </button>
         ))}
       </div>
-      {state.tab === "front" ? null : plannedCategories.length > 0 ? (
+      {useNmsBundle ? (
+        <p className="generation-category-planned-note" data-tour="editor-news-category" style={{ fontSize: 12, color: "#555", fontStyle: "italic", marginBottom: 14 }}>
+          Category: {CLIFFDEMO3_NMS_CATEGORY} (cliffdemo3 — NMS bundle से खबरें)
+        </p>
+      ) : state.tab === "front" ? null : plannedCategories.length > 0 ? (
         <p className="generation-category-planned-note" data-tour="editor-news-category" style={{ fontSize: 12, color: "#555", fontStyle: "italic", marginBottom: 14 }}>
           Category: {plannedCategories.join(", ")} (सेटिंग्स में सेट — यहां बदलने के लिए admin से settings unlock करवाएं)
         </p>
@@ -2364,6 +2392,60 @@ export const GenerationWizardModal = memo(function GenerationWizardModal({
     }
   }, [state.category, state.languageMode, state.articleCount, state.layoutDesign, state.tab, activePageNumber, buildImportOptions, onImportNewswireStories, onClose, getManualBoxStories]);
 
+  const handleLoadNmsBundle = useCallback(async () => {
+    dispatch({ type: "SET_LOADING", loading: true });
+    dispatch({ type: "RESET_ERROR" });
+    try {
+      const manualResult = getManualBoxStories();
+      if ("error" in manualResult) {
+        throw new Error(manualResult.error);
+      }
+
+      const requiredArticleCount = getRequiredNewswireStoryCount(state.tab, state.layoutDesign, state.articleCount);
+      const needed = Math.max(0, requiredArticleCount - manualResult.stories.length);
+      if (needed === 0) {
+        onImportNewswireStories(CLIFFDEMO3_NMS_CATEGORY, manualResult.stories, buildImportOptions());
+        onClose();
+        return;
+      }
+
+      const issueSession = readPortalIssueArticleSession();
+      const exclusions = await loadIssueArticleExclusions(issueSession);
+      const response = await fetch(
+        `/api/newswire?category=${encodeURIComponent(CLIFFDEMO3_NMS_CATEGORY)}&language=${state.languageMode}&limit=${Math.max(needed * 2, 80)}`,
+      );
+      const payload = (await response.json().catch(() => null)) as {
+        success?: boolean;
+        data?: NewswireStory[];
+        error?: string;
+      } | null;
+      if (!response.ok || payload?.success === false || !Array.isArray(payload?.data)) {
+        throw new Error(payload?.error ?? "NMS bundle खबरें लोड नहीं हो सकीं।");
+      }
+      if (payload.data.length === 0) {
+        throw new Error("No NMS bundle articles are stored. Publish a bundle first.");
+      }
+
+      // Keep the stored bundle order — this feed is one publisher's packet,
+      // not a mixed newswire shuffle across categories.
+      const liveStories = collectFreshStories(payload.data, needed, exclusions);
+      if (liveStories.length < needed) {
+        throw new Error(
+          `Only ${liveStories.length} NMS bundle articles are available for ${needed} empty boxes. Publish a fuller bundle, or leave fewer boxes automatic.`,
+        );
+      }
+      onImportNewswireStories(CLIFFDEMO3_NMS_CATEGORY, [...manualResult.stories, ...liveStories], buildImportOptions());
+      onClose();
+    } catch (error) {
+      dispatch({
+        type: "SET_ERROR",
+        error: error instanceof Error ? error.message : "NMS bundle खबरें लोड नहीं हो सकीं।",
+      });
+    } finally {
+      dispatch({ type: "SET_LOADING", loading: false });
+    }
+  }, [state.languageMode, state.articleCount, state.layoutDesign, state.tab, buildImportOptions, onImportNewswireStories, onClose, getManualBoxStories]);
+
   const handleLoadPreloaded = useCallback(async () => {
     dispatch({ type: "RESET_ERROR" });
     try {
@@ -2631,8 +2713,22 @@ export const GenerationWizardModal = memo(function GenerationWizardModal({
                   dispatch={dispatch}
                   onBack={() => dispatch({ type: "SET_STEP", step: "style" })}
                   onEditLayout={() => dispatch({ type: "SET_STEP", step: "layout" })}
-                  onLoadPreloaded={state.tab === "front" ? handleLoadPreloadedMixed : handleLoadPreloaded}
-                  onLoadLive={() => void (state.tab === "front" ? handleLoadLiveMixed() : handleLoadLive())}
+                  onLoadPreloaded={
+                    wizardPageUsesNmsBundle(state.tab, activePageNumber)
+                      ? handleLoadNmsBundle
+                      : state.tab === "front"
+                        ? handleLoadPreloadedMixed
+                        : handleLoadPreloaded
+                  }
+                  onLoadLive={() =>
+                    void (
+                      wizardPageUsesNmsBundle(state.tab, activePageNumber)
+                        ? handleLoadNmsBundle()
+                        : state.tab === "front"
+                          ? handleLoadLiveMixed()
+                          : handleLoadLive()
+                    )
+                  }
                   activePageNumber={activePageNumber}
                 />
               </div>

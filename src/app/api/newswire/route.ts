@@ -14,6 +14,8 @@ import {
   type LocalizedNewswireContent,
   type NewswireStory,
 } from "@/lib/newswire";
+import { isNmsBundleCategory } from "@/lib/nms/cliffDemo3Publisher";
+import { loadNmsBundleNewswireStories } from "@/lib/nms/nmsBundleStories";
 
 const DEFAULT_API_BASE_URL = "https://api.gautamenterprises.org";
 const GAUTAM_ENGLISH_API_BASE_URL = "https://api.gautamenterprises.org";
@@ -623,6 +625,15 @@ export async function GET(request: Request) {
   const language = searchParams.get("language") ?? "hindi";
   const requestedLanguage = toRequestedArticleLanguage(language);
   const limit = Math.max(1, Math.min(100, Number(searchParams.get("limit") ?? 5) || 5));
+
+  if (isNmsBundleCategory(category)) {
+    const stories = await loadNmsBundleNewswireStories(limit);
+    return NextResponse.json({
+      success: true,
+      data: stories,
+      meta: { source: "nms-bundle", baseUrl: "nms-bundle" },
+    });
+  }
 
   if (!isNewswireCategory(category)) {
     return NextResponse.json(
