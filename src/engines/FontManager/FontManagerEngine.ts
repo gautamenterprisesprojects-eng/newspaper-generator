@@ -311,6 +311,65 @@ export const createFontDiagnostics = (): FontAvailabilityDiagnostic[] =>
     };
   });
 
+/**
+ * Asks the browser for every registered newspaper face, including the 700
+ * Noto cuts that REQUIRED_FONT_DEFINITIONS skips. Canvas (unlike the DOM)
+ * never starts @font-face on its own, so a headless Cliff News export that
+ * only waited on the required regulars could still measure body copy against
+ * Georgia and then paint headlines in Rozha once those files arrived.
+ */
+export const loadAllNewspaperFontFaces = async () => {
+  if (typeof document === "undefined" || !document.fonts?.load) {
+    return;
+  }
+
+  await Promise.all([
+    ...NEWSPAPER_FONT_DEFINITIONS.map((font) =>
+      document.fonts.load(toFontCheckString(font), "मानसून").catch(() => undefined),
+    ),
+    document.fonts.load(`400 16px "Tinos"`).catch(() => undefined),
+    document.fonts.load(`700 16px "Tinos"`).catch(() => undefined),
+  ]);
+  await document.fonts.ready;
+};
+
+const primeNewspaperFontsOnCanvas = () => {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+  if (!context) {
+    return;
+  }
+
+  for (const font of NEWSPAPER_FONT_DEFINITIONS) {
+    context.font = `${font.weight} 16px "${font.family}"`;
+    context.fillText("मानसून Aa", 0, 16);
+  }
+};
+
+/**
+ * Same gate the editor uses before a publisher is allowed to compose: every
+ * required Devanagari face must actually be loaded, not merely requested.
+ * Retries because Chromium headless often reports check()=false until the
+ * face has been used on a canvas once.
+ */
+export const waitUntilNewspaperFontsLoaded = async (timeoutMs = 20000): Promise<FontManagerState> => {
+  const deadline = Date.now() + Math.max(1000, timeoutMs);
+  let last = await waitForNewspaperFonts();
+
+  while (last.status !== "loaded" && Date.now() < deadline) {
+    await loadAllNewspaperFontFaces();
+    primeNewspaperFontsOnCanvas();
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    last = await waitForNewspaperFonts();
+  }
+
+  return last;
+};
+
 export const waitForNewspaperFonts = async (): Promise<FontManagerState> => {
   if (typeof document === "undefined" || !document.fonts?.ready) {
     return {

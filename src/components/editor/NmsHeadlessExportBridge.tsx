@@ -15,7 +15,7 @@ import type { PageType } from "@/types/page";
 import type { TemplateId } from "@/engines/TemplateLayout/TemplateTypes";
 import type { NmsBundleArticle, NmsBundlePayload } from "@/lib/nms/nmsBundleTypes";
 import { textValue } from "@/lib/nms/nmsBundleTypes";
-import { waitForNewspaperFonts } from "@/engines/FontManager/FontManagerEngine";
+import { waitUntilNewspaperFontsLoaded } from "@/engines/FontManager/FontManagerEngine";
 import { clearTextMeasurementCache } from "@/engines/TypographyEngine/TextMeasure";
 
 const words = (text: string) => text.trim().split(/\s+/u).filter(Boolean);
@@ -64,9 +64,29 @@ const namespaceActivePageStories = (pageIndex: number) => {
       }
     });
 
+    // importNewswireStories always writes story-1 / story-1-frame. Renaming
+    // stories alone left those frame keys free for page 2 to occupy, so the
+    // front page's frameIds still pointed at inside-page boxes laid out from
+    // the folio strip (~54pt) instead of below the 6.1cm masthead — the
+    // header printed on top of the first row. Frame ids have to move too.
+    const frameIdMap = new Map<string, string>();
+    const nextFrames: typeof state.document.frames = {};
+    for (const [frameId, frame] of Object.entries(state.document.frames)) {
+      if (frame.pageId === pageId && frame.storyId && idMap.has(frame.storyId)) {
+        const nextStoryId = idMap.get(frame.storyId) ?? frame.storyId;
+        const nextFrameId = `${prefix}${frameId}`;
+        frameIdMap.set(frameId, nextFrameId);
+        nextFrames[nextFrameId] = { ...frame, id: nextFrameId, storyId: nextStoryId };
+      } else {
+        nextFrames[frameId] = frame;
+      }
+    }
+
     return {
       stories,
       selectedStoryId: state.selectedStoryId ? idMap.get(state.selectedStoryId) ?? state.selectedStoryId : state.selectedStoryId,
+      selectedFrameId: state.selectedFrameId ? frameIdMap.get(state.selectedFrameId) ?? state.selectedFrameId : state.selectedFrameId,
+      selectedFrameIds: state.selectedFrameIds.map((frameId) => frameIdMap.get(frameId) ?? frameId),
       selectedObjects: state.selectedObjects.map((selection) => ({
         ...selection,
         storyId: idMap.get(selection.storyId) ?? selection.storyId,
@@ -74,18 +94,12 @@ const namespaceActivePageStories = (pageIndex: number) => {
       document: {
         ...state.document,
         stories: documentStories,
-        frames: Object.fromEntries(
-          Object.entries(state.document.frames).map(([frameId, frame]) => [
-            frameId,
-            frame.pageId === pageId && frame.storyId && idMap.has(frame.storyId)
-              ? { ...frame, storyId: idMap.get(frame.storyId) }
-              : frame,
-          ]),
-        ),
+        frames: nextFrames,
         pages: state.document.pages.map((page) =>
           page.id === pageId
             ? {
                 ...page,
+                frameIds: page.frameIds.map((frameId) => frameIdMap.get(frameId) ?? frameId),
                 stories: page.stories.map((placement) => ({
                   ...placement,
                   storyId: idMap.get(placement.storyId) ?? placement.storyId,
@@ -147,7 +161,7 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  * identical to the one the editor exports by hand.
  */
 const awaitNewspaperFontsBeforeComposing = async () => {
-  const fontState = await waitForNewspaperFonts();
+  const fontState = await waitUntilNewspaperFontsLoaded(20000);
   await document.fonts?.ready;
   clearTextMeasurementCache();
   console.log("[NMS export bridge] fonts ready before composition", {
@@ -155,6 +169,12 @@ const awaitNewspaperFontsBeforeComposing = async () => {
     ready: fontState.ready,
     fallbacks: fontState.diagnostics.filter((font) => font.fallback).map((font) => font.id),
   });
+  if (fontState.status !== "loaded") {
+    const missing = fontState.diagnostics.filter((font) => font.fallback).map((font) => font.id);
+    throw new Error(
+      `Cliff News NMS export blocked: Devanagari fonts not loaded (${missing.join(", ") || "unknown"}).`,
+    );
+  }
   return fontState;
 };
 
@@ -258,6 +278,7 @@ export function NmsHeadlessExportBridge() {
             articleCount: chunk.length,
           });
 
+          await awaitNewspaperFontsBeforeComposing();
           const palette = pickPalette();
           useEditorStore.getState().importNewswireStories(
             "NMS Bundle",

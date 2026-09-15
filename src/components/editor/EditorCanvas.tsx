@@ -62,9 +62,12 @@ import {
 } from "@/engines/IncrementalComposition/IncrementalCompositionEngine";
 import {
   createInitialFontManagerState,
+  getNewspaperFontStack,
+  loadAllNewspaperFontFaces,
   waitForNewspaperFonts,
 } from "@/engines/FontManager/FontManagerEngine";
 import type { FontManagerState } from "@/engines/FontManager/FontManagerTypes";
+import { createCanvasFontString } from "@/engines/TypographyEngine/TextMeasure";
 import {
   createPerformanceProfiler,
   getMemoryUsageMb,
@@ -207,7 +210,6 @@ import {
   drawColumnRulesToCanvas,
   resolveColumnRules,
 } from "@/engines/MasterPage/ColumnRuleGeometry";
-import { getNewspaperFontStack } from "@/engines/FontManager/FontManagerEngine";
 import { EDITORIAL_COLOURS, EDITORIAL_RAIL } from "@/engines/MasterPage/EditorialPageStyle";
 import { GRID_SIZE, snapValue } from "@/utils/grid";
 import { NEWSPAPER_PAGE, POINTS_PER_INCH, RULER_SIZE } from "@/utils/page";
@@ -2781,12 +2783,16 @@ export function EditorCanvas() {
   ) => {
     const fontFamily =
       operation.fontFamily === "serif"
-        ? "'Noto Serif Devanagari', Georgia, serif"
+        ? getNewspaperFontStack("serif")
         : operation.fontFamily === "condensed"
-          ? "'Arial Narrow', Arial, sans-serif"
+          ? "Arial Narrow, Arial, sans-serif"
           : "Arial, sans-serif";
     context.fillStyle = operation.color;
-    context.font = `${operation.fontWeight === "bold" ? "700" : "400"} ${operation.fontSize}px ${fontFamily}`;
+    context.font = createCanvasFontString(
+      fontFamily,
+      operation.fontSize,
+      operation.fontWeight === "bold" ? "700" : "400",
+    );
     context.textBaseline = "top";
     context.textAlign = operation.align;
     context.fillText(
@@ -2999,7 +3005,7 @@ export function EditorCanvas() {
       }
 
       context.fillStyle = "#111111";
-      context.font = "700 12px 'Noto Serif Devanagari', serif";
+      context.font = createCanvasFontString(getNewspaperFontStack("serif"), 12, "700");
       context.fillText(document.metadata.newspaperName, 18, 22);
       context.strokeStyle = "#111111";
       context.lineWidth = 1;
@@ -3060,7 +3066,11 @@ export function EditorCanvas() {
       : "400";
     const italic = style.fontStyle?.includes("italic") ? "italic " : "";
 
-    context.font = `${italic}${weight} ${style.fontSize}px ${style.fontFamily}, 'Noto Serif Devanagari', serif`;
+    context.font = createCanvasFontString(
+      style.fontFamily,
+      style.fontSize,
+      `${italic}${weight}`.trim() || "400",
+    );
     context.fillStyle = style.fill || "#111111";
     context.textBaseline = "top";
     context.textAlign = style.align === "center" ? "center" : style.align === "right" ? "right" : "left";
@@ -3665,6 +3675,7 @@ export function EditorCanvas() {
     // just those lines. Awaiting it here, right before the canvas exists,
     // removes that race outright.
     if (typeof window.document !== "undefined" && window.document.fonts?.load) {
+      await loadAllNewspaperFontFaces();
       await Promise.all([
         window.document.fonts.load(`400 16px "Tinos"`).catch(() => undefined),
         window.document.fonts.load(`700 16px "Tinos"`).catch(() => undefined),

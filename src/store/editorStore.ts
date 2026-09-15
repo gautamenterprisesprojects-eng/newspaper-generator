@@ -5156,8 +5156,15 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         stories: Object.fromEntries(
           Object.entries(syncedDocument.stories).map(([storyId, storyObject]) => {
             const storyIndex = newStories.findIndex((story) => story.id === storyId);
-            const storyFrame = storyIndex >= 0 ? newStories[storyIndex] : null;
-            const imageUrl = (storyIndex >= 0 && storyFrame?.imageEnabled) ? effectiveImageUrls[storyIndex] : "";
+            // Other pages keep their own story objects. This loop used to
+            // treat every unmatched id as "no image" and clear photo /
+            // imageEnabled, so composing page 2 blanked page 1's pictures
+            // even after ids were namespaced.
+            if (storyIndex < 0) {
+              return [storyId, storyObject];
+            }
+            const storyFrame = newStories[storyIndex];
+            const imageUrl = storyFrame?.imageEnabled ? effectiveImageUrls[storyIndex] : "";
             const assetId = imageUrl ? assetIdsByUrl.get(imageUrl) ?? null : null;
             const hasValidImage = Boolean(assetId);
             const allowReservedImageFrame =
