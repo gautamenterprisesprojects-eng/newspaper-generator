@@ -1,10 +1,8 @@
 import { getNewspaperFontStack } from "@/engines/FontManager/FontManagerEngine";
 import {
   EDITOR_RAIL_FRONT_COLORS,
-  editorRailFrontImageHasAlpha,
-  getEditorRailFrontContainRect,
-  getEditorRailFrontCoverCrop,
   getEditorRailFrontGeometry,
+  getEditorRailFrontPhotoDraw,
   type EditorRailFrontContent,
   type EditorRailFrontRect,
 } from "./EditorRailFrontGeometry";
@@ -56,28 +54,18 @@ export const drawEditorRailFrontToCanvas = async (
       img.src = source;
     });
     if (image && image.naturalWidth > 0 && image.naturalHeight > 0) {
-      if (editorRailFrontImageHasAlpha(image)) {
-        const contain = getEditorRailFrontContainRect(image.naturalWidth, image.naturalHeight, geometry.photo);
-        context.drawImage(image, contain.x, contain.y, contain.width, contain.height);
-      } else {
-        const crop = getEditorRailFrontCoverCrop(
-          image.naturalWidth,
-          image.naturalHeight,
-          geometry.photo.width,
-          geometry.photo.height,
-        );
-        context.drawImage(
-          image,
-          crop.x,
-          crop.y,
-          crop.width,
-          crop.height,
-          geometry.photo.x,
-          geometry.photo.y,
-          geometry.photo.width,
-          geometry.photo.height,
-        );
-      }
+      const photoDraw = getEditorRailFrontPhotoDraw(image, geometry.photo);
+      context.drawImage(
+        image,
+        photoDraw.crop.x,
+        photoDraw.crop.y,
+        photoDraw.crop.width,
+        photoDraw.crop.height,
+        photoDraw.dest.x,
+        photoDraw.dest.y,
+        photoDraw.dest.width,
+        photoDraw.dest.height,
+      );
     }
   }
 

@@ -5,10 +5,8 @@ import { Group, Image as KonvaImage, Line, Rect, Text } from "react-konva";
 import { getNewspaperFontStack } from "@/engines/FontManager/FontManagerEngine";
 import {
   EDITOR_RAIL_FRONT_COLORS,
-  editorRailFrontImageHasAlpha,
-  getEditorRailFrontContainRect,
-  getEditorRailFrontCoverCrop,
   getEditorRailFrontGeometry,
+  getEditorRailFrontPhotoDraw,
   type EditorRailFrontContent,
 } from "@/engines/MasterPage/EditorRailFrontGeometry";
 
@@ -28,7 +26,10 @@ export function EditorRailFront({ x, y, width, height, content }: EditorRailFron
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const sans = getNewspaperFontStack("sans");
   const geometry = getEditorRailFrontGeometry({ x, y, width, height }, content);
-  const hasAlpha = useMemo(() => (image ? editorRailFrontImageHasAlpha(image) : false), [image]);
+  const photoDraw = useMemo(
+    () => (image && image.naturalWidth > 0 ? getEditorRailFrontPhotoDraw(image, geometry.photo) : null),
+    [image, geometry.photo],
+  );
 
   useEffect(() => {
     if (!content.imageUrl) {
@@ -52,20 +53,6 @@ export function EditorRailFront({ x, y, width, height, content }: EditorRailFron
     };
   }, [content.imageUrl]);
 
-  const containRect =
-    image && hasAlpha
-      ? getEditorRailFrontContainRect(image.naturalWidth, image.naturalHeight, geometry.photo)
-      : null;
-  const crop =
-    image && !hasAlpha && image.naturalWidth > 0
-      ? getEditorRailFrontCoverCrop(
-          image.naturalWidth,
-          image.naturalHeight,
-          geometry.photo.width,
-          geometry.photo.height,
-        )
-      : null;
-
   return (
     <Group listening={false}>
       <Rect
@@ -75,23 +62,14 @@ export function EditorRailFront({ x, y, width, height, content }: EditorRailFron
         height={geometry.box.height}
         fill={EDITOR_RAIL_FRONT_COLORS.background}
       />
-      {image && containRect ? (
+      {image && photoDraw ? (
         <KonvaImage
           image={image}
-          x={containRect.x}
-          y={containRect.y}
-          width={containRect.width}
-          height={containRect.height}
-        />
-      ) : null}
-      {image && crop ? (
-        <KonvaImage
-          image={image}
-          x={geometry.photo.x}
-          y={geometry.photo.y}
-          width={geometry.photo.width}
-          height={geometry.photo.height}
-          crop={crop}
+          x={photoDraw.dest.x}
+          y={photoDraw.dest.y}
+          width={photoDraw.dest.width}
+          height={photoDraw.dest.height}
+          crop={photoDraw.crop}
         />
       ) : null}
       <Rect

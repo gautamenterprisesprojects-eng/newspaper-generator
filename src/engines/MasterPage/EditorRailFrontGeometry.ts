@@ -80,67 +80,70 @@ export const resolveEditorRailFrontContent = ({
   designation: (designation ?? "").trim() || EDITOR_RAIL_FRONT_DEFAULT_DESIGNATION,
 });
 
-export const editorRailFrontImageHasAlpha = (image: HTMLImageElement) => {
-  if (typeof document === "undefined") return false;
-  const sampleWidth = Math.max(1, Math.min(48, image.naturalWidth));
-  const sampleHeight = Math.max(1, Math.min(48, image.naturalHeight));
-  const canvas = document.createElement("canvas");
-  canvas.width = sampleWidth;
-  canvas.height = sampleHeight;
-  const context = canvas.getContext("2d");
-  if (!context) return false;
-  try {
-    context.drawImage(image, 0, 0, sampleWidth, sampleHeight);
-    const pixels = context.getImageData(0, 0, sampleWidth, sampleHeight).data;
-    for (let index = 3; index < pixels.length; index += 4) {
-      if (pixels[index] < 250) return true;
-    }
-  } catch {
-    return false;
+export const getEditorRailFrontOpaqueCrop = (image: HTMLImageElement) => {
+  const width = image.naturalWidth;
+  const height = image.naturalHeight;
+  if (!width || !height || typeof document === "undefined") {
+    return { x: 0, y: 0, width, height };
   }
-  return false;
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) return { x: 0, y: 0, width, height };
+  try {
+    context.drawImage(image, 0, 0);
+    const pixels = context.getImageData(0, 0, width, height).data;
+    let minX = width;
+    let minY = height;
+    let maxX = 0;
+    let maxY = 0;
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        if (pixels[(y * width + x) * 4 + 3] < 24) continue;
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+      }
+    }
+    if (maxX <= minX || maxY <= minY) {
+      return { x: 0, y: 0, width, height };
+    }
+    return { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 };
+  } catch {
+    return { x: 0, y: 0, width, height };
+  }
 };
 
-export const getEditorRailFrontCoverCrop = (
-  naturalWidth: number,
-  naturalHeight: number,
-  targetWidth: number,
-  targetHeight: number,
-) => {
-  const sourceRatio = naturalWidth / Math.max(1, naturalHeight);
-  const targetRatio = targetWidth / Math.max(1, targetHeight);
-  if (sourceRatio > targetRatio) {
-    const cropWidth = naturalHeight * targetRatio;
+export type EditorRailFrontPhotoDraw = {
+  crop: EditorRailFrontRect;
+  dest: EditorRailFrontRect;
+};
+
+/** Fill the rail photo band with the cut-out bust, sitting on the name plate. */
+export const getEditorRailFrontPhotoDraw = (
+  image: HTMLImageElement,
+  photo: EditorRailFrontRect,
+): EditorRailFrontPhotoDraw => {
+  const crop = getEditorRailFrontOpaqueCrop(image);
+  const scale = photo.width / Math.max(1, crop.width);
+  const fittedHeight = crop.height * scale;
+  if (fittedHeight >= photo.height) {
+    const sourceHeight = photo.height / scale;
     return {
-      x: (naturalWidth - cropWidth) / 2,
-      y: 0,
-      width: cropWidth,
-      height: naturalHeight,
+      crop: { x: crop.x, y: crop.y, width: crop.width, height: sourceHeight },
+      dest: { ...photo },
     };
   }
-  const cropHeight = naturalWidth / targetRatio;
   return {
-    x: 0,
-    y: 0,
-    width: naturalWidth,
-    height: cropHeight,
-  };
-};
-
-/** Bottom-centred contain: a cut-out portrait sits on the red ground and on the name plate. */
-export const getEditorRailFrontContainRect = (
-  naturalWidth: number,
-  naturalHeight: number,
-  box: EditorRailFrontRect,
-): EditorRailFrontRect => {
-  const scale = Math.min(box.width / Math.max(1, naturalWidth), box.height / Math.max(1, naturalHeight));
-  const width = naturalWidth * scale;
-  const height = naturalHeight * scale;
-  return {
-    x: box.x + (box.width - width) / 2,
-    y: box.y + box.height - height,
-    width,
-    height,
+    crop,
+    dest: {
+      x: photo.x,
+      y: photo.y + photo.height - fittedHeight,
+      width: photo.width,
+      height: fittedHeight,
+    },
   };
 };
 
