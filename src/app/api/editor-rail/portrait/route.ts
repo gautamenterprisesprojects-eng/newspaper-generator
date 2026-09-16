@@ -17,7 +17,7 @@ export async function GET() {
       const bytes = await fs.readFile(filePath);
       return new NextResponse(bytes, {
         headers: {
-          "Cache-Control": "public, max-age=86400, immutable",
+          "Cache-Control": "no-store",
           "Content-Type": "image/png",
         },
       });

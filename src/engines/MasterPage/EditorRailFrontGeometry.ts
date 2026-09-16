@@ -33,7 +33,7 @@ export const EDITOR_RAIL_FRONT_DEFAULT_NAME = "विकास तिवार�
 export const EDITOR_RAIL_FRONT_DEFAULT_PLACE = "जबलपुर";
 export const EDITOR_RAIL_FRONT_DEFAULT_DESIGNATION = "ब्यूरो चीफ";
 // Served under /api so the launch-token nginx gate cannot 403 Konva Image().
-export const EDITOR_RAIL_FRONT_DEFAULT_IMAGE_URL = "/api/editor-rail/portrait";
+export const EDITOR_RAIL_FRONT_DEFAULT_IMAGE_URL = "/api/editor-rail/portrait?v=2";
 
 export type EditorRailFrontRect = { x: number; y: number; width: number; height: number };
 
