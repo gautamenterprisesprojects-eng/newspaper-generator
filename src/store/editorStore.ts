@@ -122,6 +122,7 @@ import {
   isYouthUpdateHeaderOnlyInsideTemplateId,
   isYouthUpdateInsideTemplateId,
 } from "@/engines/MasterPage/YouthUpdateConfig";
+import { EDITOR_RAIL_FRONT_THEME } from "@/engines/MasterPage/EditorRailFrontGeometry";
 import { useYouthUpdateInsideRailStore } from "@/store/youthUpdateInsideRailStore";
 import { useYouthUpdateInsideTeaserLiveStore } from "@/store/youthUpdateInsideTeaserLiveStore";
 import { commitLayoutSolution } from "@/engines/LayoutTransactionEngine/LayoutCommitEngine";
@@ -4026,8 +4027,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         const youthUpdateInsideCompactSlot = isYouthUpdateInsideStory && slot.columnSpan <= 2;
         const isCliffFrontSep15MidPackage = options?.templateId === "CliffFrontSep15" && slot.storyNumber === 8;
         const isCliffFrontSep15RelatedNews = options?.templateId === "CliffFrontSep15" && slot.storyNumber === 9;
-        const isEditorRailFrontFurnitureSlot =
-          options?.templateId === EDITOR_RAIL_FRONT_TEMPLATE_ID && slot.storyNumber === 1;
+        const isEditorRailFrontLayout = options?.templateId === EDITOR_RAIL_FRONT_TEMPLATE_ID;
+        const isEditorRailFrontFurnitureSlot = isEditorRailFrontLayout && slot.storyNumber === 1;
         const resolvedImageEnabled = isAkhandEditorial5A || isAkhandVicharManthanImageSlot
           ? true
           : priorityForbidsImage ||
@@ -4451,6 +4452,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             ...(isYouthUpdateFrontStory || isYouthUpdateInsideStory
               ? { kickerLabelColor: YOUTH_UPDATE_COLORS.bodyDivider }
               : {}),
+            ...(isEditorRailFrontLayout ? { kickerLabelColor: EDITOR_RAIL_FRONT_THEME.accent } : {}),
           },
           compositionSettings: {
             ...initialCompositionSettings,
@@ -4639,6 +4641,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         if (isAkhandVicharManthan6A) {
           finalHeadlineColor = AKHAND_VICHAR_MANTHAN_6A_SLOT_STYLES[slot.storyNumber]?.headline ?? finalHeadlineColor;
         }
+        if (isEditorRailFrontLayout && slot.priority === "lead") {
+          finalHeadlineColor = EDITOR_RAIL_FRONT_THEME.leadHeadline;
+        }
 
         let finalContainerStyles = initialArticleData.containerStyles;
         // ── Story visual personality ────────────────────────────────────────
@@ -4655,15 +4660,17 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           previousStyle: previousVisualStyle,
           isLeadStory: isLead,
         });
-        if (!options?.tintedStoryBackground && visualStyle === "tinted") {
+        if (!options?.tintedStoryBackground && visualStyle === "tinted" && !isEditorRailFrontLayout) {
           // Wizard tint disabled → downgrade tinted picks to plain
           // (leave boxed picks intact — they don't depend on the tint toggle).
           visualStyle = "plain";
         }
 
         if (visualStyle === "tinted") {
-          const tintSourceColor = options.tintColor || options.subheadingStyle.backgroundColor;
-          const tintRgba = convertColorToLightTintRgba(tintSourceColor, 0.25);
+          const tintSourceColor = isEditorRailFrontLayout
+            ? EDITOR_RAIL_FRONT_THEME.tint
+            : options.tintColor || options.subheadingStyle.backgroundColor;
+          const tintRgba = convertColorToLightTintRgba(tintSourceColor, isEditorRailFrontLayout ? 0.18 : 0.25);
           const tintBorderColor = convertColorToTintBorder(tintSourceColor, 0.6);
           finalContainerStyles = normalizeContainerStyles({
             ...initialArticleData.containerStyles,
@@ -4717,7 +4724,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
               framePaddingLeft: BOXED_STYLE_SPEC.framePadding,
               framePaddingRight: BOXED_STYLE_SPEC.framePadding,
               frameBorderWidth: BOXED_STYLE_SPEC.frameBorderWidth,
-              frameBorderColor: BOXED_STYLE_SPEC.frameBorderColor,
+              frameBorderColor: isEditorRailFrontLayout
+                ? EDITOR_RAIL_FRONT_THEME.boxRule
+                : BOXED_STYLE_SPEC.frameBorderColor,
               frameBorderStyle: "solid",
               frameBackgroundColor: "transparent",
               frameRadius: BOXED_STYLE_SPEC.frameRadius,
@@ -4930,6 +4939,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           articleData.inlineSubheadingColor === "#18181b"
         ) {
           articleData.inlineSubheadingColor = YOUTH_UPDATE_COLORS.wordmarkLight;
+        }
+        if (isEditorRailFrontLayout && articleData.inlineSubheadingColor === "#18181b") {
+          articleData.inlineSubheadingColor = EDITOR_RAIL_FRONT_THEME.accent;
         }
 
         if (options?.pageKind === "editorial" && isEditorialAuthorSlot(slot.storyNumber, options?.templateId)) {

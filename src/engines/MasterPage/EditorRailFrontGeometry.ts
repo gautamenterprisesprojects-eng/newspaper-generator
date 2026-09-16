@@ -17,6 +17,18 @@ export const EDITOR_RAIL_FRONT_COLORS = {
   type: "#FFFFFF",
 } as const;
 
+/**
+ * Page chrome for CliffFrontEditorRail8A's news boxes — a Hindi-paper brick
+ * red, not the rail's own fire-engine fill. Kickers, lead ink and light tints
+ * read as the same family as the rail without painting the whole sheet red.
+ */
+export const EDITOR_RAIL_FRONT_THEME = {
+  accent: "#A32035",
+  leadHeadline: "#5C1520",
+  tint: "#C45A63",
+  boxRule: "#8B3340",
+} as const;
+
 export const EDITOR_RAIL_FRONT_DEFAULT_NAME = "संपादक";
 export const EDITOR_RAIL_FRONT_DEFAULT_DESIGNATION = "ब्यूरो चीफ";
 
@@ -154,23 +166,23 @@ export const getEditorRailFrontGeometry = (
   content: EditorRailFrontContent,
 ): EditorRailFrontGeometry => {
   const sans = getNewspaperFontStack("sans");
-  const namePlateHeight = Math.max(46, Math.min(box.width * 0.52, box.height * 0.2));
+  const namePlateHeight = Math.max(32, Math.min(box.width * 0.36, box.height * 0.14));
   const photoHeight = Math.max(48, Math.min(box.width * 1.12, box.height - namePlateHeight - box.height * 0.38));
   const designationTop = box.y + photoHeight + namePlateHeight;
   const designationHeight = Math.max(1, box.y + box.height - designationTop);
-  const plateStrokeWidth = Math.max(1.15, box.width * 0.018);
-  const accentWidth = Math.max(10, box.width * 0.16);
-  const textLeft = box.x + accentWidth + Math.max(4, box.width * 0.06);
-  const textWidth = Math.max(1, box.x + box.width - textLeft - Math.max(4, box.width * 0.05));
+  const plateStrokeWidth = Math.max(0.9, box.width * 0.014);
+  const accentWidth = Math.max(8, box.width * 0.14);
+  const textLeft = box.x + accentWidth + Math.max(3, box.width * 0.05);
+  const textWidth = Math.max(1, box.x + box.width - textLeft - Math.max(3, box.width * 0.04));
   const nameFontSize = fitFontSize(
     content.name,
     textWidth,
-    Math.max(10, namePlateHeight * (content.place ? 0.34 : 0.42)),
-    7,
+    Math.max(7.5, namePlateHeight * (content.place ? 0.32 : 0.4)),
+    6,
     sans,
   );
   const placeFontSize = content.place
-    ? fitFontSize(content.place, textWidth, Math.max(8, namePlateHeight * 0.28), 6, sans)
+    ? fitFontSize(content.place, textWidth, Math.max(6, namePlateHeight * 0.24), 5.5, sans)
     : 0;
   const nameBlockHeight = content.place ? nameFontSize + placeFontSize + Math.max(2, namePlateHeight * 0.06) : nameFontSize;
   const nameTop = box.y + photoHeight + Math.max(3, (namePlateHeight - nameBlockHeight) / 2);
