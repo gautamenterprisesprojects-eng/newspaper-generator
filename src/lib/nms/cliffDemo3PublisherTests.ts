@@ -48,8 +48,16 @@ assert(!pagePlanRequestsNmsBundle(["National"], ""), "a National page is not an 
 assert(!pagePlanRequestsNmsBundle([], ""), "an empty page plan is not an NMS page");
 
 assert(
-  shouldUseNmsBundleFeed({ isCliffDemo3: true, isFrontPage: true, plannedCategories: [] }),
-  "cliffdemo3 front page uses NMS even when Settings still has mix/empty chips",
+  !shouldUseNmsBundleFeed({ isCliffDemo3: true, isFrontPage: true, plannedCategories: [] }),
+  "cliffdemo3 front page uses the mixed category API like other publishers",
+);
+assert(
+  !shouldUseNmsBundleFeed({
+    isCliffDemo3: true,
+    isFrontPage: true,
+    plannedCategories: ["NMS Bundle"],
+  }),
+  "cliffdemo3 front page stays on the mix even if Settings still lists NMS",
 );
 assert(
   !shouldUseNmsBundleFeed({ isCliffDemo3: false, isFrontPage: true, plannedCategories: [] }),

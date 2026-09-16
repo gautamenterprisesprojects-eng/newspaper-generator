@@ -4716,8 +4716,8 @@ export function EditorCanvas() {
               // come from, and importNewswireStories would then throw "Not
               // enough Hindi articles" outright instead of finishing the
               // page with a few cross-category live stories mixed in.
-              // cliffdemo3 NMS pages stay on the stored bundle only — mixing
-              // National/Sports/etc. would undo the "NMS Bundle only" front.
+              // cliffdemo3 NMS inside pages stay on the stored bundle only — mixing
+              // National/Sports/etc. would undo an explicit "NMS Bundle" Settings pick.
               if (freshLive.length < remaining && !useNmsBundle) {
                 const stillNeeded = remaining - freshLive.length;
                 const mixedIn = await fetchLiveArticlesFromOtherCategories(

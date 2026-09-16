@@ -61,9 +61,9 @@ export const pagePlanRequestsNmsBundle = (
   isNmsBundleCategory(plannedCategory);
 
 /**
- * cliffdemo3 front pages always take the NMS bundle. Inside pages take it
- * only when Settings selected "NMS Bundle". Every other publisher stays on
- * the existing mix / newswire category path.
+ * cliffdemo3 inside pages take the NMS bundle only when Settings selected
+ * "NMS Bundle". Front pages use the same mixed-category newswire path as
+ * every other publisher.
  */
 export const shouldUseNmsBundleFeed = (input: {
   isCliffDemo3: boolean;
@@ -72,7 +72,7 @@ export const shouldUseNmsBundleFeed = (input: {
   plannedCategory?: string;
 }) => {
   if (!input.isCliffDemo3) return false;
-  if (input.isFrontPage) return true;
+  if (input.isFrontPage) return false;
   return pagePlanRequestsNmsBundle(input.plannedCategories, input.plannedCategory);
 };
 
