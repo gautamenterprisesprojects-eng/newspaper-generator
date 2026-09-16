@@ -193,7 +193,12 @@ import { getYouthUpdateInsideRailItems } from "@/store/youthUpdateInsideRailStor
 import { getYouthUpdateRightDividers, getYouthUpdateHatchDividerTicks } from "@/engines/MasterPage/YouthUpdateBodyDividers";
 import { drawYouthUpdateEditorialRailToCanvas } from "@/engines/MasterPage/drawYouthUpdateEditorialRail";
 import { drawEditorRailFrontToCanvas } from "@/engines/MasterPage/drawEditorRailFront";
-import { resolveEditorRailFrontContent } from "@/engines/MasterPage/EditorRailFrontGeometry";
+import {
+  EDITOR_RAIL_FRONT_DEFAULT_IMAGE_URL,
+  EDITOR_RAIL_FRONT_DEFAULT_NAME,
+  EDITOR_RAIL_FRONT_DEFAULT_PLACE,
+  resolveEditorRailFrontContent,
+} from "@/engines/MasterPage/EditorRailFrontGeometry";
 import { drawYouthUpdateShortNewsBannerToCanvas } from "@/engines/MasterPage/drawYouthUpdateShortNewsBanner";
 import { drawYouthUpdateInsideHeaderToCanvas } from "@/engines/MasterPage/drawYouthUpdateInsideHeader";
 import { drawYouthUpdateInsideTeaserStripToCanvas } from "@/engines/MasterPage/drawYouthUpdateInsideTeaserStrip";
@@ -2794,21 +2799,16 @@ export function EditorCanvas() {
     () => (activePage ? resolvePageHeader(document, activePage.id) : null),
     [activePage, document],
   );
-  const editorRailFrontContent = useMemo(() => {
-    const profileId = resolvedPageHeader?.profileId;
-    const profile = profileId ? document.headerSystem.publicationProfiles[profileId] : null;
-    return resolveEditorRailFrontContent({
-      name: editorialAuthorSelection?.name,
-      imageUrl: editorialAuthorSelection?.imageUrl,
-      place: editorialAuthorSelection?.location || profile?.city || document.metadata.edition,
-      designation: editorialAuthorSelection?.designation,
-    });
-  }, [
-    document.headerSystem.publicationProfiles,
-    document.metadata.edition,
-    editorialAuthorSelection,
-    resolvedPageHeader,
-  ]);
+  const editorRailFrontContent = useMemo(
+    () =>
+      resolveEditorRailFrontContent({
+        name: EDITOR_RAIL_FRONT_DEFAULT_NAME,
+        imageUrl: EDITOR_RAIL_FRONT_DEFAULT_IMAGE_URL,
+        place: EDITOR_RAIL_FRONT_DEFAULT_PLACE,
+        designation: editorialAuthorSelection?.designation,
+      }),
+    [editorialAuthorSelection],
+  );
   const headerLogoSource = useMemo(() => {
     if (!resolvedPageHeader) {
       return "";
@@ -3908,18 +3908,13 @@ export function EditorCanvas() {
         try {
           const author = usePublisherEditorialAuthorStore.getState().selectedAuthors[0]
             ?? usePublisherEditorialAuthorStore.getState().defaults;
-          const activeHeaderSetId = document.headerSystem.activeHeaderSetId;
-          const profileId = activeHeaderSetId
-            ? document.headerSystem.headerSets[activeHeaderSetId]?.publicationProfileId
-            : null;
-          const profile = profileId ? document.headerSystem.publicationProfiles[profileId] : null;
           await drawEditorRailFrontToCanvas(
             context,
             railBox,
             resolveEditorRailFrontContent({
-              name: author?.name,
-              imageUrl: author?.imageUrl,
-              place: author?.location || profile?.city || document.metadata.edition,
+              name: EDITOR_RAIL_FRONT_DEFAULT_NAME,
+              imageUrl: EDITOR_RAIL_FRONT_DEFAULT_IMAGE_URL,
+              place: EDITOR_RAIL_FRONT_DEFAULT_PLACE,
               designation: author?.designation,
             }),
           );

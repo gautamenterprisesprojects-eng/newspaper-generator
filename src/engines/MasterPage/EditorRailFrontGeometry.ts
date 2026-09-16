@@ -29,8 +29,10 @@ export const EDITOR_RAIL_FRONT_THEME = {
   boxRule: "#8B3340",
 } as const;
 
-export const EDITOR_RAIL_FRONT_DEFAULT_NAME = "संपादक";
+export const EDITOR_RAIL_FRONT_DEFAULT_NAME = "विकास तिवारी";
+export const EDITOR_RAIL_FRONT_DEFAULT_PLACE = "जबलपुर";
 export const EDITOR_RAIL_FRONT_DEFAULT_DESIGNATION = "ब्यूरो चीफ";
+export const EDITOR_RAIL_FRONT_DEFAULT_IMAGE_URL = "/editor-rail/vikash-tiwari.png";
 
 export type EditorRailFrontRect = { x: number; y: number; width: number; height: number };
 
@@ -72,9 +74,9 @@ export const resolveEditorRailFrontContent = ({
   place?: string | null;
   designation?: string | null;
 }): EditorRailFrontContent => ({
-  imageUrl: (imageUrl ?? "").trim(),
-  name: formatEditorRailFrontLabel(name ?? "") || EDITOR_RAIL_FRONT_DEFAULT_NAME,
-  place: formatEditorRailFrontLabel(place ?? ""),
+  imageUrl: (imageUrl ?? "").trim() || EDITOR_RAIL_FRONT_DEFAULT_IMAGE_URL,
+  name: formatEditorRailFrontLabel(name ?? "") || formatEditorRailFrontLabel(EDITOR_RAIL_FRONT_DEFAULT_NAME),
+  place: formatEditorRailFrontLabel(place ?? "") || formatEditorRailFrontLabel(EDITOR_RAIL_FRONT_DEFAULT_PLACE),
   designation: (designation ?? "").trim() || EDITOR_RAIL_FRONT_DEFAULT_DESIGNATION,
 });
 
