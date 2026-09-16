@@ -11,8 +11,9 @@ import { getNewspaperFontStack } from "@/engines/FontManager/FontManagerEngine";
 
 export const EDITOR_RAIL_FRONT_COLORS = {
   background: "#E30613",
-  namePlate: "#1C070A",
+  namePlate: "#4A1018",
   accentBar: "#E30613",
+  plateStroke: "#FFFFFF",
   type: "#FFFFFF",
 } as const;
 
@@ -26,6 +27,8 @@ export type EditorRailFrontGeometry = {
   photo: EditorRailFrontRect;
   namePlate: EditorRailFrontRect;
   accent: EditorRailFrontRect;
+  accentPoints: number[];
+  plateStrokeWidth: number;
   name: EditorRailFrontRect & { text: string; fontSize: number };
   place: EditorRailFrontRect & { text: string; fontSize: number };
   designation: EditorRailFrontRect & { text: string; fontSize: number };
@@ -63,6 +66,27 @@ export const resolveEditorRailFrontContent = ({
   designation: (designation ?? "").trim() || EDITOR_RAIL_FRONT_DEFAULT_DESIGNATION,
 });
 
+export const editorRailFrontImageHasAlpha = (image: HTMLImageElement) => {
+  if (typeof document === "undefined") return false;
+  const sampleWidth = Math.max(1, Math.min(48, image.naturalWidth));
+  const sampleHeight = Math.max(1, Math.min(48, image.naturalHeight));
+  const canvas = document.createElement("canvas");
+  canvas.width = sampleWidth;
+  canvas.height = sampleHeight;
+  const context = canvas.getContext("2d");
+  if (!context) return false;
+  try {
+    context.drawImage(image, 0, 0, sampleWidth, sampleHeight);
+    const pixels = context.getImageData(0, 0, sampleWidth, sampleHeight).data;
+    for (let index = 3; index < pixels.length; index += 4) {
+      if (pixels[index] < 250) return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+};
+
 export const getEditorRailFrontCoverCrop = (
   naturalWidth: number,
   naturalHeight: number,
@@ -86,6 +110,23 @@ export const getEditorRailFrontCoverCrop = (
     y: 0,
     width: naturalWidth,
     height: cropHeight,
+  };
+};
+
+/** Bottom-centred contain: a cut-out portrait sits on the red ground and on the name plate. */
+export const getEditorRailFrontContainRect = (
+  naturalWidth: number,
+  naturalHeight: number,
+  box: EditorRailFrontRect,
+): EditorRailFrontRect => {
+  const scale = Math.min(box.width / Math.max(1, naturalWidth), box.height / Math.max(1, naturalHeight));
+  const width = naturalWidth * scale;
+  const height = naturalHeight * scale;
+  return {
+    x: box.x + (box.width - width) / 2,
+    y: box.y + box.height - height,
+    width,
+    height,
   };
 };
 
@@ -113,25 +154,26 @@ export const getEditorRailFrontGeometry = (
   content: EditorRailFrontContent,
 ): EditorRailFrontGeometry => {
   const sans = getNewspaperFontStack("sans");
-  const photoHeight = Math.min(box.width * 1.18, box.height * 0.36);
-  const namePlateHeight = Math.max(32, Math.min(box.width * 0.48, box.height * 0.12));
+  const namePlateHeight = Math.max(46, Math.min(box.width * 0.52, box.height * 0.2));
+  const photoHeight = Math.max(48, Math.min(box.width * 1.12, box.height - namePlateHeight - box.height * 0.38));
   const designationTop = box.y + photoHeight + namePlateHeight;
   const designationHeight = Math.max(1, box.y + box.height - designationTop);
-  const accentWidth = Math.max(5, box.width * 0.09);
-  const textLeft = box.x + accentWidth + Math.max(3, box.width * 0.05);
-  const textWidth = Math.max(1, box.x + box.width - textLeft - Math.max(3, box.width * 0.04));
+  const plateStrokeWidth = Math.max(1.15, box.width * 0.018);
+  const accentWidth = Math.max(10, box.width * 0.16);
+  const textLeft = box.x + accentWidth + Math.max(4, box.width * 0.06);
+  const textWidth = Math.max(1, box.x + box.width - textLeft - Math.max(4, box.width * 0.05));
   const nameFontSize = fitFontSize(
     content.name,
     textWidth,
-    Math.max(8, namePlateHeight * (content.place ? 0.36 : 0.42)),
-    6,
+    Math.max(10, namePlateHeight * (content.place ? 0.34 : 0.42)),
+    7,
     sans,
   );
   const placeFontSize = content.place
-    ? fitFontSize(content.place, textWidth, Math.max(6, namePlateHeight * 0.26), 5, sans)
+    ? fitFontSize(content.place, textWidth, Math.max(8, namePlateHeight * 0.28), 6, sans)
     : 0;
-  const nameBlockHeight = content.place ? nameFontSize + placeFontSize + 3 : nameFontSize;
-  const nameTop = box.y + photoHeight + Math.max(2, (namePlateHeight - nameBlockHeight) / 2);
+  const nameBlockHeight = content.place ? nameFontSize + placeFontSize + Math.max(2, namePlateHeight * 0.06) : nameFontSize;
+  const nameTop = box.y + photoHeight + Math.max(3, (namePlateHeight - nameBlockHeight) / 2);
   const designationFontSize = fitFontSize(
     content.designation,
     designationHeight * 0.92,
@@ -139,22 +181,35 @@ export const getEditorRailFrontGeometry = (
     12,
     sans,
   );
+  const plateY = box.y + photoHeight;
+  const accentPoints = [
+    box.x,
+    plateY,
+    box.x + accentWidth * 0.42,
+    plateY,
+    box.x + accentWidth,
+    plateY + namePlateHeight,
+    box.x,
+    plateY + namePlateHeight,
+  ];
 
   return {
     box,
     photo: { x: box.x, y: box.y, width: box.width, height: photoHeight },
     namePlate: {
       x: box.x,
-      y: box.y + photoHeight,
+      y: plateY,
       width: box.width,
       height: namePlateHeight,
     },
     accent: {
       x: box.x,
-      y: box.y + photoHeight,
+      y: plateY,
       width: accentWidth,
       height: namePlateHeight,
     },
+    accentPoints,
+    plateStrokeWidth,
     name: {
       x: textLeft,
       y: nameTop,
@@ -165,7 +220,7 @@ export const getEditorRailFrontGeometry = (
     },
     place: {
       x: textLeft,
-      y: nameTop + nameFontSize + (content.place ? 2 : 0),
+      y: nameTop + nameFontSize + (content.place ? Math.max(2, namePlateHeight * 0.06) : 0),
       width: textWidth,
       height: placeFontSize,
       text: content.place,

@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Group, Image as KonvaImage, Rect, Text } from "react-konva";
+import { useEffect, useMemo, useState } from "react";
+import { Group, Image as KonvaImage, Line, Rect, Text } from "react-konva";
 import { getNewspaperFontStack } from "@/engines/FontManager/FontManagerEngine";
 import {
   EDITOR_RAIL_FRONT_COLORS,
+  editorRailFrontImageHasAlpha,
+  getEditorRailFrontContainRect,
   getEditorRailFrontCoverCrop,
   getEditorRailFrontGeometry,
   type EditorRailFrontContent,
@@ -26,6 +28,7 @@ export function EditorRailFront({ x, y, width, height, content }: EditorRailFron
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const sans = getNewspaperFontStack("sans");
   const geometry = getEditorRailFrontGeometry({ x, y, width, height }, content);
+  const hasAlpha = useMemo(() => (image ? editorRailFrontImageHasAlpha(image) : false), [image]);
 
   useEffect(() => {
     if (!content.imageUrl) {
@@ -49,8 +52,12 @@ export function EditorRailFront({ x, y, width, height, content }: EditorRailFron
     };
   }, [content.imageUrl]);
 
+  const containRect =
+    image && hasAlpha
+      ? getEditorRailFrontContainRect(image.naturalWidth, image.naturalHeight, geometry.photo)
+      : null;
   const crop =
-    image && image.naturalWidth > 0 && image.naturalHeight > 0
+    image && !hasAlpha && image.naturalWidth > 0
       ? getEditorRailFrontCoverCrop(
           image.naturalWidth,
           image.naturalHeight,
@@ -68,6 +75,15 @@ export function EditorRailFront({ x, y, width, height, content }: EditorRailFron
         height={geometry.box.height}
         fill={EDITOR_RAIL_FRONT_COLORS.background}
       />
+      {image && containRect ? (
+        <KonvaImage
+          image={image}
+          x={containRect.x}
+          y={containRect.y}
+          width={containRect.width}
+          height={containRect.height}
+        />
+      ) : null}
       {image && crop ? (
         <KonvaImage
           image={image}
@@ -85,12 +101,19 @@ export function EditorRailFront({ x, y, width, height, content }: EditorRailFron
         height={geometry.namePlate.height}
         fill={EDITOR_RAIL_FRONT_COLORS.namePlate}
       />
-      <Rect
-        x={geometry.accent.x}
-        y={geometry.accent.y}
-        width={geometry.accent.width}
-        height={geometry.accent.height}
+      <Line
+        points={geometry.accentPoints}
+        closed
         fill={EDITOR_RAIL_FRONT_COLORS.accentBar}
+      />
+      <Rect
+        x={geometry.namePlate.x}
+        y={geometry.namePlate.y}
+        width={geometry.namePlate.width}
+        height={geometry.namePlate.height}
+        stroke={EDITOR_RAIL_FRONT_COLORS.plateStroke}
+        strokeWidth={geometry.plateStrokeWidth}
+        listening={false}
       />
       <Text
         x={geometry.name.x}

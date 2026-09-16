@@ -1,6 +1,8 @@
 import { getNewspaperFontStack } from "@/engines/FontManager/FontManagerEngine";
 import {
   EDITOR_RAIL_FRONT_COLORS,
+  editorRailFrontImageHasAlpha,
+  getEditorRailFrontContainRect,
   getEditorRailFrontCoverCrop,
   getEditorRailFrontGeometry,
   type EditorRailFrontContent,
@@ -11,6 +13,16 @@ const getPrintableImageSource = (source: string) =>
   source.startsWith("http")
     ? `/api/print-image?url=${encodeURIComponent(source)}`
     : source;
+
+const fillPolygon = (context: CanvasRenderingContext2D, points: number[]) => {
+  context.beginPath();
+  context.moveTo(points[0], points[1]);
+  for (let index = 2; index < points.length; index += 2) {
+    context.lineTo(points[index], points[index + 1]);
+  }
+  context.closePath();
+  context.fill();
+};
 
 /**
  * PDF-export twin of EditorRailFront.tsx. Both read getEditorRailFrontGeometry
@@ -44,23 +56,28 @@ export const drawEditorRailFrontToCanvas = async (
       img.src = source;
     });
     if (image && image.naturalWidth > 0 && image.naturalHeight > 0) {
-      const crop = getEditorRailFrontCoverCrop(
-        image.naturalWidth,
-        image.naturalHeight,
-        geometry.photo.width,
-        geometry.photo.height,
-      );
-      context.drawImage(
-        image,
-        crop.x,
-        crop.y,
-        crop.width,
-        crop.height,
-        geometry.photo.x,
-        geometry.photo.y,
-        geometry.photo.width,
-        geometry.photo.height,
-      );
+      if (editorRailFrontImageHasAlpha(image)) {
+        const contain = getEditorRailFrontContainRect(image.naturalWidth, image.naturalHeight, geometry.photo);
+        context.drawImage(image, contain.x, contain.y, contain.width, contain.height);
+      } else {
+        const crop = getEditorRailFrontCoverCrop(
+          image.naturalWidth,
+          image.naturalHeight,
+          geometry.photo.width,
+          geometry.photo.height,
+        );
+        context.drawImage(
+          image,
+          crop.x,
+          crop.y,
+          crop.width,
+          crop.height,
+          geometry.photo.x,
+          geometry.photo.y,
+          geometry.photo.width,
+          geometry.photo.height,
+        );
+      }
     }
   }
 
@@ -72,7 +89,15 @@ export const drawEditorRailFrontToCanvas = async (
     geometry.namePlate.height,
   );
   context.fillStyle = EDITOR_RAIL_FRONT_COLORS.accentBar;
-  context.fillRect(geometry.accent.x, geometry.accent.y, geometry.accent.width, geometry.accent.height);
+  fillPolygon(context, geometry.accentPoints);
+  context.strokeStyle = EDITOR_RAIL_FRONT_COLORS.plateStroke;
+  context.lineWidth = geometry.plateStrokeWidth;
+  context.strokeRect(
+    geometry.namePlate.x + geometry.plateStrokeWidth / 2,
+    geometry.namePlate.y + geometry.plateStrokeWidth / 2,
+    geometry.namePlate.width - geometry.plateStrokeWidth,
+    geometry.namePlate.height - geometry.plateStrokeWidth,
+  );
 
   context.fillStyle = EDITOR_RAIL_FRONT_COLORS.type;
   context.textAlign = "left";
