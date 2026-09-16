@@ -37,6 +37,7 @@ import {
 } from "@/components/editor/CanvasRenderLayers";
 import { PerformanceOverlay } from "@/components/editor/PerformanceOverlay";
 import { YouthUpdateEditorialRailImage } from "@/components/editor/YouthUpdateEditorialRailImage";
+import { EditorRailFront } from "@/components/editor/EditorRailFront";
 import { YouthUpdateShortNewsBanner } from "@/components/editor/YouthUpdateShortNewsBanner";
 import { YouthUpdateInsideRail } from "@/components/editor/YouthUpdateInsideRail";
 import { FrameManagerPanel } from "@/components/editor/FrameManagerPanel";
@@ -173,6 +174,7 @@ import {
   YOUTH_UPDATE_WORDMARK_FONT_FAMILY,
 } from "@/engines/MasterPage/YouthUpdateMastheadGeometry";
 import {
+  EDITOR_RAIL_FRONT_TEMPLATE_ID,
   YOUTH_UPDATE_FRONT_TEMPLATE_ID,
   YOUTH_UPDATE_FRONT_TEMPLATE_IDS,
   YOUTH_UPDATE_INSIDE_TEMPLATE_IDS,
@@ -190,6 +192,8 @@ import {
 import { getYouthUpdateInsideRailItems } from "@/store/youthUpdateInsideRailStore";
 import { getYouthUpdateRightDividers, getYouthUpdateHatchDividerTicks } from "@/engines/MasterPage/YouthUpdateBodyDividers";
 import { drawYouthUpdateEditorialRailToCanvas } from "@/engines/MasterPage/drawYouthUpdateEditorialRail";
+import { drawEditorRailFrontToCanvas } from "@/engines/MasterPage/drawEditorRailFront";
+import { resolveEditorRailFrontContent } from "@/engines/MasterPage/EditorRailFrontGeometry";
 import { drawYouthUpdateShortNewsBannerToCanvas } from "@/engines/MasterPage/drawYouthUpdateShortNewsBanner";
 import { drawYouthUpdateInsideHeaderToCanvas } from "@/engines/MasterPage/drawYouthUpdateInsideHeader";
 import { drawYouthUpdateInsideTeaserStripToCanvas } from "@/engines/MasterPage/drawYouthUpdateInsideTeaserStrip";
@@ -260,7 +264,7 @@ const wizardAccentPresets = NEWSWIRE_SUBHEADING_PRESETS.filter((preset) => prese
  * True when the page on the canvas is one of Youth UPDATE's front pages.
  *
  * Recognised by slot shape rather than by a stored template id, because the
- * committed page keeps only its story frames â€” the id it was generated from is
+ * committed page keeps only its story frames — the id it was generated from is
  * not carried through. Reads the shapes straight out of TEMPLATE_REGISTRY for
  * every id in YOUTH_UPDATE_FRONT_TEMPLATE_IDS (the same approach
  * getYouthUpdateInsideTemplateIdFromLayoutShape already takes for the inside
@@ -268,21 +272,47 @@ const wizardAccentPresets = NEWSWIRE_SUBHEADING_PRESETS.filter((preset) => prese
  * here. All eight slots must match exactly, which is what keeps another
  * publisher's 8-story front page from being mistaken for this one.
  */
+const matchesTemplateSlotShape = (
+  templateId: TemplateId,
+  storyLayouts: Array<{ story: Pick<StoryFrame, "templateStoryNumber" | "columnStart" | "columnSpan" | "priority"> }>,
+) => {
+  const template = TEMPLATE_REGISTRY[templateId];
+  if (!template) return false;
+  return template.slots.every((slot) => {
+    const story = storyLayouts.find((item) => item.story.templateStoryNumber === slot.storyNumber)?.story;
+    return (
+      story?.columnStart === slot.columnStart &&
+      story.columnSpan === slot.columnSpan &&
+      story.priority === slot.priority
+    );
+  });
+};
+
 const isYouthUpdateFrontLayoutShape = (
   storyLayouts: Array<{ story: Pick<StoryFrame, "templateStoryNumber" | "columnStart" | "columnSpan" | "priority"> }>,
-) =>
-  YOUTH_UPDATE_FRONT_TEMPLATE_IDS.some((templateId) => {
-    const template = TEMPLATE_REGISTRY[templateId];
-    if (!template) return false;
-    return template.slots.every((slot) => {
-      const story = storyLayouts.find((item) => item.story.templateStoryNumber === slot.storyNumber)?.story;
-      return (
-        story?.columnStart === slot.columnStart &&
-        story.columnSpan === slot.columnSpan &&
-        story.priority === slot.priority
-      );
-    });
-  });
+) => YOUTH_UPDATE_FRONT_TEMPLATE_IDS.some((templateId) => matchesTemplateSlotShape(templateId, storyLayouts));
+
+const isSharedEditorRailFrontLayoutShape = (
+  storyLayouts: Array<{ story: Pick<StoryFrame, "templateStoryNumber" | "columnStart" | "columnSpan" | "priority"> }>,
+) => matchesTemplateSlotShape(EDITOR_RAIL_FRONT_TEMPLATE_ID, storyLayouts);
+
+const getHardcodedEditorialRailBox = (
+  storyLayouts: Array<{ story: Pick<StoryFrame, "x" | "y" | "width" | "height" | "templateStoryNumber"> }>,
+) => {
+  const railStory = storyLayouts.find((item) => item.story.templateStoryNumber === 1)?.story;
+  if (!railStory) return null;
+  const nextStory = storyLayouts
+    .map((item) => item.story)
+    .filter(
+      (story) =>
+        story.x > railStory.x &&
+        story.y < railStory.y + railStory.height &&
+        story.y + story.height > railStory.y,
+    )
+    .sort((a, b) => a.x - b.x)[0];
+  const width = nextStory ? Math.max(railStory.width, nextStory.x - railStory.x) : railStory.width;
+  return { x: railStory.x, y: railStory.y, width, height: railStory.height };
+};
 
 const getYouthUpdateInsideTemplateIdFromLayoutShape = (
   storyLayouts: Array<{ story: Pick<StoryFrame, "templateStoryNumber" | "columnStart" | "columnSpan" | "priority"> }>,
@@ -337,7 +367,7 @@ const wizardLayoutPreviews = wizardLayoutDesigns.reduce(
       contentY: 0,
       contentWidth: 1000,
       contentHeight: 1000,
-      // The template's own grid â€” six for every news layout, four for the
+      // The template's own grid — six for every news layout, four for the
       // editorial page, whose slots are stated against a four-column sheet.
       columnCount: getTemplateColumnCount(layout.id, 6),
       gutter: 0,
@@ -436,7 +466,7 @@ const redirectToPortalAfterPdfExport = () => {
     return;
   }
 
-  // Not 800ms â€” confirmed live (CDP Browser.downloadProgress) that navigating
+  // Not 800ms — confirmed live (CDP Browser.downloadProgress) that navigating
   // away this soon cancels the browser's own download of the just-created
   // blob before it finishes writing to disk: a real multi-image edition PDF
   // (~9MB) was still "inProgress" and got cancelled outright at 800ms. There
@@ -448,7 +478,7 @@ const redirectToPortalAfterPdfExport = () => {
   }, 4000);
 };
 
-// â”€â”€â”€ Small inline icons for the publisher action rail â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Small inline icons for the publisher action rail ─────────────────────────
 // Plain inline SVG rather than an icon library dependency -- five glyphs
 // don't justify pulling one in, and this matches how the rest of this file
 // already hand-draws its small UI icons.
@@ -523,9 +553,9 @@ const getPortalLaunchParam = (name: string) => {
 
 const shouldChargeSinglePageOnExport = () => getPortalLaunchParam("chargeOnExport") === "single";
 
-// â”€â”€â”€ Portal batch mode: auto-fill every page, unattended â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Portal batch mode: auto-fill every page, unattended ──────────────────────
 // mode=batch is launched inside a hidden iframe by the portal dashboard's
-// "generate all pages" button. It never shows the wizard UI â€” it drives the
+// "generate all pages" button. It never shows the wizard UI — it drives the
 // exact same store actions ("Load Preloaded News"/"Load Live" call these
 // underneath) and the exact same renderDocumentPageToDataUrl/exportDocumentPdf
 // the manual wizard/export flow already uses, one page at a time, reporting
@@ -594,7 +624,7 @@ const getWizardTabForPortalPage = (page: PortalPagePlan): WizardTab => {
 
   if (page.page_number === 1) return "front";
   if (headerType === "advertisement") return "advertisement";
-  if (headerType === "editorial" || section === "editorial" || /sampadak|à¤¸à¤‚à¤ªà¤¾à¤¦/.test(section)) return "editorial";
+  if (headerType === "editorial" || section === "editorial" || /sampadak|संपाद/.test(section)) return "editorial";
   return "inside";
 };
 
@@ -615,11 +645,11 @@ const BATCH_FRONT_PAGE_TEMPLATE_IDS = FRONT_PAGE_TEMPLATE_IDS.filter(
 
 /**
  * Maps a publisher's page-section label (e.g. "Sports", "Business",
- * "à¤®à¤¨à¥‹à¤°à¤‚à¤œà¤¨") to the matching NEWSWIRE_CATEGORY, so a page the publisher
+ * "मनोरंजन") to the matching NEWSWIRE_CATEGORY, so a page the publisher
  * named "Sports" actually gets Sports news instead of falling through to
  * whatever the blanket default happens to be. Every real publisher profile
- * checked has `page_section_config[].category` set to an empty string â€”
- * the section label is the only signal actually available in practice â€” so
+ * checked has `page_section_config[].category` set to an empty string —
+ * the section label is the only signal actually available in practice — so
  * this is a best-effort keyword match, not an authoritative mapping.
  * Sections with no match (City, Classifieds, ...) return null and the
  * caller falls through to the existing "Madhya Pradesh" local-news
@@ -630,12 +660,12 @@ const inferCategoryFromSection = (section: string): NewswireCategory | null => {
   if (!normalized) return null;
 
   const keywordMap: Array<[RegExp, NewswireCategory]> = [
-    [/sport|à¤–à¥‡à¤²/, "Sports"],
-    [/business|commerce|market|trade|finance|à¤µà¥à¤¯à¤¾à¤ªà¤¾à¤°|à¤µà¤¾à¤£à¤¿à¤œà¥à¤¯/, "Business"],
-    [/entertainment|culture|cinema|film|bollywood|à¤®à¤¨à¥‹à¤°à¤‚à¤œà¤¨/, "Entertainment"],
-    [/international|world|foreign|à¤µà¤¿à¤¶à¥à¤µ|à¤…à¤‚à¤¤à¤°à¤°à¤¾à¤·à¥à¤Ÿà¥à¤°à¥€à¤¯/, "International"],
-    [/health|medical|wellness|à¤¸à¥à¤µà¤¾à¤¸à¥à¤¥à¥à¤¯/, "Health"],
-    [/nation|national|à¤°à¤¾à¤·à¥à¤Ÿà¥à¤°à¥€à¤¯/, "National"],
+    [/sport|खेल/, "Sports"],
+    [/business|commerce|market|trade|finance|व्यापार|वाणिज्य/, "Business"],
+    [/entertainment|culture|cinema|film|bollywood|मनोरंजन/, "Entertainment"],
+    [/international|world|foreign|विश्व|अंतरराष्ट्रीय/, "International"],
+    [/health|medical|wellness|स्वास्थ्य/, "Health"],
+    [/nation|national|राष्ट्रीय/, "National"],
   ];
 
   for (const [pattern, category] of keywordMap) {
@@ -656,7 +686,7 @@ const getPortalOrigin = () => {
 
 /**
  * Same request handleLoadLive already makes, including its fallback-detection
- * guard â€” the newswire route answers 200 + success:true even when every
+ * guard — the newswire route answers 200 + success:true even when every
  * upstream backend failed, substituting built-in stories and flagging it only
  * via meta.baseUrl.
  */
@@ -667,7 +697,7 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
  * backoff before giving up. Batch mode is the only caller of this function
  * (an unattended, whole-issue run with no user watching a spinner) and is
  * explicitly meant to take its time rather than concede a page's live
- * content over one transient network hiccup â€” the interactive wizard's own
+ * content over one transient network hiccup — the interactive wizard's own
  * fetch path is separate and untouched by this.
  */
 const fetchLiveNewswireOnce = async (
@@ -712,7 +742,7 @@ const normalizeHeadlineKey = (headline: string) => headline.trim().toLowerCase()
 /**
  * Filters out articles already used elsewhere in this batch run so the same
  * wire story doesn't appear on two pages of one edition. Checks both id and
- * headline â€” the live upstream can file the same real-world story under
+ * headline — the live upstream can file the same real-world story under
  * different ids for different category queries (syndicated/cross-posted
  * content), which an id-only check would miss.
  */
@@ -721,11 +751,11 @@ const isArticleUsed = (article: NewswireStory, usedIds: Set<string>, usedHeadlin
 
 /**
  * When a page's own assigned category doesn't have enough fresh, unused live
- * articles to fill it â€” an expected outcome now that the newswire route
+ * articles to fill it — an expected outcome now that the newswire route
  * itself dedupes and restricts to the last 24h server-side (see
  * src/app/api/newswire/route.ts), on top of thin categories that only ever
  * carry a handful of live articles (Health/Entertainment can run to single
- * digits) â€” pulls the shortfall from the other categories' live wire instead
+ * digits) — pulls the shortfall from the other categories' live wire instead
  * of conceding straight to the deterministic preloaded pool. Still all live
  * content by the time this returns, just not all filed under the one
  * category the page was nominally assigned; tried in NEWSWIRE_CATEGORIES
@@ -756,7 +786,7 @@ const fetchLiveArticlesFromOtherCategories = async (
         collected.push(article);
       }
     } catch {
-      // This category failed â€” move on to the next one rather than giving
+      // This category failed — move on to the next one rather than giving
       // up to preloaded content over a single category's network hiccup.
     }
   }
@@ -764,7 +794,7 @@ const fetchLiveArticlesFromOtherCategories = async (
   return collected;
 };
 
-/** Raw shape of one row from GET /publisher/manual-box-content â€” see ManualBoxContentInput in the portal's saas_handlers.go. */
+/** Raw shape of one row from GET /publisher/manual-box-content — see ManualBoxContentInput in the portal's saas_handlers.go. */
 type ManualBoxContentRecord = {
   page_number?: number;
   slot_index?: number;
@@ -779,12 +809,12 @@ type ManualBoxContentRecord = {
 };
 
 /**
- * Fetches this page's manual box content once, raw â€” both
+ * Fetches this page's manual box content once, raw — both
  * fetchManualArticlesForPage (news pages) and fetchManualEditorialEntriesForPage
  * (Editorial pages) build on this same call so there's exactly one place that
  * knows the endpoint shape. Missing portal identity (opened outside the
  * portal) or a fetch failure both resolve to "nothing seeded" rather than
- * blocking the page â€” manual content is a bonus, never a dependency.
+ * blocking the page — manual content is a bonus, never a dependency.
  */
 const fetchManualBoxContentForPage = async (pageNumber: number): Promise<ManualBoxContentRecord[]> => {
   const apiBase = getPortalLaunchParam("apiBase");
@@ -803,7 +833,7 @@ const fetchManualBoxContentForPage = async (pageNumber: number): Promise<ManualB
     if (!response.ok || !Array.isArray(payload?.boxes)) {
       return [];
     }
-    // Raw, unfiltered â€” an editorial portrait+name entry legitimately has no
+    // Raw, unfiltered — an editorial portrait+name entry legitimately has no
     // headline/body (see fetchManualEditorialEntriesForPage), so filtering
     // here would silently strip it before either consumer sees it. Each
     // consumer applies its own "is this row usable" rule.
@@ -815,12 +845,12 @@ const fetchManualBoxContentForPage = async (pageNumber: number): Promise<ManualB
 
 /**
  * Manual news boxes the publisher supplied on the portal for this issue,
- * shaped as NewswireStory so they flow through the exact same classify â†’
- * layout â†’ slot-pairing pipeline as wire content (importNewswireStories
+ * shaped as NewswireStory so they flow through the exact same classify →
+ * layout → slot-pairing pipeline as wire content (importNewswireStories
  * can't tell the difference). `body` alone drives size classification
- * (classifyArticles falls through body â†’ longBody â†’ ... â†’ headline) and
+ * (classifyArticles falls through body → longBody → ... → headline) and
  * `imageUrl` alone drives image-slot routing, so the empty-string/[]
- * defaults on every other required field are safe â€” they're only ever
+ * defaults on every other required field are safe — they're only ever
  * interpolated as display strings downstream, never branched on.
  */
 const fetchManualArticlesForPage = async (pageNumber: number, category: string): Promise<NewswireStory[]> => {
@@ -839,7 +869,7 @@ const fetchManualArticlesForPage = async (pageNumber: number, category: string):
     imageUrl: box.image_url || "",
     imageCaption: (box.image_caption || "").trim(),
     place: (box.place || "").trim(),
-    sourceTitle: "à¤ªà¥à¤°à¤•à¤¾à¤¶à¤•",
+    sourceTitle: "प्रकाशक",
     sourceUrl: "",
     publishedAt: null,
     manualPinned: true,
@@ -847,7 +877,7 @@ const fetchManualArticlesForPage = async (pageNumber: number, category: string):
 };
 
 /**
- * Manual editorial content â€” same portal source as fetchManualArticlesForPage,
+ * Manual editorial content — same portal source as fetchManualArticlesForPage,
  * but built as EditorialSlotPanel.tsx's own manualEntryToStory does (portrait
  * + author name folded into editorPortraitUrl/bylineName/editorSummary),
  * since Editorial pages never go through the regular newswire shape. Boxes
@@ -857,11 +887,11 @@ const fetchManualArticlesForPage = async (pageNumber: number, category: string):
  * do.
  */
 const fetchManualEditorialEntriesForPage = async (pageNumber: number): Promise<NewswireStory[]> => {
-  // Portrait/name are enrichment on a real entry, not a substitute for one â€”
+  // Portrait/name are enrichment on a real entry, not a substitute for one —
   // matches EditorialSlotPanel.tsx's own manualEntryToStory gate (hasCopy =
   // headline || body). A row with only a portrait has no localized copy for
   // getLocalizedArticleContent to select, which throws "Not enough Hindi
-  // articles" during import â€” confirmed live, not just by inspection.
+  // articles" during import — confirmed live, not just by inspection.
   const boxes = (await fetchManualBoxContentForPage(pageNumber)).filter(
     (box) => box.headline?.trim() && box.body?.trim(),
   );
@@ -873,7 +903,7 @@ const fetchManualEditorialEntriesForPage = async (pageNumber: number): Promise<N
     const portrait = (box.editor_portrait_url || "").trim();
     const imageCaption = (box.image_caption || "").trim();
     // A box with only a portrait and no story photograph prints the portrait
-    // as its image (the à¤¸à¤®à¥à¤ªà¤¾à¤¦à¤•à¥€à¤¯ rail convention) â€” mirrors
+    // as its image (the à¤¸à¤®à¥à¤ªà¤¾à¤¦à¤•à¥€à¤¯ rail convention) — mirrors
     // EditorialSlotPanel.tsx's manualEntryToStory exactly.
     const primaryImage = box.image_url || portrait;
     const portraitIsPrimary = !box.image_url && Boolean(portrait);
@@ -892,12 +922,12 @@ const fetchManualEditorialEntriesForPage = async (pageNumber: number): Promise<N
       imageUrl: primaryImage,
       imageCaption: portraitIsPrimary ? editorName : imageCaption,
       place: (box.place || "").trim(),
-      sourceTitle: "à¤ªà¥à¤°à¤•à¤¾à¤¶à¤•",
+      sourceTitle: "प्रकाशक",
       sourceUrl: "",
       publishedAt: null,
       bylineName: editorName,
       editorPortraitUrl: portrait,
-      editorSummary: body.split(/(?<=[à¥¤.!?])\s/)[0] ?? "",
+      editorSummary: body.split(/(?<=[।.!?])\s/)[0] ?? "",
       manualPinned: true,
       localized: {
         hindi: {
@@ -927,8 +957,8 @@ const EDITORIAL_TEMPLATE_ID: TemplateId = "CliffEditorial8A";
 /**
  * Editorial pages (identified from the publisher's own page plan, not
  * guessed) get the same purpose-built pipeline EditorialSlotPanel.tsx uses
- * interactively â€” the desk's leader/comment copy and the day's à¤°à¤¾à¤¶à¤¿à¤«à¤²,
- * slotted by box width â€” rather than being treated as one more newswire
+ * interactively — the desk's leader/comment copy and the day's राशिफल,
+ * slotted by box width — rather than being treated as one more newswire
  * category. Mirrors EditorialSlotPanel.tsx's handleGenerate (~line 772-800)
  * exactly, minus the manual per-slot overrides that only make sense in the
  * interactive editor.
@@ -959,7 +989,7 @@ const fetchEditorialStoriesForPage = async (excludeIds?: Set<string>): Promise<N
 };
 
 // WIZARD_LAYOUT_DESIGNS is the wizard's own inside-page catalogue (one entry
-// per template, tagged "basic" or "advanced") â€” deriving these two pools
+// per template, tagged "basic" or "advanced") — deriving these two pools
 // from it directly means these categorizations can never drift apart from
 // the wizard's own. Only pickInsideTemplateId (batch mode) reads these pools;
 // the interactive single-page wizard picks straight from WIZARD_LAYOUT_DESIGNS
@@ -976,7 +1006,7 @@ const BASIC_INSIDE_TEMPLATE_IDS: TemplateId[] = WIZARD_LAYOUT_DESIGNS.filter(
 ).map((design) => design.id);
 
 /**
- * One distinct layout per inside page, per edition â€” Advance Layouts
+ * One distinct layout per inside page, per edition — Advance Layouts
  * preferred, basic templates only once every advanced one is already used
  * this run, and reuse only as a last resort once both pools are exhausted
  * (a very large edition). `usedTemplateIds` is scoped to a single batch run.
@@ -1033,8 +1063,17 @@ const chargeSinglePageAfterRender = async (pageNumberOverride?: number, pageName
 };
 
 const dataUrlToArrayBuffer = async (dataUrl: string) => {
-  const response = await fetch(dataUrl);
+  const comma = dataUrl.indexOf(",");
+  if (dataUrl.startsWith("data:") && comma >= 0) {
+    const binary = atob(dataUrl.slice(comma + 1));
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes.buffer;
+  }
 
+  const response = await fetch(dataUrl);
   return response.arrayBuffer();
 };
 
@@ -1324,11 +1363,11 @@ const SEPARATOR_RULE_PADDING = 5;
 
 // Horizontal row-divider rules were removed entirely (repeated feedback: they
 // stuck to the box below, or vanished next to bordered boxes, across several
-// attempts at fixing the underlying tolerance/positioning issues) â€” the user
+// attempts at fixing the underlying tolerance/positioning issues) — the user
 // asked for the line gone rather than continuing to retune it. Only the
 // vertical rules between side-by-side articles in the same row remain.
 // A box narrower than this fraction of the page's content width counts as
-// "1 column" for the stacked-divider rule below â€” matches the same 0.22
+// "1 column" for the stacked-divider rule below — matches the same 0.22
 // threshold composeArticleBox.ts uses to decide a box is single-column.
 const NARROW_COLUMN_WIDTH_RATIO = 0.22;
 
@@ -1342,7 +1381,7 @@ const getEditorialSeparatorLines = (
   // Group into rows (same y/height), then draw a separator only between
   // ADJACENT boxes within a row. Comparing every pair regardless of
   // adjacency (the old approach) meant a 3+-box row's non-adjacent pair
-  // (e.g. the leftmost and rightmost of three) still got a "separator" â€”
+  // (e.g. the leftmost and rightmost of three) still got a "separator" —
   // its midpoint calculation spanned clean across the middle box and landed
   // the line INSIDE it, reading as a stray vertical division line inside a
   // single article box instead of between two actual neighbours.
@@ -1387,7 +1426,7 @@ const getEditorialSeparatorLines = (
   }
 
   // A short, centred (70% width) rule between two 1-column boxes stacked
-  // directly on top of each other in the same column lane â€” and ONLY that
+  // directly on top of each other in the same column lane — and ONLY that
   // case. Grouping by exact x/width match (rounded) naturally excludes a
   // 1-column box sitting above/below a wider (2-6 col) box, since they never
   // share a lane: no explicit priority/columnSpan check needed, the
@@ -1435,7 +1474,7 @@ const getEditorialSeparatorLines = (
  * Edges of stories that draw their own outline (tinted boxes, narrow-column
  * badge boxes). Their border already divides them from their neighbours, so a
  * page separator rule running along the same edge shows up as a second,
- * doubled line â€” these edges are used to suppress those rules.
+ * doubled line — these edges are used to suppress those rules.
  */
 const getBorderedStoryEdges = (
   storyLayouts: { story: { x: number; y: number; width: number; height: number }; layout: ArticleLayout }[],
@@ -1445,7 +1484,7 @@ const getBorderedStoryEdges = (
     .map(({ story }) => ({
       left: story.x,
       right: story.x + story.width,
-      // Box outlines now always draw at the story's true top/bottom edge â€”
+      // Box outlines now always draw at the story's true top/bottom edge —
       // see the boxTop/boxHeight fix in the draw loop below.
       top: story.y,
       bottom: story.y + story.height,
@@ -1453,12 +1492,12 @@ const getBorderedStoryEdges = (
 
 // Generous enough to catch a rule drawn at the midpoint of a column gutter
 // (~4.3pt from either box edge) as well as one drawn exactly on a shared edge.
-// Only valid for the vertical/gutter case below â€” row gaps are a separate,
+// Only valid for the vertical/gutter case below — row gaps are a separate,
 // much tighter tolerance (see SEPARATOR_ROW_BORDER_TOLERANCE).
 const SEPARATOR_BORDER_TOLERANCE = 6;
 
 // Row gaps between stacked boxes are a real, deliberate design gap (min
-// 3-8pt, see RowGapEngine) â€” not a coincidental overlap with the box below's
+// 3-8pt, see RowGapEngine) — not a coincidental overlap with the box below's
 // own top border. Using the 6pt gutter tolerance here treated every row gap
 // as "the same line" as the box's border and suppressed the divider rule
 // entirely. Now that the rule is centred in the gap (see getEditorialSeparatorLines),
@@ -1814,7 +1853,7 @@ export function EditorCanvas() {
   const importAssets = useEditorStore((state) => state.importAssets);
   // The inside folio's category field (see inside-header-live.svg /
   // HeaderResolver's {{section}} token) reads page.sectionName, which
-  // importNewswireStories itself never touches â€” only the wizard/quick-panel
+  // importNewswireStories itself never touches — only the wizard/quick-panel
   // caller here knows which category was actually chosen. Wrapping it here
   // (used by both the "AI News" dock panel and the full generation wizard)
   // keeps that page.sectionName always current with whatever content the
@@ -1834,13 +1873,13 @@ export function EditorCanvas() {
       void saveIssueUsedArticles(readPortalIssueArticleSession(), articles);
 
       // A portal-configured page (the publisher's own Settings page plan)
-      // already carries its deliberate name -- e.g. "à¤°à¤¾à¤·à¥à¤Ÿà¥à¤°à¥€à¤¯ à¤¸à¤®à¤¾à¤šà¤¾à¤°" --
+      // already carries its deliberate name -- e.g. "à¤°à¤¾à¤·à¥à¤Ÿà¥à¤°à¥€à¤¯ समाचार" --
       // set the moment the page was opened (see openWizardForPortalPage).
       // Overwriting it here with the fetched category label was clobbering
       // that real name with the raw category value instead -- worse, the
       // wizard's own manual-picker state ("category" passed in here isn't
       // always this page's actual planned category; see getInsideImportCategory
-      // in GenerationWizardModal.tsx), so a page like "à¤°à¤¾à¤·à¥à¤Ÿà¥à¤°à¥€à¤¯ à¤¸à¤®à¤¾à¤šà¤¾à¤°"
+      // in GenerationWizardModal.tsx), so a page like "à¤°à¤¾à¤·à¥à¤Ÿà¥à¤°à¥€à¤¯ समाचार"
       // could end up relabeled with a completely unrelated category's name.
       // Only a page with no portal plan at all (the manual/non-portal
       // editor flow, which starts genuinely unnamed) still wants this
@@ -1962,7 +2001,7 @@ export function EditorCanvas() {
       setWorkspaceHistory((current) => [`Go To Page ${pageNumber}`, ...current].slice(0, 24));
     }
   }, [document.pages, setActivePage]);
-  // Minimal, wizard-facing view of the page list â€” lets the Advertisement Page
+  // Minimal, wizard-facing view of the page list — lets the Advertisement Page
   // tab offer "attach to page N" without handing the whole live document (and
   // its constant re-render churn) into the wizard's props.
   const wizardPageSummaries = useMemo(
@@ -2316,6 +2355,13 @@ export function EditorCanvas() {
       isYouthUpdateFrontLayoutShape(storyLayouts),
     [pageType, storyLayouts],
   );
+  const isSharedEditorRailFrontLayout = useMemo(
+    () =>
+      pageType === "front" &&
+      getPortalLaunchParam("publisherId") !== YOUTH_UPDATE_PUBLISHER_ID &&
+      isSharedEditorRailFrontLayoutShape(storyLayouts),
+    [pageType, storyLayouts],
+  );
   const isYouthUpdateInsideLayout = useMemo(
     () =>
       pageType !== "front" &&
@@ -2338,31 +2384,15 @@ export function EditorCanvas() {
     if (!isYouthUpdateFrontLayout) {
       return null;
     }
-    const railStory = visibleStoryLayouts.find((item) => item.story.templateStoryNumber === 1)?.story;
-    if (!railStory) return null;
-    // Extended to story 2's left edge so the rail's blue touches the lead
-    // story's border directly -- the template's real column gutter would
-    // otherwise leave a visible sliver of white between them, which reads as
-    // a stray gap next to a hardcoded, edge-to-edge graphic. Purely a wider
-    // paint rect: story 1's actual box (and the gutter the layout engine
-    // reserves) is untouched, so nothing about how the page composes changes.
-    // The neighbour is found by position, not by story number: story 2 is the
-    // rail's right-hand neighbour on 1A/2A/3A, but on 4A the lead is anchored
-    // to the right and a different story sits beside the rail. Taking the
-    // nearest box that starts to the right of the rail and shares its band
-    // works on all four.
-    const nextStory = visibleStoryLayouts
-      .map((item) => item.story)
-      .filter(
-        (story) =>
-          story.x > railStory.x &&
-          story.y < railStory.y + railStory.height &&
-          story.y + story.height > railStory.y,
-      )
-      .sort((a, b) => a.x - b.x)[0];
-    const width = nextStory ? Math.max(railStory.width, nextStory.x - railStory.x) : railStory.width;
-    return { x: railStory.x, y: railStory.y, width, height: railStory.height };
+    return getHardcodedEditorialRailBox(visibleStoryLayouts);
   }, [isYouthUpdateFrontLayout, visibleStoryLayouts]);
+  const editorRailFrontBox = useMemo(() => {
+    if (!isSharedEditorRailFrontLayout) return null;
+    return getHardcodedEditorialRailBox(visibleStoryLayouts);
+  }, [isSharedEditorRailFrontLayout, visibleStoryLayouts]);
+  const editorialAuthorSelection = usePublisherEditorialAuthorStore(
+    (store) => store.selectedAuthors[0] ?? store.defaults,
+  );
   // Youth UPDATE: "SHORT NEWS" banner painted across the top of story 3's
   // box -- the real headline/byline/body render normally below it, in the
   // top padding editorStore.ts's isYouthUpdateShortNewsSlot reserves.
@@ -2764,6 +2794,21 @@ export function EditorCanvas() {
     () => (activePage ? resolvePageHeader(document, activePage.id) : null),
     [activePage, document],
   );
+  const editorRailFrontContent = useMemo(() => {
+    const profileId = resolvedPageHeader?.profileId;
+    const profile = profileId ? document.headerSystem.publicationProfiles[profileId] : null;
+    return resolveEditorRailFrontContent({
+      name: editorialAuthorSelection?.name,
+      imageUrl: editorialAuthorSelection?.imageUrl,
+      place: editorialAuthorSelection?.location || profile?.city || document.metadata.edition,
+      designation: editorialAuthorSelection?.designation,
+    });
+  }, [
+    document.headerSystem.publicationProfiles,
+    document.metadata.edition,
+    editorialAuthorSelection,
+    resolvedPageHeader,
+  ]);
   const headerLogoSource = useMemo(() => {
     if (!resolvedPageHeader) {
       return "";
@@ -3263,11 +3308,11 @@ export function EditorCanvas() {
     }
     const radius = layout.containerStyles?.article?.containerBorderRadius;
     // Every story's box background/border draws at its true story.y/height,
-    // full stop â€” a badge box used to shift this down and shrink the height
+    // full stop — a badge box used to shift this down and shrink the height
     // to dodge its own pill's overhang, but that made a badge box's border
     // start lower and read shorter than a normal box sitting beside it in the
     // same row. The pill still straddles above this (unshifted) top edge on
-    // its own â€” see kickerTopInset in composeArticleBox â€” so "badge going
+    // its own — see kickerTopInset in composeArticleBox — so "badge going
     // above the border" is unaffected; only the box itself stops moving.
     const boxTop = story.y;
     const boxHeight = story.height;
@@ -3291,13 +3336,13 @@ export function EditorCanvas() {
       }
     }
 
-    // Not imageSourcesByStoryId alone â€” that memo is built from the single
+    // Not imageSourcesByStoryId alone — that memo is built from the single
     // active page's `stories`/`document.stories`, which importNewswireStories
     // overwrites per page (story ids collide across pages, "story-1",
-    // "story-2", ... restarting each call â€” see batchPageStoriesSnapshotRef's
+    // "story-2", ... restarting each call — see batchPageStoriesSnapshotRef's
     // own comment). imageSourceOverrides, when supplied, is a snapshot taken
     // right after THIS page's own import (before a later page's import can
-    // clobber document.stories' photo references) â€” see
+    // clobber document.stories' photo references) — see
     // batchPageImageSourcesRef. Falls back to imageSourcesByStoryId for the
     // normal (non-batch, single-active-page) case, where it's already correct.
     const imageSource = imageSourceOverrides?.[story.id] ?? imageSourcesByStoryId[story.id] ?? "";
@@ -3345,7 +3390,7 @@ export function EditorCanvas() {
 
     // Hard-clip the kicker to this story's own box. It's fit-to-width via a
     // measured font-size search, and Devanagari glyph shaping can render
-    // slightly wider than the measurement predicted â€” clipping guarantees
+    // slightly wider than the measurement predicted — clipping guarantees
     // it can never visually bleed into a neighboring article regardless.
     if (layout.kicker?.textBlock) {
       context.save();
@@ -3381,7 +3426,7 @@ export function EditorCanvas() {
     // which is exactly the trap this codebase sets: two render paths, one of
     // them missing a piece. On the sheet the banner vanished, its white type
     // landed on white paper, and the depth the composer had reserved for it
-    // printed as a white gap under the headline â€” the "gap only in the PDF".
+    // printed as a white gap under the headline — the "gap only in the PDF".
     if (layout.subheadlineBackground) {
       const banner = layout.subheadlineBackground;
       context.save();
@@ -3474,7 +3519,7 @@ export function EditorCanvas() {
         } else if (line.style.align === "justify" && line.justify) {
           const words = sanitizeCanvasText(line.text).split(/\s+/u).filter(Boolean);
           // Measured and drawn with the line's own tracking, matching the
-          // width the composer wrapped to â€” see the same fix in ArticleBox's
+          // width the composer wrapped to — see the same fix in ArticleBox's
           // drawBodyLine. Without it a negatively-tracked body measures wider
           // here than the composer budgeted and the words print touching.
           context.save();
@@ -3655,12 +3700,12 @@ export function EditorCanvas() {
   const renderDocumentPageToDataUrl = async (
     page: NewspaperPageObject,
     pageStoryLayouts: IncrementalStoryLayout[],
-    // Print export needs true 300dpi; an on-screen preview doesn't â€” passing
+    // Print export needs true 300dpi; an on-screen preview doesn't — passing
     // a lower dpi here draws through this exact same code, just onto a
     // smaller canvas, so the preview stays fast without being a different
     // rendering path from the PDF.
     dpi = 300,
-    // Batch mode's per-page photo snapshot (batchPageImageSourcesRef) â€”
+    // Batch mode's per-page photo snapshot (batchPageImageSourcesRef) —
     // undefined outside batch mode, where imageSourcesByStoryId is already
     // correctly scoped to the one page being rendered.
     imageSourceOverrides?: Record<string, string>,
@@ -3709,6 +3754,14 @@ export function EditorCanvas() {
       (page.pageType === "front"
         ? isYouthUpdateFrontLayoutShape(pageStoryLayouts)
         : Boolean(getYouthUpdateInsideTemplateIdFromLayoutShape(pageStoryLayouts)));
+    const isYouthUpdateFrontExport =
+      page.pageType === "front" &&
+      getPortalLaunchParam("publisherId") === YOUTH_UPDATE_PUBLISHER_ID &&
+      isYouthUpdateFrontLayoutShape(pageStoryLayouts);
+    const isSharedEditorRailFrontExport =
+      page.pageType === "front" &&
+      getPortalLaunchParam("publisherId") !== YOUTH_UPDATE_PUBLISHER_ID &&
+      isSharedEditorRailFrontLayoutShape(pageStoryLayouts);
 
     if (!youthUpdateFlatStyle) {
       await drawResolvedHeaderToCanvas(context, page, pageWidth);
@@ -3733,7 +3786,7 @@ export function EditorCanvas() {
     }
     for (const separator of resolvedSeparators) {
       // Only the vertical rules between side-by-side articles are drawn now
-      // (horizontal row rules were removed) â€” matches the interactive canvas.
+      // (horizontal row rules were removed) — matches the interactive canvas.
       const [x1, y1, x2, y2] = separator.points;
       context.beginPath();
       context.moveTo(x1, y1);
@@ -3745,9 +3798,12 @@ export function EditorCanvas() {
     for (const storyLayout of pageStoryLayouts) {
       // The horoscope prints as a grid of cells, not as flowed prose. Same
       // branch as the on-screen canvas in CanvasRenderLayers, reading the same
-      // geometry â€” the export builds its own canvas, so it has to be drawn
+      // geometry — the export builds its own canvas, so it has to be drawn
       // twice or the sheet and the screen disagree.
       const { story } = storyLayout;
+      if (isSharedEditorRailFrontExport && story.templateStoryNumber === 1) {
+        continue;
+      }
       const rashifalReadings = parseRashifalReadings(
         richTextToPlainText(story.articleData?.headline ?? ""),
         richTextToPlainText(story.articleData?.body ?? ""),
@@ -3831,50 +3887,48 @@ export function EditorCanvas() {
       }
     }
 
-    // Youth UPDATE's own masthead and hardcoded editorial-rail photo, gated
-    // on both this being their real portal session AND the front page
-    // specifically â€” every other publisher's front page, and this same
-    // publisher's inside pages, are completely unaffected since the
-    // condition is false for both.
-    if (
-      page.pageType === "front" &&
-      getPortalLaunchParam("publisherId") === YOUTH_UPDATE_PUBLISHER_ID &&
-      isYouthUpdateFrontLayoutShape(pageStoryLayouts)
-    ) {
-      const railStoryLayout = pageStoryLayouts.find(
-        (storyLayout) => storyLayout.story.templateStoryNumber === 1,
-      );
-      if (railStoryLayout) {
-        // Extended to its right-hand neighbour's left edge so the rail's blue
-        // touches that story's border â€” same reasoning, and the same
-        // find-by-position rather than find-by-story-number, as the
-        // live-preview overlay (youthUpdateEditorialRailBox).
-        const nextStory = pageStoryLayouts
-          .map((item) => item.story)
-          .filter(
-            (story) =>
-              story.x > railStoryLayout.story.x &&
-              story.y < railStoryLayout.story.y + railStoryLayout.story.height &&
-              story.y + story.height > railStoryLayout.story.y,
-          )
-          .sort((a, b) => a.x - b.x)[0];
-        const width = nextStory
-          ? Math.max(railStoryLayout.story.width, nextStory.x - railStoryLayout.story.x)
-          : railStoryLayout.story.width;
-        await drawYouthUpdateEditorialRailToCanvas(context, {
-          x: railStoryLayout.story.x,
-          y: railStoryLayout.story.y,
-          width,
-          height: railStoryLayout.story.height,
-        });
-        context.fillStyle = "#fffef9";
-        context.fillRect(
-          railStoryLayout.story.x,
-          railStoryLayout.story.y + railStoryLayout.story.height - 8,
-          width,
-          11,
-        );
+    // Youth UPDATE fronts keep the jpg overlay. CliffFrontEditorRail8A draws
+    // a dynamic red author rail from the publisher's saved editor photo / name
+    // / designation.
+    if (isYouthUpdateFrontExport) {
+      const railBox = getHardcodedEditorialRailBox(pageStoryLayouts.map((item) => ({ story: item.story })));
+      if (railBox) {
+        try {
+          await drawYouthUpdateEditorialRailToCanvas(context, railBox);
+          context.fillStyle = "#fffef9";
+          context.fillRect(railBox.x, railBox.y + railBox.height - 8, railBox.width, 11);
+        } catch (railError) {
+          console.error("[PDF export] Editorial rail overlay failed; page export continues.", railError);
+        }
       }
+    }
+    if (isSharedEditorRailFrontExport) {
+      const railBox = getHardcodedEditorialRailBox(pageStoryLayouts.map((item) => ({ story: item.story })));
+      if (railBox) {
+        try {
+          const author = usePublisherEditorialAuthorStore.getState().selectedAuthors[0]
+            ?? usePublisherEditorialAuthorStore.getState().defaults;
+          const activeHeaderSetId = document.headerSystem.activeHeaderSetId;
+          const profileId = activeHeaderSetId
+            ? document.headerSystem.headerSets[activeHeaderSetId]?.publicationProfileId
+            : null;
+          const profile = profileId ? document.headerSystem.publicationProfiles[profileId] : null;
+          await drawEditorRailFrontToCanvas(
+            context,
+            railBox,
+            resolveEditorRailFrontContent({
+              name: author?.name,
+              imageUrl: author?.imageUrl,
+              place: author?.location || profile?.city || document.metadata.edition,
+              designation: author?.designation,
+            }),
+          );
+        } catch (railError) {
+          console.error("[PDF export] Editor rail overlay failed; page export continues.", railError);
+        }
+      }
+    }
+    if (isYouthUpdateFrontExport) {
       const shortNewsStoryLayout = pageStoryLayouts.find(
         (storyLayout) => storyLayout.story.templateStoryNumber === 3,
       );
@@ -4013,7 +4067,7 @@ export function EditorCanvas() {
     // Press colour control strip, drawn last so it sits over the empty band
     // below the content box. This export builds its own canvas rather than
     // rasterising the Konva layer tree, so the strip has to be drawn here as
-    // well as in PressColourBar â€” both read the same geometry module so the
+    // well as in PressColourBar — both read the same geometry module so the
     // printed sheet and the on-screen page cannot disagree.
     drawPressColourBarToCanvas(context, page, pageWidth, pageHeight);
 
@@ -4031,7 +4085,7 @@ export function EditorCanvas() {
    * exactly the same rendering path.
    *
    * Returns { added: true } on success; { added: false, error } when the
-   * page failed to render â€” the caller decides whether to abort the whole
+   * page failed to render — the caller decides whether to abort the whole
    * export or continue with remaining pages.
    */
   async function addPageToPdf(
@@ -4042,7 +4096,7 @@ export function EditorCanvas() {
     try {
       // In batch mode, importNewswireStories names every page's story frames
       // "story-1", "story-2", ... restarting at 1 per page, and
-      // document.stories is one flat map shared by the whole document â€” so a
+      // document.stories is one flat map shared by the whole document — so a
       // later page's import can silently overwrite an earlier page's entries
       // under the same keys. batchPageStoriesSnapshotRef (populated by the
       // batch importing-phase effect, empty outside batch mode) captures each
@@ -4116,7 +4170,7 @@ export function EditorCanvas() {
     const { pdfBytes, failedPages, totalPages } = await buildDocumentPdfBytes(onProgress);
     const saved = await downloadBytes(pdfBytes, filename, "application/pdf");
     if (!saved.ok) {
-      window.alert(`PDF à¤¸à¥‡à¤µ à¤¨à¤¹à¥€à¤‚ à¤¹à¥‹ à¤¸à¤•à¤¾: ${saved.error}`);
+      window.alert(`PDF सेव नहीं हो सका: ${saved.error}`);
       setWorkspaceHistory((current) => [`PDF save failed: ${saved.error}`, ...current].slice(0, 24));
     }
 
@@ -4164,7 +4218,7 @@ export function EditorCanvas() {
 
   /**
    * Export a single page (by id, defaults to the currently active page) as a
-   * standalone PDF. Requested in the plan under Phase 5 â€” users want to grab
+   * standalone PDF. Requested in the plan under Phase 5 — users want to grab
    * one page without downloading the whole edition.
    */
   async function exportSinglePagePdf(pageId?: string) {
@@ -4196,7 +4250,7 @@ export function EditorCanvas() {
       const saved = await downloadBytes(pdfBytes, filename, "application/pdf");
       if (!saved.ok) {
         window.alert(
-          `à¤ªà¥‡à¤œ à¤¬à¤¨ à¤—à¤¯à¤¾ à¤”à¤° à¤ªà¥ˆà¤¸à¤¾ à¤•à¤Ÿ à¤—à¤¯à¤¾, à¤²à¥‡à¤•à¤¿à¤¨ à¤«à¤¼à¤¾à¤‡à¤² à¤¸à¥‡à¤µ à¤¨à¤¹à¥€à¤‚ à¤¹à¥‹ à¤¸à¤•à¥€: ${saved.error}\n\nà¤•à¥ƒà¤ªà¤¯à¤¾ à¤¦à¥‹à¤¬à¤¾à¤°à¤¾ à¤¡à¤¾à¤‰à¤¨à¤²à¥‹à¤¡ à¤•à¤°à¥‡à¤‚ â€” à¤¦à¥‹à¤¬à¤¾à¤°à¤¾ à¤ªà¥ˆà¤¸à¤¾ à¤¨à¤¹à¥€à¤‚ à¤•à¤Ÿà¥‡à¤—à¤¾à¥¤`,
+          `पेज बन गया और पैसा कट गया, लेकिन फ़ाइल सेव नहीं हो सकी: ${saved.error}\n\nकृपया दोबारा डाउनलोड करें — दोबारा पैसा नहीं कटेगा।`,
         );
         setWorkspaceHistory((current) => [`Charged but save failed: ${saved.error}`, ...current].slice(0, 24));
       } else {
@@ -4204,7 +4258,7 @@ export function EditorCanvas() {
       }
     } catch (error) {
       console.error("Export page PDF failed", error);
-      window.alert(`Export page failed. à¤ªà¥ˆà¤¸à¤¾ à¤¨à¤¹à¥€à¤‚ à¤•à¤Ÿà¤¾ à¤¹à¥ˆ, à¤•à¥ƒà¤ªà¤¯à¤¾ Try Again à¤•à¤°à¥‡à¤‚: ${error instanceof Error ? error.message : "unknown error"}`);
+      window.alert(`Export page failed. पैसा नहीं कटा है, कृपया Try Again करें: ${error instanceof Error ? error.message : "unknown error"}`);
       setWorkspaceHistory((current) => [
         `Export page failed, no charge: ${error instanceof Error ? error.message : "unknown error"}`,
         ...current,
@@ -4212,10 +4266,10 @@ export function EditorCanvas() {
     }
   }
 
-  // â”€â”€ Portal batch mode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Portal batch mode ────────────────────────────────────────────────────
   // Two phases, each its own effect, on purpose: importNewswireStories is a
   // synchronous store write, but renderDocumentPageToDataUrl below is a
-  // closure over this render's `document` â€” calling it in the same tick as
+  // closure over this render's `document` — calling it in the same tick as
   // the import (before React has re-rendered with the fresh document) would
   // silently render the PREVIOUS page's content one step behind. Splitting
   // "import everything" (phase 1, pure store writes, no closures involved)
@@ -4295,7 +4349,7 @@ export function EditorCanvas() {
   const batchCompositionCacheRef = useRef<StoryCompositionCache>(new Map());
   const batchUsedFallbackRef = useRef<Map<string, boolean>>(new Map());
   // importNewswireStories names each page's story frames "story-1", "story-2",
-  // ... restarting from 1 every call â€” fine for the single-active-page world
+  // ... restarting from 1 every call — fine for the single-active-page world
   // this was built for, but in batch mode every page shares one document, so
   // page 2's "story-1" silently overwrites page 1's "story-1" in the flat
   // document.stories map once page 2 imports. Snapshotting each page's own
@@ -4305,22 +4359,22 @@ export function EditorCanvas() {
   // every other (non-batch) flow also depends on.
   const batchPageStoriesSnapshotRef = useRef<Map<string, typeof stories>>(new Map());
   // The same collision hits photo references too, but StoryFrame (what the
-  // line above snapshots) never carries the photo asset id at all â€” only
+  // line above snapshots) never carries the photo asset id at all — only
   // NewspaperStoryObject (document.stories[id]) does; the frame-conversion
   // step (createStoryFrameFromDocumentPlacement) reads it just long enough to
   // pull the asset's width/height and then drops it. So the render path has
-  // always re-resolved images via document.stories[story.id]?.photo â€” fine
+  // always re-resolved images via document.stories[story.id]?.photo — fine
   // for a single active page, wrong for every other page once a later page's
   // import has overwritten that entry. This snapshot captures each page's
   // resolved image URLs (not just asset ids, so no second document.assets
   // lookup is needed later) right after that page's own import, the same
   // moment batchPageStoriesSnapshotRef captures its stories.
   const batchPageImageSourcesRef = useRef<Map<string, Record<string, string>>>(new Map());
-  // Scoped to one batch run â€” reset at the start of each "importing" phase.
+  // Scoped to one batch run — reset at the start of each "importing" phase.
   const batchUsedTemplateIdsRef = useRef<Set<TemplateId>>(new Set());
   const batchUsedArticleIdsRef = useRef<Set<string>>(new Set());
   // Same-story-different-id can happen when the live upstream files one
-  // real-world item under more than one category â€” id-only dedup misses
+  // real-world item under more than one category — id-only dedup misses
   // that, so headline is tracked alongside it (see dedupeAndFill).
   const batchUsedHeadlinesRef = useRef<Set<string>>(new Set());
 
@@ -4331,7 +4385,7 @@ export function EditorCanvas() {
 
     const expectedPageCount = Math.max(1, Math.min(64, Number(getPortalLaunchParam("pageCount")) || 1));
 
-    // document always starts with 1 page â€” wait for PortalLaunchBootstrap's
+    // document always starts with 1 page — wait for PortalLaunchBootstrap's
     // own effect to finish resizing to the real count before starting, so
     // this never races a sibling component's setup.
     if (document.pages.length !== expectedPageCount) {
@@ -4482,7 +4536,7 @@ export function EditorCanvas() {
         // A publisher can now pick more than one category for a page from
         // the portal's Settings page (e.g. Sports + Business on one page,
         // since a longer edition has more pages than the 7 base categories)
-        // â€” that arrives here as plannedPages[].categories. Two or more
+        // — that arrives here as plannedPages[].categories. Two or more
         // valid entries means "mix just these", handled by its own branch
         // below rather than falling through to specificCategory (a single
         // category) or the all-7-category Mixed fallback.
@@ -4515,13 +4569,13 @@ export function EditorCanvas() {
 
         if (isEditorial) {
           // The editorial page has its own purpose-built content model
-          // (à¤°à¤¾à¤¶à¤¿à¤«à¤² + desk copy, slotted by box width) rather than the
-          // regular newswire/manual-article path â€” manual content for this
+          // (राशिफल + desk copy, slotted by box width) rather than the
+          // regular newswire/manual-article path — manual content for this
           // page kind is overlaid straight onto matching slot positions
           // instead of merged into a pool, the same "decided per slot, not
           // ranked" rule the desk feed itself already follows. Slots 0/1
-          // (array index == storyNumber-1) are à¤¸à¤®à¥à¤ªà¤¾à¤¦à¤•à¥€à¤¯ / à¤µà¤¿à¤šà¤¾à¤° à¤®à¤‚à¤¥à¤¨, the two
-          // portrait+name rails â€” see fetchManualEditorialEntriesForPage.
+          // (array index == storyNumber-1) are à¤¸à¤®à¥à¤ªà¤¾à¤¦à¤•à¥€à¤¯ / विचार मंथन, the two
+          // portrait+name rails — see fetchManualEditorialEntriesForPage.
           try {
             const [manualEditorialEntries, editorialStories] = await Promise.all([
               fetchManualEditorialEntriesForPage(index + 1),
@@ -4541,8 +4595,8 @@ export function EditorCanvas() {
               batchUsedArticleIdsRef.current.add(article.id);
               batchUsedHeadlinesRef.current.add(normalizeHeadlineKey(article.headline));
             }
-            // Same per-issue ledger the news branch below writes to â€” without
-            // this, an editorial page's à¤¸à¤®à¥à¤ªà¤¾à¤¦à¤•à¥€à¤¯/à¤°à¤¾à¤¶à¤¿à¤«à¤² picks were only ever
+            // Same per-issue ledger the news branch below writes to — without
+            // this, an editorial page's à¤¸à¤®à¥à¤ªà¤¾à¤¦à¤•à¥€à¤¯/राशिफल picks were only ever
             // remembered for the rest of THIS batch run, so a page later
             // regenerated individually via the single-page wizard could repeat
             // them, and vice versa.
@@ -4577,7 +4631,7 @@ export function EditorCanvas() {
           }
 
           // Strict rule: never use the deterministic preloaded pool for a
-          // news page â€” every article here comes from a live category API.
+          // news page — every article here comes from a live category API.
           // Manual articles fill their own guaranteed slots first; the wire
           // feed only needs to cover what's left.
           const remaining = Math.max(0, templateStoryCount - manualArticles.length);
@@ -4597,7 +4651,7 @@ export function EditorCanvas() {
                 );
               } else if (explicitCategories.length > 1) {
                 // Publisher chose more than one category for this page
-                // (e.g. Sports + Business) â€” an even split across exactly
+                // (e.g. Sports + Business) — an even split across exactly
                 // those categories, reusing the same weighted-target/rounding
                 // logic the front page and the "no category match" fallback
                 // already use, just restricted to this page's own set
@@ -4635,7 +4689,7 @@ export function EditorCanvas() {
                 );
               } else {
                 // Front page, or a section with no category match: pull a
-                // real cross-category mix instead of one guessed category â€”
+                // real cross-category mix instead of one guessed category —
                 // weighted editorial priority for the front page, an even
                 // split otherwise (see newswireCategoryMix.ts).
                 const targets = (isFront ? computeWeightedCategoryTargets(remaining) : computeEvenCategoryTargets(remaining))
@@ -4687,7 +4741,7 @@ export function EditorCanvas() {
 
             // No padding, no fallback: a page proceeds with however many
             // real live articles were actually found, even if that's fewer
-            // than the template's ideal count â€” a thin page is still real
+            // than the template's ideal count — a thin page is still real
             // news. Only a genuinely empty page (nothing manual, nothing
             // live anywhere) counts as a failure for this page.
             const wireArticles = freshLive.slice(0, remaining);
@@ -4716,8 +4770,8 @@ export function EditorCanvas() {
           }
         }
 
-        // Capture this page's own stories â€” and, separately, its resolved
-        // photo URLs (StoryFrame itself never carries the photo asset id) â€”
+        // Capture this page's own stories — and, separately, its resolved
+        // photo URLs (StoryFrame itself never carries the photo asset id) —
         // immediately after its own import, before the next page's import
         // can overwrite the shared document.stories map under the same
         // "story-1", "story-2", ... keys (see notes on both refs).
@@ -4851,7 +4905,7 @@ export function EditorCanvas() {
       void (async () => {
         try {
           const filename = `${getSafeFilenamePart(document.metadata.newspaperName)}-edition.pdf`;
-          // Deliberately not exportCurrentPagePdf() â€” that also redirects
+          // Deliberately not exportCurrentPagePdf() — that also redirects
           // back to the portal on success, which would tear down this
           // iframe mid-conversation with its parent window.
           await exportDocumentPdf(filename, (completed, total) => {
@@ -4895,7 +4949,7 @@ export function EditorCanvas() {
    * Renders the active page through the exact same drawing code the PDF
    * export uses (`renderDocumentPageToDataUrl`), just at screen dpi instead
    * of print dpi. Two render paths (this canvas vs the editing canvas) have
-   * drifted before â€” routing the preview through the export's own code is
+   * drifted before — routing the preview through the export's own code is
    * what makes it trustworthy rather than a second guess.
    */
   async function openPagePreview() {
@@ -4906,7 +4960,7 @@ export function EditorCanvas() {
     setPagePreview({ status: "loading" });
 
     // Let the loading state actually paint before the heavy synchronous
-    // canvas draw below runs â€” otherwise the state update and the draw land
+    // canvas draw below runs — otherwise the state update and the draw land
     // in the same tick and the UI looks frozen instead of working.
     await new Promise<void>((resolve) =>
       requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
@@ -5596,7 +5650,7 @@ export function EditorCanvas() {
     );
   }, [selectedStoryLayout, setZoom, viewport, zoom]);
 
-  // â”€â”€ Touch gestures â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Touch gestures ────────────────────────────────────────────────────
   // The stage had mouse handlers only, so on a phone the page could not be
   // zoomed or panned at all: document zoom is disabled for the WebView shell,
   // and Konva does not synthesise pinch. Two fingers zoom around their own
@@ -5875,7 +5929,7 @@ export function EditorCanvas() {
 
       if (target.target === "portrait") {
         // The rail portrait is a plain URL field on the story's article data,
-        // not an asset-store entry â€” same field the wizard's own upload sets.
+        // not an asset-store entry — same field the wizard's own upload sets.
         selectStory(target.storyId);
         updateSelectedStoryArticleData("editorPortraitUrl", descriptor.source);
         return;
@@ -6084,7 +6138,7 @@ export function EditorCanvas() {
         case "body":
           return layout.body.columns[0]?.lines[0]?.style ?? null;
         case "editorName":
-          // Not part of the composed layout â€” the name plate is furniture
+          // Not part of the composed layout — the name plate is furniture
           // AuthorBlock draws itself, styled to match exactly.
           return {
             fill: EDITORIAL_COLOURS.onAccent,
@@ -6922,11 +6976,11 @@ export function EditorCanvas() {
             <span className="layout-sheet-grabber" aria-hidden="true" />
             <span className="layout-sheet-handle-row">
               <span className="layout-sheet-handle-text">
-                <span className="layout-sheet-handle-label">à¤²à¤¾à¤‡à¤µ à¤ªà¥‡à¤œ à¤²à¥‡à¤†à¤‰à¤Ÿ</span>
-                <span className="layout-sheet-handle-sub">à¤Ÿà¤š à¤•à¤°à¥‡à¤‚ à¤–à¤¬à¤° à¤¬à¤¦à¤²à¤¨à¥‡ à¤•à¥‡ à¤²à¤¿à¤</span>
+                <span className="layout-sheet-handle-label">लाइव पेज लेआउट</span>
+                <span className="layout-sheet-handle-sub">टच करें खबर बदलने के लिए</span>
               </span>
               <span className="layout-sheet-handle-hint">
-                {layoutSheetExpanded ? "à¤›à¥‹à¤Ÿà¤¾ à¤•à¤°à¥‡à¤‚" : "à¤¬à¤¡à¤¼à¤¾ à¤•à¤°à¥‡à¤‚"}
+                {layoutSheetExpanded ? "छोटा करें" : "बड़ा करें"}
                 {/* Points the way the sheet will move: up to grow while it is
                     collapsed, down to shrink once it is open. One chevron,
                     rotated by the expanded class. */}
@@ -6956,7 +7010,7 @@ export function EditorCanvas() {
             }}
           >
             <PublisherHomeIcon />
-            <span>à¤¹à¥‹à¤®</span>
+            <span>होम</span>
           </button>
           <button
             type="button"
@@ -6966,7 +7020,7 @@ export function EditorCanvas() {
             disabled={pagePreview?.status === "loading"}
           >
             <PublisherPreviewIcon />
-            <span>à¤ªà¥à¤°à¥€à¤µà¥à¤¯à¥‚</span>
+            <span>प्रीव्यू</span>
           </button>
           <button
             type="button"
@@ -6978,12 +7032,12 @@ export function EditorCanvas() {
             {pdfExporting ? (
               <>
                 <span className="publisher-button-loader" aria-hidden="true" />
-                <span>PDF à¤¬à¤¨ à¤°à¤¹à¤¾ à¤¹à¥ˆ</span>
+                <span>PDF बन रहा है</span>
               </>
             ) : (
               <>
                 <PublisherDownloadIcon />
-                <span>PDF à¤¡à¤¾à¤‰à¤¨à¤²à¥‹à¤¡</span>
+                <span>PDF डाउनलोड</span>
               </>
             )}
           </button>
@@ -6994,7 +7048,7 @@ export function EditorCanvas() {
             onClick={openGenerationWizard}
           >
             <PublisherRegenerateIcon />
-            <span>à¤°à¥€à¤œà¤¨à¤°à¥‡à¤Ÿ à¤ªà¥‡à¤œ</span>
+            <span>रीजनरेट पेज</span>
           </button>
           <button
             type="button"
@@ -7003,7 +7057,7 @@ export function EditorCanvas() {
             onClick={openNextPagePicker}
           >
             <PublisherNextPageIcon />
-            <span>à¤…à¤—à¤²à¤¾ à¤ªà¥‡à¤œ à¤¬à¤¨à¤¾à¤à¤‚</span>
+            <span>अगला पेज बनाएं</span>
           </button>
         </section>
       </div>
@@ -7094,7 +7148,11 @@ export function EditorCanvas() {
 
               <Profiler id="StoryLayer" onRender={handleReactRenderProfile}>
                 <StoryLayer
-                  storyLayouts={visibleStoryLayouts}
+                  storyLayouts={
+                    isSharedEditorRailFrontLayout
+                      ? visibleStoryLayouts.filter((item) => item.story.templateStoryNumber !== 1)
+                      : visibleStoryLayouts
+                  }
                   selectedStoryId={selectedStoryId}
                   selectedStoryIds={selectedStoryIds}
                   selectedObjectType={selectedObjectType}
@@ -7148,6 +7206,16 @@ export function EditorCanvas() {
                     fill="#fffef9"
                   />
                 </Group>
+              ) : null}
+
+              {editorRailFrontBox ? (
+                <EditorRailFront
+                  x={editorRailFrontBox.x}
+                  y={editorRailFrontBox.y}
+                  width={editorRailFrontBox.width}
+                  height={editorRailFrontBox.height}
+                  content={editorRailFrontContent}
+                />
               ) : null}
 
               {youthUpdateShortNewsBanner ? (
@@ -7246,8 +7314,8 @@ export function EditorCanvas() {
               <X size={17} strokeWidth={2.2} />
             </button>
             <div className="publisher-page-picker-heading">
-              <span>à¤à¤• à¤ªà¥‡à¤œ à¤¬à¤¨à¤¾à¤à¤‚</span>
-              <strong>à¤•à¥Œà¤¨ à¤¸à¤¾ à¤ªà¥‡à¤œ à¤¤à¥ˆà¤¯à¤¾à¤° à¤•à¤°à¤¨à¤¾ à¤¹à¥ˆ?</strong>
+              <span>एक पेज बनाएं</span>
+              <strong>कौन सा पेज तैयार करना है?</strong>
             </div>
             <div className="publisher-page-picker-grid">
               {portalPagePlan.map((pagePlan) => {
@@ -7255,12 +7323,12 @@ export function EditorCanvas() {
                 const isCurrent = pagePlan.page_number === (activePage?.pageNumber ?? 1);
                 const typeLabel =
                   tab === "front"
-                    ? "à¤«à¥à¤°à¤‚à¤Ÿ à¤ªà¥‡à¤œ"
+                    ? "फ्रंट पेज"
                     : tab === "editorial"
-                      ? "à¤à¤¡à¤¿à¤Ÿà¥‹à¤°à¤¿à¤¯à¤²"
+                      ? "एडिटोरियल"
                       : tab === "advertisement"
-                        ? "à¤µà¤¿à¤œà¥à¤žà¤¾à¤ªà¤¨"
-                        : "à¤‡à¤¨à¤¸à¤¾à¤‡à¤¡ à¤ªà¥‡à¤œ";
+                        ? "विज्ञापन"
+                        : "इनसाइड पेज";
 
                 return (
                   <button
@@ -7452,7 +7520,7 @@ export function EditorCanvas() {
       </div>
 
       {/* PERFORMANCE: GenerationWizardModal is a memoised component with its own
-          useReducer â€” EditorCanvas never re-renders on wizard interactions. */}
+          useReducer — EditorCanvas never re-renders on wizard interactions. */}
       <GenerationWizardModal
         open={wizardOpen}
         defaultBylineName={document.metadata.newspaperName ?? ""}

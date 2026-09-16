@@ -382,7 +382,7 @@ export const waitForNewspaperFonts = async (): Promise<FontManagerState> => {
 
   await Promise.all([
     ...REQUIRED_FONT_DEFINITIONS.map((font) =>
-      document.fonts.load(toFontCheckString(font), "मानसून"),
+      document.fonts.load(toFontCheckString(font), "मानसून").catch(() => undefined),
     ),
     // Tinos (English-language body copy, see EditorialStyleEngine.ts's
     // ENGLISH_NEWSPAPER_BODY_FONT_FAMILY) -- not in REQUIRED_FONT_DEFINITIONS

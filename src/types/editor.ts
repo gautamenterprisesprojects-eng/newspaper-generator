@@ -110,6 +110,13 @@ export type StoryImageSettings = {
   imageEnabled: boolean;
   imageAlignment: StoryImageAlignment;
   imageColumnSpan: number;
+  /**
+   * 1-based column where the photograph begins, counted in this box's own
+   * columns. Omitted by every existing template so placement still follows
+   * `imageAlignment`. Used when a nested sidebar occupies the right of a
+   * wide box and the picture must start on column 2 rather than centred.
+   */
+  imageColumnStart?: number;
   imageHeight: number;
   imageHeightMode: StoryImageHeightMode;
   imageHeightPreset: StoryImageHeightPreset;
@@ -605,6 +612,7 @@ export type StoryFrame = ArticleBoxModel & {
   imageEnabled: boolean;
   imageAlignment: StoryImageAlignment;
   imageColumnSpan: number;
+  imageColumnStart?: number;
   imageHeight: number;
   imageHeightMode: StoryImageHeightMode;
   imageHeightPreset: StoryImageHeightPreset;
@@ -952,6 +960,8 @@ export type ArticleCompositionSettings = {
   suppressColumnRules?: boolean;
   /** Clear the subheadline/banner for template-specific story boxes. */
   suppressSubheadline?: boolean;
+  /** Clear the byline for a nested related-news box that sits inside a parent which already has one. */
+  suppressByline?: boolean;
   /** Disable inline bullet/subheading blocks for template-specific story boxes. */
   suppressInlineSubheadings?: boolean;
   /** Draw body copy as natural lines instead of per-word positioned segments. */

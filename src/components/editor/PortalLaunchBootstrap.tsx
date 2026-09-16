@@ -69,7 +69,17 @@ type PublisherProfileResponse = {
   remaining_page_header_url?: string;
   editorial_author_name?: string;
   editorial_author_image_url?: string;
-  editorial_authors?: Array<{ name?: string; image_url?: string; imageUrl?: string }>;
+  editorial_author_designation?: string;
+  editorial_authors?: Array<{
+    name?: string;
+    image_url?: string;
+    imageUrl?: string;
+    designation?: string;
+    title?: string;
+    location?: string;
+    place?: string;
+    city?: string;
+  }>;
   theme_color?: string;
   editions?: Array<{ name?: string; front_header_url?: string; inside_header_url?: string }>;
   youth_update_inside_author_image_url?: string;
@@ -237,17 +247,25 @@ export function PortalLaunchBootstrap() {
               .map((author) => ({
                 name: String(author?.name ?? "").trim(),
                 imageUrl: String(author?.image_url ?? author?.imageUrl ?? "").trim(),
+                designation: String(author?.designation ?? author?.title ?? "").trim(),
+                location: String(author?.location ?? author?.place ?? author?.city ?? "").trim(),
               }))
               .filter((author) => author.name || author.imageUrl)
           : [];
         const editorialAuthorName = String(profile.editorial_author_name ?? "").trim();
         const editorialAuthorImageUrl = String(profile.editorial_author_image_url ?? "").trim();
+        const editorialAuthorDesignation = String(profile.editorial_author_designation ?? "").trim();
         if (editorialAuthors.length > 0) {
           usePublisherEditorialAuthorStore.getState().setAuthors(editorialAuthors);
         } else {
           usePublisherEditorialAuthorStore.getState().setDefaults(
             editorialAuthorName || editorialAuthorImageUrl
-              ? { name: editorialAuthorName, imageUrl: editorialAuthorImageUrl }
+              ? {
+                  name: editorialAuthorName,
+                  imageUrl: editorialAuthorImageUrl,
+                  ...(editorialAuthorDesignation ? { designation: editorialAuthorDesignation } : {}),
+                  ...(profile.city ? { location: String(profile.city).trim() } : {}),
+                }
               : null,
           );
         }

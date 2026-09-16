@@ -3,6 +3,8 @@ import { create } from "zustand";
 export type PublisherEditorialAuthorDefaults = {
   name: string;
   imageUrl: string;
+  designation?: string;
+  location?: string;
 };
 
 export type PublisherEditorialAuthor = PublisherEditorialAuthorDefaults & {
@@ -44,10 +46,16 @@ type PublisherEditorialAuthorStore = {
   selectAuthorForRail: (railIndex: 0 | 1, id: string) => void;
 };
 
-const normalizeAuthor = (author: PublisherEditorialAuthorDefaults, index: number): PublisherEditorialAuthor => ({
-  id: `${index}-${author.name || "author"}`,
+const pickAuthorFields = (author: PublisherEditorialAuthorDefaults): PublisherEditorialAuthorDefaults => ({
   name: author.name.trim(),
   imageUrl: author.imageUrl.trim(),
+  ...(author.designation?.trim() ? { designation: author.designation.trim() } : {}),
+  ...(author.location?.trim() ? { location: author.location.trim() } : {}),
+});
+
+const normalizeAuthor = (author: PublisherEditorialAuthorDefaults, index: number): PublisherEditorialAuthor => ({
+  id: `${index}-${author.name || "author"}`,
+  ...pickAuthorFields(author),
 });
 
 export const usePublisherEditorialAuthorStore = create<PublisherEditorialAuthorStore>((set) => ({
@@ -65,10 +73,8 @@ export const usePublisherEditorialAuthorStore = create<PublisherEditorialAuthorS
     const normalized = authors
       .map(normalizeAuthor)
       .filter((author) => author.name || author.imageUrl);
-    const first = normalized[0] ? { name: normalized[0].name, imageUrl: normalized[0].imageUrl } : null;
-    const second = normalized[1]
-      ? { name: normalized[1].name, imageUrl: normalized[1].imageUrl }
-      : first;
+    const first = normalized[0] ? pickAuthorFields(normalized[0]) : null;
+    const second = normalized[1] ? pickAuthorFields(normalized[1]) : first;
     set({
       authors: normalized,
       defaults: first,
@@ -81,7 +87,7 @@ export const usePublisherEditorialAuthorStore = create<PublisherEditorialAuthorS
       if (!author) {
         return {};
       }
-      const defaults = { name: author.name, imageUrl: author.imageUrl };
+      const defaults = pickAuthorFields(author);
       return { defaults, selectedAuthors: [defaults, state.selectedAuthors[1] ?? defaults] };
     }),
   selectAuthorForRail: (railIndex, id) =>
@@ -91,7 +97,7 @@ export const usePublisherEditorialAuthorStore = create<PublisherEditorialAuthorS
         return {};
       }
       const selectedAuthors: PublisherEditorialAuthorStore["selectedAuthors"] = [...state.selectedAuthors];
-      selectedAuthors[railIndex] = { name: author.name, imageUrl: author.imageUrl };
+      selectedAuthors[railIndex] = pickAuthorFields(author);
       return {
         selectedAuthors,
         defaults: selectedAuthors[0] ?? state.defaults,

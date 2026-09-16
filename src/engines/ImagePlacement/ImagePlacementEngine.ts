@@ -274,11 +274,18 @@ export const placeImage = ({
     1,
     safeColumnCount,
   );
-  const startColumn = getStartColumn({
-    alignment: imageSettings.imageAlignment,
-    columnCount: safeColumnCount,
-    columnSpan: safeColumnSpan,
-  });
+  const maxStartColumn = Math.max(0, safeColumnCount - safeColumnSpan);
+  const startColumn = (() => {
+    const requestedStart = Number(imageSettings.imageColumnStart);
+    if (Number.isFinite(requestedStart) && requestedStart >= 1) {
+      return Math.max(0, Math.min(maxStartColumn, Math.round(requestedStart) - 1));
+    }
+    return getStartColumn({
+      alignment: imageSettings.imageAlignment,
+      columnCount: safeColumnCount,
+      columnSpan: safeColumnSpan,
+    });
+  })();
   const columnRect = getColumnSpanRect({
     storyBounds,
     columnCount: safeColumnCount,

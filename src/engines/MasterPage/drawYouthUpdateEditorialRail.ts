@@ -25,10 +25,17 @@ export const drawYouthUpdateEditorialRailToCanvas = async (
 
   const image = await new Promise<HTMLImageElement | null>((resolve) => {
     const img = new window.Image();
-    img.crossOrigin = "anonymous";
+    const source = getPrintableImageSource(YOUTH_UPDATE_EDITORIAL_RAIL_IMAGE_URL);
+    // Same-origin /public assets must not set crossOrigin -- that forces a
+    // CORS fetch, and a missing ACAO header taints the export canvas so
+    // toDataURL throws and PDF download dies. Remote URLs still go through
+    // /api/print-image, which is same-origin too.
+    if (/^https?:/i.test(source)) {
+      img.crossOrigin = "anonymous";
+    }
     img.onload = () => resolve(img);
     img.onerror = () => resolve(null);
-    img.src = getPrintableImageSource(YOUTH_UPDATE_EDITORIAL_RAIL_IMAGE_URL);
+    img.src = source;
   });
 
   if (!image) {

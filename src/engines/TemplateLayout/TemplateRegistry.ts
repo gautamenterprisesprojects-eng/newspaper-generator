@@ -998,71 +998,79 @@ const CLIFF_FRONT_8A: TemplateDefinition = {
  * edition. This page's body is three bands below the existing masthead:
  *
  *   masthead band            reserved, not a slot
- *   row 1  top package       ratio 0.54
- *     col 1        सार-समाचार rail
- *     cols 2-4     lead package
+ *   rows 1-3  top package    ratio 0.18 + 0.18 + 0.18  (the old 0.54 band)
+ *     col 1        three stacked सार-समाचार rail briefs
+ *     cols 2-4     lead package, rowSpan 3 beside all three rails
  *       └ cols 2-4 nested article across the lead's full width, below the
  *                  headline/inner well (topFraction 0.52)
- *     cols 5-6     right package
+ *     cols 5-6     right package, rowSpan 3
  *       └ cols 5-6 nested article at the foot (topFraction 0.74)
- *   row 2  full-width        ratio 0.28
- *     cols 1-6     major package
- *       └ col 1    nested fact/content box (topFraction 0.23)
- *   row 3  bottom            ratio 0.18
+ *   row 4  full-width        ratio 0.28
+ *     cols 1-6     major package (photograph three columns, starting at col 2)
+ *       └ cols 5-6 2-column related-news box nested top-right, below the
+ *                  headline (topFraction 0.22), like a fact box for a related
+ *                  story of this package; no byline (the parent already has one)
+
+ *   row 5  bottom            ratio 0.18
  *     col 1        आज का मुक्का cartoon
  *     cols 2-6     economy package
  *
- * Nested packages that span the parent's full width sit in a band *below*
- * the parent's copy, so those parents are listed in `trimToInsets` — the
- * same device the editorial page uses — rather than having body flow
- * through them. The mid-band fact box is a true sidebar (one column inside
- * a six-column parent) and is not trimmed.
+ * Nested packages that sit in a band *below* the parent's copy are listed in
+ * `trimToInsets` so body cannot print through them. The mid-band related-news
+ * box is a true inset (two columns inside a six-column parent) and is not
+ * trimmed — the parent keeps its full rectangle and the related box sits
+ * inside it, with body flowing around the reservation.
  *
- * Nested multi-column packages are `secondary`, not `brief`: the lead-row
- * invariant forbids a multi-column brief as a peer of the lead. A nested
- * package is not a peer.
+ * Nested multi-column packages in the lead row are `secondary`, not `brief`:
+ * the lead-row invariant forbids a multi-column brief as a peer of the lead.
+ * The related-news inset is a short `brief` and is not in the lead's row.
  */
 const CLIFF_FRONT_SEP15: TemplateDefinition = {
   id: "CliffFrontSep15",
   name: "The Cliff News Front Page (15 Sep 2026)",
-  storyCount: 9,
-  trimToInsets: [2, 4],
+  storyCount: 11,
+  trimToInsets: [4, 6],
   rowRhythm: [
-    { row: 1, baseRatio: 0.54, receivesRemainingSpace: false, minimumHeight: 240 },
-    { row: 2, baseRatio: 0.28, receivesRemainingSpace: false, minimumHeight: 180 },
-    { row: 3, baseRatio: 0.18, receivesRemainingSpace: true, minimumHeight: 140 },
+    { row: 1, baseRatio: 0.18, receivesRemainingSpace: false, minimumHeight: 80 },
+    { row: 2, baseRatio: 0.18, receivesRemainingSpace: false, minimumHeight: 80 },
+    { row: 3, baseRatio: 0.18, receivesRemainingSpace: false, minimumHeight: 80 },
+    { row: 4, baseRatio: 0.28, receivesRemainingSpace: false, minimumHeight: 180 },
+    { row: 5, baseRatio: 0.18, receivesRemainingSpace: true, minimumHeight: 140 },
   ],
   slots: [
     { storyNumber: 1, row: 1, columnStart: 1, columnSpan: 1, priority: "brief" },
-    { storyNumber: 2, row: 1, columnStart: 2, columnSpan: 3, priority: "lead" },
+    { storyNumber: 2, row: 2, columnStart: 1, columnSpan: 1, priority: "brief" },
+    { storyNumber: 3, row: 3, columnStart: 1, columnSpan: 1, priority: "brief" },
+    { storyNumber: 4, row: 1, columnStart: 2, columnSpan: 3, priority: "lead", rowSpan: 3 },
     {
-      storyNumber: 3,
+      storyNumber: 5,
       row: 1,
       columnStart: 2,
       columnSpan: 3,
       priority: "secondary",
-      insetInto: { parentStoryNumber: 2, topFraction: 0.52 },
+      insetInto: { parentStoryNumber: 4, topFraction: 0.52 },
     },
-    { storyNumber: 4, row: 1, columnStart: 5, columnSpan: 2, priority: "major" },
+    { storyNumber: 6, row: 1, columnStart: 5, columnSpan: 2, priority: "major", rowSpan: 3 },
     {
-      storyNumber: 5,
+      storyNumber: 7,
       row: 1,
       columnStart: 5,
       columnSpan: 2,
       priority: "secondary",
-      insetInto: { parentStoryNumber: 4, topFraction: 0.74 },
+      insetInto: { parentStoryNumber: 6, topFraction: 0.74 },
     },
-    { storyNumber: 6, row: 2, columnStart: 1, columnSpan: 6, priority: "major" },
+    { storyNumber: 8, row: 4, columnStart: 1, columnSpan: 6, priority: "major" },
     {
-      storyNumber: 7,
-      row: 2,
-      columnStart: 1,
-      columnSpan: 1,
+      storyNumber: 9,
+      row: 4,
+      columnStart: 5,
+      columnSpan: 2,
       priority: "brief",
-      insetInto: { parentStoryNumber: 6, topFraction: 0.23 },
+      insetInto: { parentStoryNumber: 8, topFraction: 0.22 },
+      bottomTrimFraction: 0.42,
     },
-    { storyNumber: 8, row: 3, columnStart: 1, columnSpan: 1, priority: "brief" },
-    { storyNumber: 9, row: 3, columnStart: 2, columnSpan: 5, priority: "major" },
+    { storyNumber: 10, row: 5, columnStart: 1, columnSpan: 1, priority: "brief" },
+    { storyNumber: 11, row: 5, columnStart: 2, columnSpan: 5, priority: "major" },
   ],
 };
 
@@ -1782,6 +1790,38 @@ const CLIFF_FRONT_YOUTH_UPDATE_1A: TemplateDefinition = {
     { storyNumber: 4, row: 2, columnStart: 2, columnSpan: 3, priority: "major" },
     { storyNumber: 5, row: 2, columnStart: 5, columnSpan: 2, priority: "secondary" },
     // Foot band — full width, three-way split, no rail.
+    { storyNumber: 6, row: 3, columnStart: 1, columnSpan: 2, priority: "secondary" },
+    { storyNumber: 7, row: 3, columnStart: 3, columnSpan: 2, priority: "secondary" },
+    { storyNumber: 8, row: 3, columnStart: 5, columnSpan: 2, priority: "secondary" },
+  ],
+};
+
+/**
+ * CliffFrontEditorRail8A
+ *
+ * Shared front-page copy of CliffFrontYouthUpdate1A's box geometry only —
+ * left one-column rail on the top two bands, lead beside it, staggered mid
+ * band, full-width three-way foot. It is not publisher-exclusive: it uses
+ * the normal Hindi front masthead (Youth UPDATE's coded header stays on the
+ * Youth UPDATE templates). Story 1 is a dynamic red editor rail (photo,
+ * name + place, vertical designation); story 3 is an ordinary article box,
+ * not the Youth UPDATE SHORT NEWS overlay.
+ */
+const CLIFF_FRONT_EDITOR_RAIL_8A: TemplateDefinition = {
+  id: "CliffFrontEditorRail8A",
+  name: "एडिटर रेल फ्रंट पेज (8 बॉक्स)",
+  storyCount: 8,
+  rowRhythm: [
+    { row: 1, baseRatio: 0.45, receivesRemainingSpace: false, minimumHeight: 260 },
+    { row: 2, baseRatio: 0.3, receivesRemainingSpace: false, minimumHeight: 170 },
+    { row: 3, baseRatio: 0.25, receivesRemainingSpace: true, minimumHeight: 150 },
+  ],
+  slots: [
+    { storyNumber: 1, row: 1, columnStart: 1, columnSpan: 1, priority: "brief" },
+    { storyNumber: 2, row: 1, columnStart: 2, columnSpan: 5, priority: "lead" },
+    { storyNumber: 3, row: 2, columnStart: 1, columnSpan: 1, priority: "brief" },
+    { storyNumber: 4, row: 2, columnStart: 2, columnSpan: 3, priority: "major" },
+    { storyNumber: 5, row: 2, columnStart: 5, columnSpan: 2, priority: "secondary" },
     { storyNumber: 6, row: 3, columnStart: 1, columnSpan: 2, priority: "secondary" },
     { storyNumber: 7, row: 3, columnStart: 3, columnSpan: 2, priority: "secondary" },
     { storyNumber: 8, row: 3, columnStart: 5, columnSpan: 2, priority: "secondary" },
@@ -2511,6 +2551,7 @@ export const TEMPLATE_REGISTRY: Record<TemplateId, TemplateDefinition> = {
   // Front page only
   CliffFront11A: CLIFF_FRONT_11A,
   CliffFront8A: CLIFF_FRONT_8A,
+  CliffFrontEditorRail8A: CLIFF_FRONT_EDITOR_RAIL_8A,
   CliffFrontSep15: CLIFF_FRONT_SEP15,
   // Front-page shape catalogue
   CliffFrontTwinRail10A: CLIFF_FRONT_TWIN_RAIL_10A,
@@ -2574,6 +2615,7 @@ export const FRONT_PAGE_TEMPLATE_IDS: TemplateId[] = [
   "CliffFrontEightColumn7C",
   "CliffFrontEightColumn8D",
   "CliffFront8A",
+  "CliffFrontEditorRail8A",
   "CliffFront11A",
   "CliffFrontSep15",
   "CliffFrontTwinRail10A",

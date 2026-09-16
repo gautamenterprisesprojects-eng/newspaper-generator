@@ -117,6 +117,7 @@ import {
   YOUTH_UPDATE_INSIDE_RESERVED_HEIGHT_PT,
 } from "@/engines/MasterPage/YouthUpdateInsideHeaderGeometry";
 import {
+  EDITOR_RAIL_FRONT_TEMPLATE_ID,
   isYouthUpdateFrontTemplateId,
   isYouthUpdateHeaderOnlyInsideTemplateId,
   isYouthUpdateInsideTemplateId,
@@ -1429,7 +1430,8 @@ const createArticleDataFromNewswireStory = (
   // Byline is mandatory on every article regardless of size/priority — except
   // on an editorial page, where the author block carries the name instead and
   // a byline as well would print it twice.
-  const suppressByline = Boolean(editorialPageStyle?.suppressByline);
+  const suppressByline =
+    Boolean(editorialPageStyle?.suppressByline) || Boolean(story.compositionSettings?.suppressByline);
   // The house rules this story is composed under — the front page's, or an
   // inside page's, which carries the same shape through its own field so the
   // front page's band geometry stays off. Absent on the editorial page, which
@@ -1825,7 +1827,9 @@ const chooseLayoutFittedNewswireArticleData = ({
   const kickerOverrideText =
     options?.templateId === "IndianCity5A" && baseStory.templateStoryNumber === 1
       ? "सार-समाचार"
-      : undefined;
+      : options?.templateId === "CliffFrontSep15" && baseStory.templateStoryNumber === 9
+        ? "संबंधित खबर"
+        : undefined;
 
   for (const requestedWords of requestedTiers) {
     const candidateData = transformTypography(
@@ -2067,6 +2071,7 @@ export const createStoryFrame = ({
   imageEnabled = getDefaultImageSettingsForPriority(priority).imageEnabled,
   imageAlignment = getDefaultImageSettingsForPriority(priority).imageAlignment,
   imageColumnSpan = getDefaultImageSettingsForPriority(priority).imageColumnSpan,
+  imageColumnStart,
   imageHeight = getDefaultImageSettingsForPriority(priority).imageHeight,
   imageHeightMode = getDefaultImageSettingsForPriority(priority).imageHeightMode,
   imageHeightPreset = getDefaultImageSettingsForPriority(priority).imageHeightPreset,
@@ -2137,6 +2142,7 @@ export const createStoryFrame = ({
   imageEnabled,
   imageAlignment,
   imageColumnSpan,
+  imageColumnStart,
   imageHeight,
   imageHeightMode,
   imageHeightPreset,
@@ -4018,6 +4024,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         const isAkhandVicharManthanImageSlot =
           isAkhandVicharManthan6A && [2, 3, 4, 5, 6].includes(slot.storyNumber);
         const youthUpdateInsideCompactSlot = isYouthUpdateInsideStory && slot.columnSpan <= 2;
+        const isCliffFrontSep15MidPackage = options?.templateId === "CliffFrontSep15" && slot.storyNumber === 8;
+        const isCliffFrontSep15RelatedNews = options?.templateId === "CliffFrontSep15" && slot.storyNumber === 9;
+        const isEditorRailFrontFurnitureSlot =
+          options?.templateId === EDITOR_RAIL_FRONT_TEMPLATE_ID && slot.storyNumber === 1;
         const resolvedImageEnabled = isAkhandEditorial5A || isAkhandVicharManthanImageSlot
           ? true
           : priorityForbidsImage ||
@@ -4025,7 +4035,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             adResidualShallowBoxImageDenied ||
             youthUpdateInsideCompactSlot ||
             isEightColumnTwoColumnSlot ||
-            isCliffInsideSixColumnTwoColumnSlot
+            isCliffInsideSixColumnTwoColumnSlot ||
+            isCliffFrontSep15RelatedNews ||
+            isEditorRailFrontFurnitureSlot
           ? false
           : isProfessional10A
             ? imageAllowed && (Boolean(item?.imageUrl) || hasAnyNewswireImage)
@@ -4313,6 +4325,15 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
                 imageColumnSpan: imageColumnsClearOfNested as StoryColumnSpan,
               }
             : {}),
+          ...(isCliffFrontSep15MidPackage && resolvedImageEnabled
+            ? {
+                imageAlignment: "top-left" as const,
+                imageColumnSpan: 3 as StoryColumnSpan,
+                imageColumnStart: 2,
+                imageWrapMode: "newspaper" as const,
+                autoSizeImage: false,
+              }
+            : {}),
           // Last, so it wins over both rules above: a signed editorial comment
           // sets its photograph in the top centre, clear of the writer's rail.
           // Editorial pages only — every other page keeps the alignment above.
@@ -4441,6 +4462,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             enablePullQuote: Boolean(item?.pullQuoteText),
             ...(isEightColumnTwoColumnSlot ? { tightTwoColumnBylineToBodyGap: true } : {}),
             ...(isShortEightColumnNarrowSlot ? { suppressSubheadline: true } : {}),
+            ...(isCliffFrontSep15RelatedNews ? { suppressByline: true } : {}),
             ...(isEightColumnThreeColumnSlot ? { suppressInlineSubheadings: true } : {}),
             ...(isCliffInsideSixColumnTemplate ? { suppressArticleContainerBorder: true } : {}),
             ...(options?.pageKind === "front" ? { frontPageStyle: FRONT_PAGE_ARTICLE_STYLE } : {}),

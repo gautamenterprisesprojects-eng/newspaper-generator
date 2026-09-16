@@ -149,6 +149,7 @@ export const createStoryObjectFromFrame = (
     imageEnabled: frame.imageEnabled,
     imageAlignment: frame.imageAlignment,
     imageColumnSpan: frame.imageColumnSpan,
+    imageColumnStart: frame.imageColumnStart,
     imageHeight: frame.imageHeight,
     imageHeightMode: frame.imageHeightMode,
     imageHeightPreset: frame.imageHeightPreset,

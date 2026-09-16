@@ -138,6 +138,15 @@ export const YOUTH_UPDATE_INSIDE_AUTHOR_SLOT_DEFAULTS = [
 export const YOUTH_UPDATE_EDITORIAL_RAIL_IMAGE_URL = "/youth-update/editorial-rail.jpg";
 
 /**
+ * Shared Front Page copy of Youth UPDATE 1A's box geometry
+ * (`CliffFrontEditorRail8A`). Story 1 is a dynamic red author rail (photo,
+ * name + place, Hindi designation) — not the Youth UPDATE jpg overlay.
+ * The Youth UPDATE masthead, SHORT NEWS banner and cyan story theme stay
+ * exclusive to `YOUTH_UPDATE_FRONT_TEMPLATE_IDS`.
+ */
+export const EDITOR_RAIL_FRONT_TEMPLATE_ID = "CliffFrontEditorRail8A" as const;
+
+/**
  * "SHORT NEWS" section banner, forced as story 3's (the row-2 rail's) own
  * photo during import -- unlike the editorial rail, this box keeps its real
  * composed headline/byline/body underneath; only the photo itself is fixed,

@@ -420,6 +420,7 @@ export const getStoryCompositionKey = (
       imageEnabled: story.imageEnabled,
       imageAlignment: story.imageAlignment,
       imageColumnSpan: story.imageColumnSpan,
+      imageColumnStart: story.imageColumnStart,
       imageHeight: story.imageHeight,
       imageHeightMode: story.imageHeightMode,
       imageHeightPreset: story.imageHeightPreset,

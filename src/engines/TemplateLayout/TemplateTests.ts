@@ -258,7 +258,11 @@ for (const [templateId, template] of Object.entries(TEMPLATE_REGISTRY)) {
   const rows = new Map<number, number>();
 
   for (const slot of peers) {
-    rows.set(slot.row, (rows.get(slot.row) ?? 0) + slot.columnSpan);
+    const spanRows = Math.max(1, slot.rowSpan ?? 1);
+    for (let offset = 0; offset < spanRows; offset += 1) {
+      const row = slot.row + offset;
+      rows.set(row, (rows.get(row) ?? 0) + slot.columnSpan);
+    }
   }
 
   // Against the template's own grid: news layouts are all six columns, the
@@ -437,7 +441,7 @@ for (const [templateId, template] of Object.entries(TEMPLATE_REGISTRY)) {
   );
 }
 
-// ── CliffFrontSep15: 15 Sep 2026 front, nested packages inside 1 │ 3 │ 2 ─────
+// ── CliffFrontSep15: 15 Sep 2026 front, three stacked rails + nested packages ─
 {
   const contentY = Math.max(contentBounds.y, FRONT_HEADER_HEIGHT_PT);
   const front = generateTemplateLayout({
@@ -451,46 +455,52 @@ for (const [templateId, template] of Object.entries(TEMPLATE_REGISTRY)) {
     gutter: toPoints(DEFAULT_PAGE_MASTER.gutter),
   });
   const bySlot = new Map(front.slots.map((slot) => [slot.storyNumber, slot]));
-  const rail = bySlot.get(1)!;
-  const lead = bySlot.get(2)!;
-  const leadNested = bySlot.get(3)!;
-  const right = bySlot.get(4)!;
-  const rightNested = bySlot.get(5)!;
-  const mid = bySlot.get(6)!;
-  const fact = bySlot.get(7)!;
-  const cartoon = bySlot.get(8)!;
-  const bottom = bySlot.get(9)!;
+  const rail1 = bySlot.get(1)!;
+  const rail2 = bySlot.get(2)!;
+  const rail3 = bySlot.get(3)!;
+  const lead = bySlot.get(4)!;
+  const leadNested = bySlot.get(5)!;
+  const right = bySlot.get(6)!;
+  const rightNested = bySlot.get(7)!;
+  const mid = bySlot.get(8)!;
+  const related = bySlot.get(9)!;
+  const cartoon = bySlot.get(10)!;
+  const bottom = bySlot.get(11)!;
 
   assert(isFrontPageTemplate("CliffFrontSep15"), "CliffFrontSep15 must be a front-page template");
   assert(!isEditorialPageTemplate("CliffFrontSep15"), "CliffFrontSep15 must not be an editorial template");
-  assert(front.slots.length === 9, `CliffFrontSep15 must place 9 boxes, got ${front.slots.length}`);
-  assert(lead.priority === "lead", "story 2 must be the lead");
+  assert(front.slots.length === 11, `CliffFrontSep15 must place 11 boxes, got ${front.slots.length}`);
+  assert(lead.priority === "lead", "story 4 must be the lead");
   assert(lead.columnSpan === 3, "the lead must span 3 columns");
-  assert(rail.columnSpan === 1, "the सार-समाचार rail must be one column");
+  assert(rail1.columnSpan === 1, "each सार-समाचार rail must be one column");
   assert(right.columnSpan === 2, "the right package must span 2 columns");
   assert(mid.columnSpan === 6, "the middle band must span the full 6-column grid");
   assert(cartoon.columnSpan === 1, "the cartoon rail must be one column");
   assert(bottom.columnSpan === 5, "the bottom package must span the remaining five columns");
 
-  assert(leadNested.insetParentStoryNumber === 2, "the lead nested article must sit inside the lead");
-  assert(rightNested.insetParentStoryNumber === 4, "the right nested article must sit inside the right package");
-  assert(fact.insetParentStoryNumber === 6, "the fact box must sit inside the middle package");
-  assert(rail.insetParentStoryNumber === undefined, "the rail is a peer, not a nested box");
-
-  assert(leadNested.columnSpan === 3, "the lead nested article must keep the lead's full width");
-  assert(rightNested.columnSpan === 2, "the right nested article must keep the right package's full width");
-  assert(fact.columnSpan === 1, "the nested fact box must occupy the first column only");
+  assert(leadNested.insetParentStoryNumber === 4, "the lead nested article must sit inside the lead");
+  assert(rightNested.insetParentStoryNumber === 6, "the right nested article must sit inside the right package");
+  assert(related.insetParentStoryNumber === 8, "the related-news box must sit inside the middle package");
+  assert(related.columnSpan === 2, "the related-news box must occupy two columns");
+  assert(related.columnStart === 5, "the related-news box must sit top-right of the middle package");
+  assert(related.x > mid.x + mid.width / 2, "the related-news box must sit on the right of the parent");
+  assert(related.x + related.width <= mid.x + mid.width + 0.01, "the related-news box must stay inside the parent's right edge");
+  assert(related.y > mid.y + 1, "the related-news box must start below the parent's top edge");
+  assert(related.y < mid.y + mid.height * 0.3, "the related-news box must start below the headline, in the upper third");
+  assert(
+    related.y + related.height < mid.y + mid.height - 1,
+    "the related-news box must finish above the parent's bottom edge",
+  );
+  assert(
+    mid.y + mid.height > related.y + 1,
+    "the middle package must keep its full height around the nested related-news box",
+  );
 
   assert(leadNested.y > lead.y, "the lead nested article must start below the lead's top edge");
   assert(rightNested.y > right.y, "the right nested article must start below the right package's top edge");
-  assert(fact.y > mid.y, "the fact box must start below the middle package's top edge");
   assert(
-    Math.abs(leadNested.y + leadNested.height - (rail.y + rail.height)) < 0.01,
+    Math.abs(leadNested.y + leadNested.height - (rail3.y + rail3.height)) < 0.01,
     "the lead nested article must run to the foot of the top package",
-  );
-  assert(
-    Math.abs(rightNested.y + rightNested.height - (rail.y + rail.height)) < 0.01,
-    "the right nested article must run to the foot of the top package",
   );
   assert(
     lead.y + lead.height < leadNested.y + 0.01,
@@ -500,19 +510,13 @@ for (const [templateId, template] of Object.entries(TEMPLATE_REGISTRY)) {
     right.y + right.height < rightNested.y + 0.01,
     "trimToInsets must stop the right package's copy above its nested article",
   );
-  assert(
-    mid.y + mid.height > fact.y + 1,
-    "the middle package must keep its full height around the nested fact box",
-  );
 
-  assert(Math.abs(rail.y - lead.y) < 0.01 && Math.abs(right.y - lead.y) < 0.01, "row 1 peers must share a top edge");
-  assert(
-    Math.abs(right.x + right.width - (contentBounds.x + contentBounds.width)) < 0.01,
-    "row 1 peers must reach the right edge of the content box",
-  );
-  assert(mid.y >= rail.y + rail.height - 0.01, "the middle band must start below the top package");
+  assert(Math.abs(rail1.y - lead.y) < 0.01 && Math.abs(right.y - lead.y) < 0.01, "row 1 peers must share a top edge");
+  assert(rail2.y >= rail1.y + rail1.height - 0.01, "the three rails must stack top to bottom");
+  assert(rail3.y >= rail2.y + rail2.height - 0.01, "the three rails must stack top to bottom");
+  assert(mid.y >= rail3.y + rail3.height - 0.01, "the middle band must start below the top package");
   assert(bottom.y >= mid.y + mid.height - 0.01, "the bottom package must start below the middle band");
-  assert(rail.y >= FRONT_HEADER_HEIGHT_PT - 0.01, "CliffFrontSep15 must start below the existing masthead");
+  assert(rail1.y >= FRONT_HEADER_HEIGHT_PT - 0.01, "CliffFrontSep15 must start below the existing masthead");
 }
 
 // ── Front-page catalogue: enough choice, and genuinely different shapes ──────

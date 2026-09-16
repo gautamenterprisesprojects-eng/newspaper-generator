@@ -40,6 +40,7 @@ export type TemplateId =
   // Dedicated front-page templates (masthead band reserved above row 1)
   | "CliffFront11A"
   | "CliffFront8A"
+  | "CliffFrontEditorRail8A"
   | "CliffFrontSep15"
   // Front-page shape catalogue — one archetype each, see TemplateRegistry
   | "CliffFrontTwinRail10A"
@@ -116,6 +117,14 @@ export type TemplateStorySlotDefinition = {
   columnStart: number;
   columnSpan: number;
   priority: StoryPriority;
+  /**
+   * How many band rows this peer occupies, starting at `row`.
+   *
+   * Omitted by every existing template (treated as 1), so their geometry is
+   * unchanged. Used when a lead or companion package must stand beside several
+   * stacked rail briefs without those briefs becoming one tall column.
+   */
+  rowSpan?: number;
   /** When set, this slot is nested inside its parent rather than beside it. */
   insetInto?: TemplateSlotInset;
   /**

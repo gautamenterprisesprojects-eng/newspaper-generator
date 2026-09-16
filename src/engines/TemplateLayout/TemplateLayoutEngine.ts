@@ -190,6 +190,7 @@ export const generateTemplateLayout = (input: TemplateLayoutInput): TemplateLayo
     template.rowRhythm,
   );
   const slots: TemplateStoryFrameSlot[] = [];
+  const rowPlacements: Array<{ y: number; height: number }> = [];
   let currentY = input.contentY;
 
   rows.forEach((row, rowIndex) => {
@@ -197,10 +198,23 @@ export const generateTemplateLayout = (input: TemplateLayoutInput): TemplateLayo
       rowIndex === rows.length - 1
         ? input.contentY + input.contentHeight - currentY
         : rowHeights[rowIndex];
+    rowPlacements.push({ y: currentY, height });
+    currentY += height + (rowGaps[rowIndex] ?? 0);
+  });
 
+  rows.forEach((row, rowIndex) => {
     for (const slot of row.slots) {
+      const span = Math.max(1, Math.round(slot.rowSpan ?? 1));
+      if (rowIndex + span > rowPlacements.length) {
+        throw new Error(
+          `Template ${template.id}: story ${slot.storyNumber} rowSpan ${span} extends past the last row`,
+        );
+      }
+      const start = rowPlacements[rowIndex];
+      const end = rowPlacements[rowIndex + span - 1];
+      const combinedHeight = end.y + end.height - start.y;
       const horizontalGeometry = getSlotWidth(columns, slot.columnStart, slot.columnSpan);
-      const verticalGeometry = applySlotVerticalAdjust(currentY, height, slot);
+      const verticalGeometry = applySlotVerticalAdjust(start.y, combinedHeight, slot);
 
       slots.push({
         storyNumber: slot.storyNumber,
@@ -213,8 +227,6 @@ export const generateTemplateLayout = (input: TemplateLayoutInput): TemplateLayo
         priority: slot.priority,
       });
     }
-
-    currentY += height + (rowGaps[rowIndex] ?? 0);
   });
 
   for (const slot of insetSlots) {

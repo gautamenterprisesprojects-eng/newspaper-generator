@@ -2701,6 +2701,7 @@ function composeArticleBoxPass(
     imageEnabled: articleBox.imageEnabled ?? defaultStoryImageSettings.imageEnabled,
     imageAlignment: articleBox.imageAlignment ?? defaultStoryImageSettings.imageAlignment,
     imageColumnSpan: articleBox.imageColumnSpan ?? defaultStoryImageSettings.imageColumnSpan,
+    imageColumnStart: articleBox.imageColumnStart ?? defaultStoryImageSettings.imageColumnStart,
     imageHeight: fitOverrides.imageHeight ?? articleBox.imageHeight ?? defaultStoryImageSettings.imageHeight,
     imageHeightMode: fitOverrides.imageHeightMode ?? articleBox.imageHeightMode ?? defaultStoryImageSettings.imageHeightMode,
     imageHeightPreset:
