@@ -12,7 +12,6 @@ import { PDFDocument } from "pdf-lib";
 import { AdvertisementManagerPanel } from "@/components/editor/AdvertisementManagerPanel";
 import { ArticleInspectorPanel } from "@/components/editor/ArticleInspectorPanel";
 import { AssetManagerPanel } from "@/components/editor/AssetManagerPanel";
-import { FontDiagnosticsPanel } from "@/components/editor/FontDiagnosticsPanel";
 import { HeaderManagerPanel } from "@/components/editor/HeaderManagerPanel";
 import { InlineObjectTextEditor } from "@/components/editor/InlineObjectTextEditor";
 import { PagePreviewOverlay } from "@/components/editor/PagePreviewOverlay";
@@ -65,7 +64,7 @@ import {
   createInitialFontManagerState,
   getNewspaperFontStack,
   loadAllNewspaperFontFaces,
-  waitForNewspaperFonts,
+  waitUntilNewspaperFontsLoaded,
 } from "@/engines/FontManager/FontManagerEngine";
 import type { FontManagerState } from "@/engines/FontManager/FontManagerTypes";
 import { createCanvasFontString } from "@/engines/TypographyEngine/TextMeasure";
@@ -2229,7 +2228,7 @@ export function EditorCanvas() {
   useEffect(() => {
     let active = true;
 
-    waitForNewspaperFonts()
+    waitUntilNewspaperFontsLoaded()
       .then((state) => {
         if (active) {
           setFontManager(state);
@@ -7056,12 +7055,6 @@ export function EditorCanvas() {
           </button>
         </section>
       </div>
-
-      {fontManager.status !== "loaded" ? (
-        <div className="font-diagnostics-shell">
-          <FontDiagnosticsPanel fontManager={fontManager} />
-        </div>
-      ) : null}
 
       <Stage
         ref={stageRef}
