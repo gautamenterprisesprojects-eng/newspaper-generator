@@ -4,7 +4,8 @@
 #   bash scripts/verify-nms-typography.sh <base-url> <bundle.json> [templateId ...]
 #
 # 1) static guards: allowlist, no wizard-visible recipe access on shared paths, wizard typography
-#    functions byte-identical to git HEAD except the documented getNmsExportRecipe() gate lines
+#    functions byte-identical to the wizard baseline tag (default: wizard-baseline = 02c3679, the
+#    15 Sep wizard; override with WIZARD_BASELINE_REF) except the documented getNmsExportRecipe() gates
 # 2) posts <bundle.json> once per template (recipe values from the NMS repo's golden set injected),
 #    waits for the PDF, asserts the export debug (fonts loaded / no fallbacks / palette / template)
 # 3) contact sheet + optional pixel diff against scripts/nms-verify/golden/<templateId>.png
@@ -27,16 +28,21 @@ grep -q 'bodyJustifyEngineMode: language === "english" && options?.professionalJ
   && pass "editorStore justification rule = HEAD (Hindi -> browser engine)" || fail "editorStore justification rule differs from HEAD"
 grep -q 'quoteFontFamily(fontFamily)}' "$REPO/src/engines/TypographyEngine/TextMeasure.ts" \
   && pass "TextMeasure measures with the full font stack (HEAD)" || fail "TextMeasure measures with a different font than it paints"
-if git -C "$REPO" rev-parse HEAD >/dev/null 2>&1; then
+BASELINE="${WIZARD_BASELINE_REF:-wizard-baseline}"
+if ! git -C "$REPO" rev-parse --git-dir >/dev/null 2>&1; then
+  echo "  skip  wizard baseline comparison (not a git checkout)"
+elif ! git -C "$REPO" rev-parse --verify --quiet "$BASELINE^{commit}" >/dev/null; then
+  fail "wizard baseline ref '$BASELINE' not found (run: git fetch origin --tags)"
+else
   fnblock() { awk "/^$2/,/^$3\$/" "$1"; }
-  headblock() { git -C "$REPO" show "HEAD:$1" | awk "/^$2/,/^$3\$/"; }
+  headblock() { git -C "$REPO" show "$BASELINE:$1" | awk "/^$2/,/^$3\$/"; }
   d=$(diff <(headblock src/engines/FontManager/FontManagerEngine.ts 'const headlineDisplayFonts' '\];') <(fnblock "$REPO/src/engines/FontManager/FontManagerEngine.ts" 'const headlineDisplayFonts' '\];') | grep -c '^[<>]')
-  [ "$d" = "0" ] && pass "headlineDisplayFonts identical to HEAD" || fail "headlineDisplayFonts differs from HEAD ($d lines)"
+  [ "$d" = "0" ] && pass "headlineDisplayFonts identical to $BASELINE" || fail "headlineDisplayFonts differs from $BASELINE ($d lines)"
   extra=$(diff <(headblock src/engines/FontManager/FontManagerEngine.ts 'export const selectNewspaperHeadlineFont' '};') <(fnblock "$REPO/src/engines/FontManager/FontManagerEngine.ts" 'export const selectNewspaperHeadlineFont' '};') | grep '^[<>]' | grep -v 'getNmsExportRecipe\|recipePick\|NMS export only\|role from the recipe\|rotation below\|^> *}$\|^> *$' | wc -l)
-  [ "$extra" = "0" ] && pass "selectNewspaperHeadlineFont = HEAD + NMS gate only" || fail "selectNewspaperHeadlineFont has non-gate differences ($extra lines)"
+  [ "$extra" = "0" ] && pass "selectNewspaperHeadlineFont = $BASELINE + NMS gate only" || fail "selectNewspaperHeadlineFont has non-gate differences ($extra lines)"
   extra=$(diff <(headblock src/engines/ArticleComposer/composeArticleBox.ts 'const fillHeadlineLineEdges' '};') <(fnblock "$REPO/src/engines/ArticleComposer/composeArticleBox.ts" 'const fillHeadlineLineEdges' '};') | grep '^[<>]' | grep -v 'getNmsExportRecipe\|NMS export only\|committed fill\|return block;\|^> *}$\|^> *$' | wc -l)
-  [ "$extra" = "0" ] && pass "fillHeadlineLineEdges = HEAD + NMS gate only" || fail "fillHeadlineLineEdges has non-gate differences ($extra lines)"
-else echo "  skip  git HEAD comparison (not a git checkout)"; fi
+  [ "$extra" = "0" ] && pass "fillHeadlineLineEdges = $BASELINE + NMS gate only" || fail "fillHeadlineLineEdges has non-gate differences ($extra lines)"
+fi
 
 [ -z "$BUNDLE" ] && { echo "no bundle given; static guards only"; exit $FAIL; }
 [ -f "$BUNDLE" ] || { fail "bundle not found: $BUNDLE"; exit 1; }
