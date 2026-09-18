@@ -1025,11 +1025,24 @@ const CLIFF_FRONT_8A: TemplateDefinition = {
  * the lead-row invariant forbids a multi-column brief as a peer of the lead.
  * The related-news inset is a short `brief` and is not in the lead's row.
  */
+/**
+ * Pale washes for cut-in boxes — the light tints Indian dailies print behind a
+ * boxed sidebar to separate it from the story it sits inside. Each is light
+ * enough that black body type stays above the newsprint contrast floor, and
+ * flat enough to survive CMYK conversion without banding.
+ */
+export const NEWSPRINT_TINTS = {
+  paleBlue: "#e8f1f9",
+  warmCream: "#fdf3e3",
+  paleGreen: "#eaf4ec",
+  rose: "#fbeef0",
+  greyLilac: "#f0eef7",
+} as const;
+
 const CLIFF_FRONT_SEP15: TemplateDefinition = {
   id: "CliffFrontSep15",
   name: "The Cliff News Front Page (15 Sep 2026)",
   storyCount: 10,
-  trimToInsets: [3, 5],
   // The left rail carries two briefs, not three. The top band keeps the depth it
   // always had (0.54 of the content box) but is split in two rather than three,
   // so the two remaining rail boxes grow to fill it and the lead and the right
@@ -1050,7 +1063,7 @@ const CLIFF_FRONT_SEP15: TemplateDefinition = {
       columnStart: 2,
       columnSpan: 3,
       priority: "secondary",
-      insetInto: { parentStoryNumber: 3, topFraction: 0.52 },
+      insetInto: { parentStoryNumber: 3, topFraction: 0.52, mode: "stack" },
     },
     { storyNumber: 5, row: 1, columnStart: 5, columnSpan: 2, priority: "major", rowSpan: 2 },
     {
@@ -1059,7 +1072,7 @@ const CLIFF_FRONT_SEP15: TemplateDefinition = {
       columnStart: 5,
       columnSpan: 2,
       priority: "secondary",
-      insetInto: { parentStoryNumber: 5, topFraction: 0.74 },
+      insetInto: { parentStoryNumber: 5, topFraction: 0.74, mode: "stack" },
     },
     { storyNumber: 7, row: 3, columnStart: 1, columnSpan: 6, priority: "major" },
     {
@@ -1074,7 +1087,12 @@ const CLIFF_FRONT_SEP15: TemplateDefinition = {
       // the top of the sidebar. bottomTrimFraction moves 0.42 -> 0.40 to hold
       // the foot on the same line, so the box grows upward only: top 78.5pt ->
       // 64.2pt below the package, bottom unchanged.
-      insetInto: { parentStoryNumber: 7, topFraction: 0.18 },
+      insetInto: {
+        parentStoryNumber: 7,
+        topFraction: 0.18,
+        mode: "cutIn",
+        tint: NEWSPRINT_TINTS.paleBlue,
+      },
       bottomTrimFraction: 0.4,
     },
     { storyNumber: 9, row: 4, columnStart: 1, columnSpan: 1, priority: "brief" },
@@ -2525,6 +2543,244 @@ const AKHAND_VICHAR_MANTHAN_6A: TemplateDefinition = {
   ],
 };
 
+/* ────────────────────────────────────────────────────────────────────────────
+ * Cut-in front pages
+ *
+ * Four shapes built around the cut-in: a box set inside another story's text,
+ * which the parent's copy divides around while the parent keeps its full-width
+ * headline. Each declares `mode: "cutIn"` and its own tint, so none of them
+ * needs a line of template-specific code anywhere else in the app.
+ *
+ * House rules these four follow, on top of the registry-wide invariants:
+ *   • every cut-in sits in a parent spanning 4 columns or more — a cut-in in a
+ *     narrower parent leaves the remaining measure too thin to set type in
+ *   • a cut-in 2 columns wide sets its copy in one column (the composer does
+ *     that from `slot.columnSpan <= 2`); 1-column cut-ins are naturally single
+ *   • no band under ~0.22 of the content box, so no box is left shallow
+ *   • the lead is one tall box among tall boxes, never a hero with scraps
+ *     around it
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Lead and a right package over a full-width second deck, with a cut-in in
+ * each. The cut-in in the lead is a single column, the one in the deck two —
+ * the same page showing both widths.
+ */
+const CLIFF_FRONT_SPLIT_HERO_8A: TemplateDefinition = {
+  id: "CliffFrontSplitHero8A",
+  name: "Split Hero",
+  storyCount: 8,
+  rowRhythm: [
+    { row: 1, baseRatio: 0.44, receivesRemainingSpace: false, minimumHeight: 180 },
+    { row: 2, baseRatio: 0.34, receivesRemainingSpace: false, minimumHeight: 160 },
+    { row: 3, baseRatio: 0.22, receivesRemainingSpace: true, minimumHeight: 140 },
+  ],
+  slots: [
+    { storyNumber: 1, row: 1, columnStart: 1, columnSpan: 4, priority: "lead" },
+    { storyNumber: 2, row: 1, columnStart: 5, columnSpan: 2, priority: "major" },
+    {
+      storyNumber: 3,
+      row: 1,
+      columnStart: 4,
+      columnSpan: 1,
+      priority: "secondary",
+      insetInto: {
+        parentStoryNumber: 1,
+        topFraction: 0.3,
+        mode: "cutIn",
+        tint: NEWSPRINT_TINTS.warmCream,
+      },
+      bottomTrimFraction: 0.42,
+    },
+    { storyNumber: 4, row: 2, columnStart: 1, columnSpan: 6, priority: "major" },
+    {
+      storyNumber: 5,
+      row: 2,
+      columnStart: 5,
+      columnSpan: 2,
+      priority: "brief",
+      insetInto: {
+        parentStoryNumber: 4,
+        topFraction: 0.22,
+        mode: "cutIn",
+        tint: NEWSPRINT_TINTS.paleGreen,
+      },
+      bottomTrimFraction: 0.4,
+    },
+    { storyNumber: 6, row: 3, columnStart: 1, columnSpan: 2, priority: "secondary" },
+    { storyNumber: 7, row: 3, columnStart: 3, columnSpan: 2, priority: "secondary" },
+    { storyNumber: 8, row: 3, columnStart: 5, columnSpan: 2, priority: "secondary" },
+  ],
+};
+
+/**
+ * A narrow standing column on the left with the lead beside it, then a second
+ * deck split 4 │ 2. Both decks carry a cut-in, two columns up top and one below.
+ */
+const CLIFF_FRONT_PILLAR_8A: TemplateDefinition = {
+  id: "CliffFrontPillar8A",
+  name: "Pillar",
+  storyCount: 8,
+  rowRhythm: [
+    { row: 1, baseRatio: 0.4, receivesRemainingSpace: false, minimumHeight: 180 },
+    { row: 2, baseRatio: 0.36, receivesRemainingSpace: false, minimumHeight: 160 },
+    { row: 3, baseRatio: 0.24, receivesRemainingSpace: true, minimumHeight: 140 },
+  ],
+  slots: [
+    { storyNumber: 1, row: 1, columnStart: 1, columnSpan: 2, priority: "major" },
+    { storyNumber: 2, row: 1, columnStart: 3, columnSpan: 4, priority: "lead" },
+    {
+      storyNumber: 3,
+      row: 1,
+      columnStart: 5,
+      columnSpan: 2,
+      priority: "secondary",
+      insetInto: {
+        parentStoryNumber: 2,
+        topFraction: 0.28,
+        mode: "cutIn",
+        tint: NEWSPRINT_TINTS.rose,
+      },
+      bottomTrimFraction: 0.42,
+    },
+    { storyNumber: 4, row: 2, columnStart: 1, columnSpan: 4, priority: "major" },
+    { storyNumber: 5, row: 2, columnStart: 5, columnSpan: 2, priority: "major" },
+    {
+      storyNumber: 6,
+      row: 2,
+      columnStart: 4,
+      columnSpan: 1,
+      priority: "brief",
+      insetInto: {
+        parentStoryNumber: 4,
+        topFraction: 0.24,
+        mode: "cutIn",
+        tint: NEWSPRINT_TINTS.greyLilac,
+      },
+      bottomTrimFraction: 0.4,
+    },
+    { storyNumber: 7, row: 3, columnStart: 1, columnSpan: 3, priority: "secondary" },
+    { storyNumber: 8, row: 3, columnStart: 4, columnSpan: 3, priority: "secondary" },
+  ],
+};
+
+/**
+ * Three decks of near-equal depth, each carrying a cut-in — the widest use of
+ * the device in the catalogue, and the one that reads most like a features page.
+ */
+const CLIFF_FRONT_TRIPLE_DECK_8A: TemplateDefinition = {
+  id: "CliffFrontTripleDeck8A",
+  name: "Triple Deck",
+  storyCount: 8,
+  rowRhythm: [
+    { row: 1, baseRatio: 0.34, receivesRemainingSpace: false, minimumHeight: 170 },
+    { row: 2, baseRatio: 0.34, receivesRemainingSpace: false, minimumHeight: 170 },
+    { row: 3, baseRatio: 0.32, receivesRemainingSpace: true, minimumHeight: 160 },
+  ],
+  slots: [
+    { storyNumber: 1, row: 1, columnStart: 1, columnSpan: 6, priority: "lead" },
+    {
+      storyNumber: 2,
+      row: 1,
+      columnStart: 5,
+      columnSpan: 2,
+      priority: "secondary",
+      insetInto: {
+        parentStoryNumber: 1,
+        topFraction: 0.26,
+        mode: "cutIn",
+        tint: NEWSPRINT_TINTS.paleBlue,
+      },
+      bottomTrimFraction: 0.4,
+    },
+    { storyNumber: 3, row: 2, columnStart: 1, columnSpan: 4, priority: "major" },
+    { storyNumber: 4, row: 2, columnStart: 5, columnSpan: 2, priority: "major" },
+    {
+      storyNumber: 5,
+      row: 2,
+      columnStart: 4,
+      columnSpan: 1,
+      priority: "brief",
+      insetInto: {
+        parentStoryNumber: 3,
+        topFraction: 0.24,
+        mode: "cutIn",
+        tint: NEWSPRINT_TINTS.warmCream,
+      },
+      bottomTrimFraction: 0.42,
+    },
+    { storyNumber: 6, row: 3, columnStart: 1, columnSpan: 4, priority: "major" },
+    { storyNumber: 7, row: 3, columnStart: 5, columnSpan: 2, priority: "secondary" },
+    {
+      storyNumber: 8,
+      row: 3,
+      columnStart: 1,
+      columnSpan: 1,
+      priority: "brief",
+      insetInto: {
+        parentStoryNumber: 6,
+        topFraction: 0.22,
+        mode: "cutIn",
+        tint: NEWSPRINT_TINTS.paleGreen,
+      },
+      bottomTrimFraction: 0.42,
+    },
+  ],
+};
+
+/**
+ * Three equal openers over a five-column lead that carries two cut-ins at once —
+ * the case the mechanism was generalised for. One is two columns, one a single,
+ * and they sit at different depths so the lead's copy threads between them.
+ */
+const CLIFF_FRONT_DOUBLE_INSET_9A: TemplateDefinition = {
+  id: "CliffFrontDoubleInset9A",
+  name: "Double Inset",
+  storyCount: 9,
+  rowRhythm: [
+    { row: 1, baseRatio: 0.3, receivesRemainingSpace: false, minimumHeight: 150 },
+    { row: 2, baseRatio: 0.44, receivesRemainingSpace: false, minimumHeight: 190 },
+    { row: 3, baseRatio: 0.26, receivesRemainingSpace: true, minimumHeight: 150 },
+  ],
+  slots: [
+    { storyNumber: 1, row: 1, columnStart: 1, columnSpan: 2, priority: "major" },
+    { storyNumber: 2, row: 1, columnStart: 3, columnSpan: 2, priority: "major" },
+    { storyNumber: 3, row: 1, columnStart: 5, columnSpan: 2, priority: "major" },
+    { storyNumber: 4, row: 2, columnStart: 1, columnSpan: 5, priority: "lead" },
+    { storyNumber: 5, row: 2, columnStart: 6, columnSpan: 1, priority: "major" },
+    {
+      storyNumber: 6,
+      row: 2,
+      columnStart: 4,
+      columnSpan: 2,
+      priority: "secondary",
+      insetInto: {
+        parentStoryNumber: 4,
+        topFraction: 0.16,
+        mode: "cutIn",
+        tint: NEWSPRINT_TINTS.rose,
+      },
+      bottomTrimFraction: 0.62,
+    },
+    {
+      storyNumber: 7,
+      row: 2,
+      columnStart: 1,
+      columnSpan: 1,
+      priority: "brief",
+      insetInto: {
+        parentStoryNumber: 4,
+        topFraction: 0.58,
+        mode: "cutIn",
+        tint: NEWSPRINT_TINTS.greyLilac,
+      },
+      bottomTrimFraction: 0.14,
+    },
+    { storyNumber: 8, row: 3, columnStart: 1, columnSpan: 3, priority: "secondary" },
+    { storyNumber: 9, row: 3, columnStart: 4, columnSpan: 3, priority: "secondary" },
+  ],
+};
+
 export const TEMPLATE_REGISTRY: Record<TemplateId, TemplateDefinition> = {
   // Original (locked)
   FrontPage5A: FRONT_PAGE_5A,
@@ -2561,6 +2817,11 @@ export const TEMPLATE_REGISTRY: Record<TemplateId, TemplateDefinition> = {
   CliffFront8A: CLIFF_FRONT_8A,
   CliffFrontEditorRail8A: CLIFF_FRONT_EDITOR_RAIL_8A,
   CliffFrontSep15: CLIFF_FRONT_SEP15,
+  // Cut-in front pages
+  CliffFrontSplitHero8A: CLIFF_FRONT_SPLIT_HERO_8A,
+  CliffFrontPillar8A: CLIFF_FRONT_PILLAR_8A,
+  CliffFrontTripleDeck8A: CLIFF_FRONT_TRIPLE_DECK_8A,
+  CliffFrontDoubleInset9A: CLIFF_FRONT_DOUBLE_INSET_9A,
   // Front-page shape catalogue
   CliffFrontTwinRail10A: CLIFF_FRONT_TWIN_RAIL_10A,
   CliffFrontBannerLead9A: CLIFF_FRONT_BANNER_LEAD_9A,
@@ -2626,6 +2887,10 @@ export const FRONT_PAGE_TEMPLATE_IDS: TemplateId[] = [
   "CliffFrontEditorRail8A",
   "CliffFront11A",
   "CliffFrontSep15",
+  "CliffFrontSplitHero8A",
+  "CliffFrontPillar8A",
+  "CliffFrontTripleDeck8A",
+  "CliffFrontDoubleInset9A",
   "CliffFrontTwinRail10A",
   "CliffFrontBannerLead9A",
   "CliffFrontPhotoAnchor8A",
@@ -2658,6 +2923,14 @@ export const isEditorialPageTemplate = (templateId: TemplateId) =>
   EDITORIAL_PAGE_TEMPLATE_IDS.includes(templateId);
 
 export const getTemplateDefinition = (templateId: TemplateId) => TEMPLATE_REGISTRY[templateId];
+
+/**
+ * The `insetInto` declaration for one slot, or undefined when the slot is a
+ * normal peer. Callers outside the layout engine need this to tell a cut-in
+ * from a stacked sibling, and to read a cut-in's tint.
+ */
+export const getSlotInset = (templateId: TemplateId, storyNumber: number) =>
+  TEMPLATE_REGISTRY[templateId]?.slots.find((slot) => slot.storyNumber === storyNumber)?.insetInto;
 
 /**
  * The column grid a template's slots are stated against.

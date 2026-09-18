@@ -938,7 +938,18 @@ export type ArticleCompositionSettings = {
    * box nested inside this one — the front page's boxed sidebar — so the parent
    * keeps its full headline measure while its text divides around the sidebar.
    */
-  reservedRegions?: { x: number; y: number; width: number; height: number }[];
+  reservedRegions?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    /**
+     * True when the region is a cut-in rather than a stacked sibling. A cut-in
+     * gets a runaround gutter and blocks the shallow band above itself, so the
+     * parent cannot orphan a single row across the top of the box.
+     */
+    cutIn?: boolean;
+  }[];
   /**
    * Front-page house style. Present only on stories composed for a front page, so
    * every rule it carries is scoped to that page and inside pages compose exactly

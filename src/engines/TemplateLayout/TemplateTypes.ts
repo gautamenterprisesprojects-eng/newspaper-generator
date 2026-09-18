@@ -42,6 +42,11 @@ export type TemplateId =
   | "CliffFront8A"
   | "CliffFrontEditorRail8A"
   | "CliffFrontSep15"
+  // Cut-in front pages
+  | "CliffFrontSplitHero8A"
+  | "CliffFrontPillar8A"
+  | "CliffFrontTripleDeck8A"
+  | "CliffFrontDoubleInset9A"
   // Front-page shape catalogue — one archetype each, see TemplateRegistry
   | "CliffFrontTwinRail10A"
   | "CliffFrontBannerLead9A"
@@ -103,6 +108,26 @@ export type TemplateId =
 export type TemplateSlotInset = {
   /** The slot this box sits inside. Must be a peer slot in the same row. */
   parentStoryNumber: number;
+  /**
+   * How the parent treats this box.
+   *
+   * - `"stack"` — the parent's frame ends where this box begins, so the two read
+   *   as stacked siblings. This is what `trimToInsets` has always done.
+   * - `"cutIn"` — the parent keeps its full depth and its body divides around
+   *   this box: a cut-in, in the print sense. The parent's banner, kicker and
+   *   headline still span every column it owns.
+   *
+   * Omitted falls back to the legacy rule — `"stack"` if the parent is listed in
+   * the template's `trimToInsets`, `"cutIn"` otherwise — so templates written
+   * before this field keep their exact behaviour.
+   */
+  mode?: "stack" | "cutIn";
+  /**
+   * Cut-in only: the wash painted behind the box, as a CSS colour. Newspapers
+   * tint a cut-in to separate it from the story it sits inside. Keep it light
+   * enough that black body type stays above the newsprint contrast floor.
+   */
+  tint?: string;
   /**
    * Where the sidebar's top edge sits, as a fraction of the parent's height.
    * Set it below the parent's banner + headline block so the two never collide;

@@ -64,7 +64,7 @@ import {
   getClassWordCapacity,
 } from "@/engines/EditorialLayoutQuality/EditorialSpaceOptimizer";
 import { generateTemplateLayout } from "@/engines/TemplateLayout/TemplateLayoutEngine";
-import { getTemplateColumnCount } from "@/engines/TemplateLayout/TemplateRegistry";
+import { getSlotInset, getTemplateColumnCount } from "@/engines/TemplateLayout/TemplateRegistry";
 import type { TemplateId } from "@/engines/TemplateLayout/TemplateTypes";
 import {
   selectOptimisticNewswireWordTier,
@@ -240,12 +240,6 @@ import {
   EDITORIAL_MIDDLE_BAND_TOP_FRACTION,
   getEditorialTextColumnCount,
 } from "@/engines/MasterPage/EditorialPageStyle";
-
-// Pale newsprint blue behind CliffFrontSep15's related-news box (story 9).
-// Kept light enough that black body type stays comfortably above the contrast
-// floor on newsprint and the tint survives CMYK conversion without banding --
-// the wash Indian dailies use to set a sidebar off from its parent package.
-const CLIFF_SEP15_RELATED_NEWS_TINT = "#e8f1f9";
 
 const MIN_STORY_SIZE: Size = {
   width: 180,
@@ -4036,7 +4030,14 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         // Story numbers moved when the left rail went from three briefs to two
         // (11 slots -> 10): the middle package is 7 and the related-news box 8.
         const isCliffFrontSep15MidPackage = options?.templateId === "CliffFrontSep15" && slot.storyNumber === 7;
-        const isCliffFrontSep15RelatedNews = options?.templateId === "CliffFrontSep15" && slot.storyNumber === 8;
+        // A tinted cut-in: a box set inside another story's text, standing on a
+        // pale wash instead of a hairline frame. Driven by the slot's own
+        // `insetInto` declaration, so any template can have one -- and so the
+        // untinted cut-ins that already exist (CliffFront11A, CliffFrontLWrap9A)
+        // keep exactly the treatment they have always had.
+        const slotInset = options?.templateId ? getSlotInset(options.templateId, slot.storyNumber) : undefined;
+        const cutInTint = slotInset?.mode === "cutIn" ? slotInset.tint : undefined;
+        const isTintedCutIn = Boolean(cutInTint);
         const isEditorRailFrontLayout = options?.templateId === EDITOR_RAIL_FRONT_TEMPLATE_ID;
         const isEditorRailFrontFurnitureSlot = isEditorRailFrontLayout && slot.storyNumber === 1;
         const resolvedImageEnabled = isAkhandEditorial5A || isAkhandVicharManthanImageSlot
@@ -4047,7 +4048,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             youthUpdateInsideCompactSlot ||
             isEightColumnTwoColumnSlot ||
             isCliffInsideSixColumnTwoColumnSlot ||
-            isCliffFrontSep15RelatedNews ||
+            isTintedCutIn ||
             isEditorRailFrontFurnitureSlot
           ? false
           : isProfessional10A
@@ -4168,7 +4169,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         // Setting one column also drops storyColumnSpan to 1, which takes the
         // headline-to-body step off the two-column branch (fontSize * 0.24, the
         // widest of the three) and onto the default fontSize * 0.08.
-        if (isCliffFrontSep15RelatedNews) {
+        // A cut-in two columns wide is ~296pt. Two text columns inside that
+        // leave roughly 14-character measures, below anything readable, so a
+        // narrow cut-in always sets as one column.
+        if (isTintedCutIn && slot.columnSpan <= 2) {
           resolvedColumnCount = 1;
         }
 
@@ -4427,17 +4431,16 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             ...prototypeArticle,
             headline: item?.headline ?? `Article ${slot.storyNumber}`,
             columnCount: resolvedColumnCount,
-            // The related-news box drops its hairline frame and stands on a pale
-            // newsprint tint instead -- the light blue wash Indian dailies use to
-            // mark a sidebar off from the package it sits inside. Scoped to this
-            // one slot; every other box keeps its frame and the paper colour.
-            ...(isCliffFrontSep15RelatedNews
+            // A tinted cut-in drops its hairline frame and stands on the wash its
+            // slot declares -- the pale colours Indian dailies use to mark a
+            // sidebar off from the package it sits inside.
+            ...(cutInTint
               ? {
                   containerStyles: {
                     ...((prototypeArticle as any).containerStyles ?? {}),
                     article: {
                       ...(((prototypeArticle as any).containerStyles?.article) ?? {}),
-                      containerBackgroundColor: CLIFF_SEP15_RELATED_NEWS_TINT,
+                      containerBackgroundColor: cutInTint,
                       containerBorderWidth: 0,
                       containerBorderRadius: 0,
                     },
@@ -4509,7 +4512,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             enablePullQuote: Boolean(item?.pullQuoteText),
             ...(isEightColumnTwoColumnSlot ? { tightTwoColumnBylineToBodyGap: true } : {}),
             ...(isShortEightColumnNarrowSlot ? { suppressSubheadline: true } : {}),
-            ...(isCliffFrontSep15RelatedNews
+            ...(isTintedCutIn
               ? { suppressByline: true, suppressArticleContainerBorder: true }
               : {}),
             ...(isEightColumnThreeColumnSlot ? { suppressInlineSubheadings: true } : {}),
@@ -4573,11 +4576,20 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
               : {}),
             ...(options?.nmsBylinePortrait ? { nmsBylinePortrait: true } : {}),
             ...(() => {
-              const nested = nestedInsideParent.map((slot: any) => ({
-                x: slot.x,
-                y: slot.y,
-                width: slot.width,
-                height: slot.height,
+              // `cutIn` tells the composer to keep a runaround gutter around the
+              // box and to block the shallow band above it, so the parent cannot
+              // orphan a single row across its top. Only slots that declare
+              // `mode: "cutIn"` get it -- the untinted, untrimmed insets that
+              // predate the field keep the wrap they were tuned against.
+              const nested = nestedInsideParent.map((nestedSlot: any) => ({
+                x: nestedSlot.x,
+                y: nestedSlot.y,
+                width: nestedSlot.width,
+                height: nestedSlot.height,
+                cutIn:
+                  (options?.templateId
+                    ? getSlotInset(options.templateId, nestedSlot.storyNumber)?.mode
+                    : undefined) === "cutIn",
               }));
               // On an editorial page a signed comment leaves a column free down
               // its left for the writer's rail, so the copy sets beside the

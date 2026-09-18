@@ -4824,29 +4824,33 @@ function composeArticleBoxPass(
   // one the same. Scoped to CliffFrontSep15 so the other nested-sidebar
   // templates (CliffFront11A, the L-Wrap, the editorial author rail) keep the
   // wrap they were tuned against.
-  const nestedRegionWrapGutter = editorialTemplateId === "CliffFrontSep15" ? 6 : 0;
+  // Runaround outset for a cut-in, in Quark's sense: the air the parent's copy
+  // keeps around the box. Applies to any cut-in on any template -- the flag
+  // travels on the region itself, set from the slot's `insetInto.mode`.
+  // A stacked sibling gets none, because the parent's frame already stops above
+  // it and there is nothing to flow around.
+  const CUT_IN_RUNAROUND_GUTTER = 6;
 
   for (const region of settings.reservedRegions ?? []) {
     if (isEditorialLeaderArticle || isAkhandCompactAuthorArticle) {
       continue;
     }
 
-    // The band left above a nested box is often only deep enough for a single
-    // line, which sets one orphan row of the parent's copy across the top of
-    // the sidebar -- on CliffFrontSep15 that row sat alone above the
-    // related-news box. Block the strip from the top of the parent instead, so
-    // the parent's copy starts below the nested box in those columns. The band's
-    // depth moves with the headline, so this cannot be a fixed fraction.
-    const regionTop = region.y - articleBox.y - nestedRegionWrapGutter;
-    const blockFromTop = nestedRegionWrapGutter > 0;
+    // The band left above a cut-in is often only deep enough for a single line,
+    // which sets one orphan row of the parent's copy across the top of the box.
+    // Block the strip from the top of the parent instead, so the parent's copy
+    // starts below the cut-in in those columns. The band's depth moves with the
+    // headline, so this cannot be a fixed fraction.
+    const gutter = region.cutIn ? CUT_IN_RUNAROUND_GUTTER : 0;
+    const regionTop = region.y - articleBox.y - gutter;
 
     obstacleRects.push({
-      x: region.x - articleBox.x - inset - nestedRegionWrapGutter,
-      y: blockFromTop ? 0 : regionTop,
-      width: region.width + nestedRegionWrapGutter * 2,
-      height: blockFromTop
-        ? regionTop + region.height + nestedRegionWrapGutter * 2
-        : region.height + nestedRegionWrapGutter * 2,
+      x: region.x - articleBox.x - inset - gutter,
+      y: region.cutIn ? 0 : regionTop,
+      width: region.width + gutter * 2,
+      height: region.cutIn
+        ? regionTop + region.height + gutter * 2
+        : region.height + gutter * 2,
     });
   }
 

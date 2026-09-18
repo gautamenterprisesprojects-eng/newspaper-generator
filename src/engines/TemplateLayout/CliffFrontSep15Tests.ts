@@ -55,7 +55,17 @@ assert(
 const definition = getTemplateDefinition("CliffFrontSep15");
 assert.equal(definition.storyCount, 10);
 assert.equal(definition.slots.length, 10);
-assert.deepEqual(definition.trimToInsets, [3, 5]);
+// Trimming is stated on each inset now, not in a separate list the slots cannot
+// see. 4 and 6 stack (their parents stop above them); 8 is the cut-in the
+// package's copy flows around, and it carries the wash it prints on.
+assert.equal(definition.trimToInsets, undefined, "CliffFrontSep15 must state trimming on its insets, not via trimToInsets");
+const insetMode = (storyNumber: number) =>
+  definition.slots.find((slot) => slot.storyNumber === storyNumber)?.insetInto;
+assert.equal(insetMode(4)?.mode, "stack");
+assert.equal(insetMode(6)?.mode, "stack");
+assert.equal(insetMode(8)?.mode, "cutIn");
+assert.equal(insetMode(8)?.tint, "#e8f1f9", "the cut-in must declare its own tint");
+assert.equal(insetMode(4)?.tint, undefined, "a stacked sibling must not carry a tint");
 
 const leadSlots = definition.slots.filter((slot) => slot.priority === "lead");
 assert.equal(leadSlots.length, 1, "exactly one lead");

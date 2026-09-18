@@ -271,15 +271,42 @@ export const generateTemplateLayout = (input: TemplateLayoutInput): TemplateLayo
   // Stopping the trim one column-gutter short of the inset's top gives it
   // the same breathing room as everywhere else, without moving the inset
   // itself off the position its topFraction was measured against.
-  for (const storyNumber of template.trimToInsets ?? []) {
+  // Which parents trim is now stated on the inset itself (`mode: "stack"`).
+  // `trimToInsets` remains the fallback for templates written before that field,
+  // so their behaviour is untouched: a parent trims if any of its insets asks to
+  // stack, or if the legacy list names it and none of its insets says otherwise.
+  const trimmingParents = new Set<number>(template.trimToInsets ?? []);
+
+  for (const slot of insetSlots) {
+    const mode = slot.insetInto!.mode;
+
+    if (mode === "stack") {
+      trimmingParents.add(slot.insetInto!.parentStoryNumber);
+    } else if (mode === "cutIn") {
+      trimmingParents.delete(slot.insetInto!.parentStoryNumber);
+    }
+  }
+
+  for (const storyNumber of trimmingParents) {
     const parent = slots.find((candidate) => candidate.storyNumber === storyNumber);
 
     if (!parent) {
       continue;
     }
 
+    // A parent that trims stops at its stacking insets only. A cut-in in the
+    // same parent must not drag the frame up — the parent is meant to run on
+    // behind it.
     const insetTops = slots
-      .filter((candidate) => candidate.insetParentStoryNumber === storyNumber)
+      .filter((candidate) => {
+        if (candidate.insetParentStoryNumber !== storyNumber) {
+          return false;
+        }
+
+        const definition = template.slots.find((entry) => entry.storyNumber === candidate.storyNumber);
+
+        return definition?.insetInto?.mode !== "cutIn";
+      })
       .map((candidate) => candidate.y);
 
     if (insetTops.length === 0) {
