@@ -38,6 +38,7 @@
     "test:regionflow": "tsx src/engines/RegionFlowEngine/RegionFlowTests.ts",
     "test:rowgap": "tsx src/engines/RowGap/RowGapTests.ts",
     "test:rowreflow": "tsx src/engines/StorySpan/RowReflowTests.ts",
+    "test:sep15": "tsx src/engines/TemplateLayout/CliffFrontSep15Tests.ts",
     "test:sentenceendfitting": "tsx src/engines/TypographyEngine/SentenceEndFittingTests.ts",
     "test:smartheader": "tsx src/store/SmartHeaderIntegrationTests.ts",
     "test:storyhierarchy": "tsx src/engines/StoryHierarchy/StoryHierarchyTests.ts",

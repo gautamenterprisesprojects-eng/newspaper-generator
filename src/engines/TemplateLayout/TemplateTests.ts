@@ -441,7 +441,7 @@ for (const [templateId, template] of Object.entries(TEMPLATE_REGISTRY)) {
   );
 }
 
-// ── CliffFrontSep15: 15 Sep 2026 front, three stacked rails + nested packages ─
+// ── CliffFrontSep15: 15 Sep 2026 front, two stacked rails + nested packages ──
 {
   const contentY = Math.max(contentBounds.y, FRONT_HEADER_HEIGHT_PT);
   const front = generateTemplateLayout({
@@ -457,20 +457,19 @@ for (const [templateId, template] of Object.entries(TEMPLATE_REGISTRY)) {
   const bySlot = new Map(front.slots.map((slot) => [slot.storyNumber, slot]));
   const rail1 = bySlot.get(1)!;
   const rail2 = bySlot.get(2)!;
-  const rail3 = bySlot.get(3)!;
-  const lead = bySlot.get(4)!;
-  const leadNested = bySlot.get(5)!;
-  const right = bySlot.get(6)!;
-  const rightNested = bySlot.get(7)!;
-  const mid = bySlot.get(8)!;
-  const related = bySlot.get(9)!;
-  const cartoon = bySlot.get(10)!;
-  const bottom = bySlot.get(11)!;
+  const lead = bySlot.get(3)!;
+  const leadNested = bySlot.get(4)!;
+  const right = bySlot.get(5)!;
+  const rightNested = bySlot.get(6)!;
+  const mid = bySlot.get(7)!;
+  const related = bySlot.get(8)!;
+  const cartoon = bySlot.get(9)!;
+  const bottom = bySlot.get(10)!;
 
   assert(isFrontPageTemplate("CliffFrontSep15"), "CliffFrontSep15 must be a front-page template");
   assert(!isEditorialPageTemplate("CliffFrontSep15"), "CliffFrontSep15 must not be an editorial template");
-  assert(front.slots.length === 11, `CliffFrontSep15 must place 11 boxes, got ${front.slots.length}`);
-  assert(lead.priority === "lead", "story 4 must be the lead");
+  assert(front.slots.length === 10, `CliffFrontSep15 must place 10 boxes, got ${front.slots.length}`);
+  assert(lead.priority === "lead", "story 3 must be the lead");
   assert(lead.columnSpan === 3, "the lead must span 3 columns");
   assert(rail1.columnSpan === 1, "each सार-समाचार rail must be one column");
   assert(right.columnSpan === 2, "the right package must span 2 columns");
@@ -478,9 +477,9 @@ for (const [templateId, template] of Object.entries(TEMPLATE_REGISTRY)) {
   assert(cartoon.columnSpan === 1, "the cartoon rail must be one column");
   assert(bottom.columnSpan === 5, "the bottom package must span the remaining five columns");
 
-  assert(leadNested.insetParentStoryNumber === 4, "the lead nested article must sit inside the lead");
-  assert(rightNested.insetParentStoryNumber === 6, "the right nested article must sit inside the right package");
-  assert(related.insetParentStoryNumber === 8, "the related-news box must sit inside the middle package");
+  assert(leadNested.insetParentStoryNumber === 3, "the lead nested article must sit inside the lead");
+  assert(rightNested.insetParentStoryNumber === 5, "the right nested article must sit inside the right package");
+  assert(related.insetParentStoryNumber === 7, "the related-news box must sit inside the middle package");
   assert(related.columnSpan === 2, "the related-news box must occupy two columns");
   assert(related.columnStart === 5, "the related-news box must sit top-right of the middle package");
   assert(related.x > mid.x + mid.width / 2, "the related-news box must sit on the right of the parent");
@@ -499,7 +498,7 @@ for (const [templateId, template] of Object.entries(TEMPLATE_REGISTRY)) {
   assert(leadNested.y > lead.y, "the lead nested article must start below the lead's top edge");
   assert(rightNested.y > right.y, "the right nested article must start below the right package's top edge");
   assert(
-    Math.abs(leadNested.y + leadNested.height - (rail3.y + rail3.height)) < 0.01,
+    Math.abs(leadNested.y + leadNested.height - (rail2.y + rail2.height)) < 0.01,
     "the lead nested article must run to the foot of the top package",
   );
   assert(
@@ -512,9 +511,9 @@ for (const [templateId, template] of Object.entries(TEMPLATE_REGISTRY)) {
   );
 
   assert(Math.abs(rail1.y - lead.y) < 0.01 && Math.abs(right.y - lead.y) < 0.01, "row 1 peers must share a top edge");
-  assert(rail2.y >= rail1.y + rail1.height - 0.01, "the three rails must stack top to bottom");
-  assert(rail3.y >= rail2.y + rail2.height - 0.01, "the three rails must stack top to bottom");
-  assert(mid.y >= rail3.y + rail3.height - 0.01, "the middle band must start below the top package");
+  assert(rail2.y >= rail1.y + rail1.height - 0.01, "the two rails must stack top to bottom");
+  assert(bySlot.get(3)!.priority === "lead", "the third slot is now the lead, not a third rail");
+  assert(mid.y >= rail2.y + rail2.height - 0.01, "the middle band must start below the top package");
   assert(bottom.y >= mid.y + mid.height - 0.01, "the bottom package must start below the middle band");
   assert(rail1.y >= FRONT_HEADER_HEIGHT_PT - 0.01, "CliffFrontSep15 must start below the existing masthead");
 }

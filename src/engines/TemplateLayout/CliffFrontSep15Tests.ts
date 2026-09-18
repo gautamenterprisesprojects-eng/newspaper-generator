@@ -44,8 +44,8 @@ assert(
   "CliffFrontSep15 must appear in FRONT_PAGE_TEMPLATE_IDS",
 );
 assert(
-  WIZARD_FRONT_PAGE_DESIGNS.some((design) => design.id === "CliffFrontSep15" && design.storyCount === 11),
-  "CliffFrontSep15 must be selectable on the Front Page wizard tab as an 11-box design",
+  WIZARD_FRONT_PAGE_DESIGNS.some((design) => design.id === "CliffFrontSep15" && design.storyCount === 10),
+  "CliffFrontSep15 must be selectable on the Front Page wizard tab as a 10-box design",
 );
 assert(
   !WIZARD_LAYOUT_DESIGNS.some((design) => design.id === "CliffFrontSep15"),
@@ -53,14 +53,15 @@ assert(
 );
 
 const definition = getTemplateDefinition("CliffFrontSep15");
-assert.equal(definition.storyCount, 11);
-assert.equal(definition.slots.length, 11);
-assert.deepEqual(definition.trimToInsets, [4, 6]);
+assert.equal(definition.storyCount, 10);
+assert.equal(definition.slots.length, 10);
+assert.deepEqual(definition.trimToInsets, [3, 5]);
 
 const leadSlots = definition.slots.filter((slot) => slot.priority === "lead");
 assert.equal(leadSlots.length, 1, "exactly one lead");
-assert.equal(leadSlots[0].storyNumber, 4);
-assert.equal(leadSlots[0].rowSpan, 3);
+// The lead spans the two rail rows, not three -- the rail carries two briefs.
+assert.equal(leadSlots[0].storyNumber, 3);
+assert.equal(leadSlots[0].rowSpan, 2);
 
 const wideBriefsInLeadRow = definition.slots.filter(
   (slot) =>
@@ -75,28 +76,26 @@ const front = generateTemplateLayout({ templateId: "CliffFrontSep15", ...geometr
 const bySlot = new Map(front.slots.map((slot) => [slot.storyNumber, slot]));
 const rail1 = bySlot.get(1)!;
 const rail2 = bySlot.get(2)!;
-const rail3 = bySlot.get(3)!;
-const lead = bySlot.get(4)!;
-const leadNested = bySlot.get(5)!;
-const right = bySlot.get(6)!;
-const rightNested = bySlot.get(7)!;
-const mid = bySlot.get(8)!;
-const related = bySlot.get(9)!;
-const cartoon = bySlot.get(10)!;
-const bottom = bySlot.get(11)!;
+const lead = bySlot.get(3)!;
+const leadNested = bySlot.get(4)!;
+const right = bySlot.get(5)!;
+const rightNested = bySlot.get(6)!;
+const mid = bySlot.get(7)!;
+const related = bySlot.get(8)!;
+const cartoon = bySlot.get(9)!;
+const bottom = bySlot.get(10)!;
 
-assert.equal(front.slots.length, 11);
+assert.equal(front.slots.length, 10);
 assert.equal(lead.columnSpan, 3);
 assert.equal(rail1.columnSpan, 1);
 assert.equal(rail2.columnSpan, 1);
-assert.equal(rail3.columnSpan, 1);
 assert.equal(right.columnSpan, 2);
 assert.equal(mid.columnSpan, 6);
 assert.equal(cartoon.columnSpan, 1);
 assert.equal(bottom.columnSpan, 5);
-assert.equal(leadNested.insetParentStoryNumber, 4);
-assert.equal(rightNested.insetParentStoryNumber, 6);
-assert.equal(related.insetParentStoryNumber, 8);
+assert.equal(leadNested.insetParentStoryNumber, 3);
+assert.equal(rightNested.insetParentStoryNumber, 5);
+assert.equal(related.insetParentStoryNumber, 7);
 assert.equal(rail1.insetParentStoryNumber, undefined);
 assert.equal(leadNested.columnSpan, 3);
 assert.equal(rightNested.columnSpan, 2);
@@ -110,18 +109,18 @@ assert.ok(related.y + related.height < mid.y + mid.height - 1, "related-news box
 assert.ok(related.height < mid.height * 0.55, "related-news box must stay a compact top-right fact box");
 assert.ok(leadNested.y > lead.y);
 assert.ok(rightNested.y > right.y);
-assert.ok(Math.abs(leadNested.y + leadNested.height - (rail3.y + rail3.height)) < 0.01);
-assert.ok(Math.abs(rightNested.y + rightNested.height - (rail3.y + rail3.height)) < 0.01);
+assert.ok(Math.abs(leadNested.y + leadNested.height - (rail2.y + rail2.height)) < 0.01);
+assert.ok(Math.abs(rightNested.y + rightNested.height - (rail2.y + rail2.height)) < 0.01);
 assert.ok(lead.y + lead.height < leadNested.y + 0.01);
 assert.ok(right.y + right.height < rightNested.y + 0.01);
 assert.ok(mid.y + mid.height > related.y + 1);
 assert.ok(rail1.y >= FRONT_HEADER_HEIGHT_PT - 0.01);
 assert.ok(front.slots.every((slot) => slot.y >= FRONT_HEADER_HEIGHT_PT - 0.01));
 assert.ok(rail2.y >= rail1.y + rail1.height - 0.01);
-assert.ok(rail3.y >= rail2.y + rail2.height - 0.01);
+assert.equal(definition.slots.filter((slot) => slot.columnStart === 1 && slot.columnSpan === 1 && slot.row <= 2).length, 2, "the left rail carries exactly two briefs");
 assert.ok(Math.abs(lead.y - rail1.y) < 0.01);
 assert.ok(Math.abs(right.y - rail1.y) < 0.01);
-assert.ok(mid.y >= rail3.y + rail3.height - 0.01);
+assert.ok(mid.y >= rail2.y + rail2.height - 0.01);
 assert.ok(bottom.y >= mid.y + mid.height - 0.01);
 assert.ok(
   Math.abs(Math.max(...front.slots.map((slot) => slot.y + slot.height)) - (contentBounds.y + contentBounds.height)) < 1,

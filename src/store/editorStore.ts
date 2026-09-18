@@ -1834,7 +1834,7 @@ const chooseLayoutFittedNewswireArticleData = ({
   const kickerOverrideText =
     options?.templateId === "IndianCity5A" && baseStory.templateStoryNumber === 1
       ? "सार-समाचार"
-      : options?.templateId === "CliffFrontSep15" && baseStory.templateStoryNumber === 9
+      : options?.templateId === "CliffFrontSep15" && baseStory.templateStoryNumber === 8
         ? "संबंधित खबर"
         : undefined;
 
@@ -4033,8 +4033,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         const isAkhandVicharManthanImageSlot =
           isAkhandVicharManthan6A && [2, 3, 4, 5, 6].includes(slot.storyNumber);
         const youthUpdateInsideCompactSlot = isYouthUpdateInsideStory && slot.columnSpan <= 2;
-        const isCliffFrontSep15MidPackage = options?.templateId === "CliffFrontSep15" && slot.storyNumber === 8;
-        const isCliffFrontSep15RelatedNews = options?.templateId === "CliffFrontSep15" && slot.storyNumber === 9;
+        // Story numbers moved when the left rail went from three briefs to two
+        // (11 slots -> 10): the middle package is 7 and the related-news box 8.
+        const isCliffFrontSep15MidPackage = options?.templateId === "CliffFrontSep15" && slot.storyNumber === 7;
+        const isCliffFrontSep15RelatedNews = options?.templateId === "CliffFrontSep15" && slot.storyNumber === 8;
         const isEditorRailFrontLayout = options?.templateId === EDITOR_RAIL_FRONT_TEMPLATE_ID;
         const isEditorRailFrontFurnitureSlot = isEditorRailFrontLayout && slot.storyNumber === 1;
         const resolvedImageEnabled = isAkhandEditorial5A || isAkhandVicharManthanImageSlot

@@ -5130,7 +5130,7 @@ function composeArticleBoxPass(
   // Require the image to actually start in the first column; the geometric
   // `imageOccupiesFirstColumn` test below still catches a photo that reaches
   // into column 1 by width. Only stories setting imageColumnStart > 1 change,
-  // which today is CliffFrontSep15 story 8 and nothing else.
+  // which today is CliffFrontSep15's middle package and nothing else.
   const imageStartsFirstColumn =
     (resolvedImageSettings.imageAlignment === "top-left" ||
       resolvedImageSettings.imageAlignment === "left") &&

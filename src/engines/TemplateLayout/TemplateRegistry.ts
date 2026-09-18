@@ -1028,41 +1028,43 @@ const CLIFF_FRONT_8A: TemplateDefinition = {
 const CLIFF_FRONT_SEP15: TemplateDefinition = {
   id: "CliffFrontSep15",
   name: "The Cliff News Front Page (15 Sep 2026)",
-  storyCount: 11,
-  trimToInsets: [4, 6],
+  storyCount: 10,
+  trimToInsets: [3, 5],
+  // The left rail carries two briefs, not three. The top band keeps the depth it
+  // always had (0.54 of the content box) but is split in two rather than three,
+  // so the two remaining rail boxes grow to fill it and the lead and the right
+  // package span two rows instead of three. Rows below are unchanged in depth.
   rowRhythm: [
-    { row: 1, baseRatio: 0.18, receivesRemainingSpace: false, minimumHeight: 80 },
-    { row: 2, baseRatio: 0.18, receivesRemainingSpace: false, minimumHeight: 80 },
-    { row: 3, baseRatio: 0.18, receivesRemainingSpace: false, minimumHeight: 80 },
-    { row: 4, baseRatio: 0.28, receivesRemainingSpace: false, minimumHeight: 180 },
-    { row: 5, baseRatio: 0.18, receivesRemainingSpace: true, minimumHeight: 140 },
+    { row: 1, baseRatio: 0.27, receivesRemainingSpace: false, minimumHeight: 120 },
+    { row: 2, baseRatio: 0.27, receivesRemainingSpace: false, minimumHeight: 120 },
+    { row: 3, baseRatio: 0.28, receivesRemainingSpace: false, minimumHeight: 180 },
+    { row: 4, baseRatio: 0.18, receivesRemainingSpace: true, minimumHeight: 140 },
   ],
   slots: [
     { storyNumber: 1, row: 1, columnStart: 1, columnSpan: 1, priority: "brief" },
     { storyNumber: 2, row: 2, columnStart: 1, columnSpan: 1, priority: "brief" },
-    { storyNumber: 3, row: 3, columnStart: 1, columnSpan: 1, priority: "brief" },
-    { storyNumber: 4, row: 1, columnStart: 2, columnSpan: 3, priority: "lead", rowSpan: 3 },
+    { storyNumber: 3, row: 1, columnStart: 2, columnSpan: 3, priority: "lead", rowSpan: 2 },
     {
-      storyNumber: 5,
+      storyNumber: 4,
       row: 1,
       columnStart: 2,
       columnSpan: 3,
       priority: "secondary",
-      insetInto: { parentStoryNumber: 4, topFraction: 0.52 },
+      insetInto: { parentStoryNumber: 3, topFraction: 0.52 },
     },
-    { storyNumber: 6, row: 1, columnStart: 5, columnSpan: 2, priority: "major", rowSpan: 3 },
+    { storyNumber: 5, row: 1, columnStart: 5, columnSpan: 2, priority: "major", rowSpan: 2 },
     {
-      storyNumber: 7,
+      storyNumber: 6,
       row: 1,
       columnStart: 5,
       columnSpan: 2,
       priority: "secondary",
-      insetInto: { parentStoryNumber: 6, topFraction: 0.74 },
+      insetInto: { parentStoryNumber: 5, topFraction: 0.74 },
     },
-    { storyNumber: 8, row: 4, columnStart: 1, columnSpan: 6, priority: "major" },
+    { storyNumber: 7, row: 3, columnStart: 1, columnSpan: 6, priority: "major" },
     {
-      storyNumber: 9,
-      row: 4,
+      storyNumber: 8,
+      row: 3,
       columnStart: 5,
       columnSpan: 2,
       priority: "brief",
@@ -1072,11 +1074,11 @@ const CLIFF_FRONT_SEP15: TemplateDefinition = {
       // the top of the sidebar. bottomTrimFraction moves 0.42 -> 0.40 to hold
       // the foot on the same line, so the box grows upward only: top 78.5pt ->
       // 64.2pt below the package, bottom unchanged.
-      insetInto: { parentStoryNumber: 8, topFraction: 0.18 },
+      insetInto: { parentStoryNumber: 7, topFraction: 0.18 },
       bottomTrimFraction: 0.4,
     },
-    { storyNumber: 10, row: 5, columnStart: 1, columnSpan: 1, priority: "brief" },
-    { storyNumber: 11, row: 5, columnStart: 2, columnSpan: 5, priority: "major" },
+    { storyNumber: 9, row: 4, columnStart: 1, columnSpan: 1, priority: "brief" },
+    { storyNumber: 10, row: 4, columnStart: 2, columnSpan: 5, priority: "major" },
   ],
 };
 
