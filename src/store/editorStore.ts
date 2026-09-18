@@ -4478,12 +4478,15 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             ...(isAkhandEditorial5A && slot.storyNumber === 4 ? { headlineToBylineExtraGap: 7 } : {}),
             ...(isAkhandVicharManthan6A && slot.storyNumber === 2 ? { headlineToBylineExtraGap: -2 } : {}),
             ...(isEightColumnTwoColumnSlot ? { headlineToBylineExtraGap: 4 } : {}),
-            // The related-news box carries no byline, so the headline-to-body
-            // step was the full datelineToContent floor (17pt) and read as a
-            // hole in a box only 161pt deep. Body top snaps to the baseline
-            // grid, so this figure is not continuous: anything from 0 to -8
-            // still lands on 17pt and -10 takes the next baseline down, 5pt.
-            ...(isCliffFrontSep15RelatedNews ? { headlineToBylineExtraGap: -10 } : {}),
+            // NOTE on the related-news box's headline-to-body step: it is not a
+            // free dial. The body's first line sits on its own ~12pt advance, so
+            // the only reachable positions are 5pt and 17pt -- measured, and
+            // unchanged by baselineGridSize, headline leading, body leading or
+            // headline container padding (that container is transparent, so its
+            // padding is dropped). 5pt read as the copy touching the headline, so
+            // the box keeps the snapped default of 17pt. Anything between the two
+            // needs the region engine to stop snapping the first body line, which
+            // is a shared path used by every story.
             // This template's kicker label (the part through the colon)
             // matches the page's own cyan theme instead of the standard
             // kicker red. Narrow/badge kickers ignore this field by design

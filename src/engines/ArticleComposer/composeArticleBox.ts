@@ -4831,11 +4831,22 @@ function composeArticleBoxPass(
       continue;
     }
 
+    // The band left above a nested box is often only deep enough for a single
+    // line, which sets one orphan row of the parent's copy across the top of
+    // the sidebar -- on CliffFrontSep15 that row sat alone above the
+    // related-news box. Block the strip from the top of the parent instead, so
+    // the parent's copy starts below the nested box in those columns. The band's
+    // depth moves with the headline, so this cannot be a fixed fraction.
+    const regionTop = region.y - articleBox.y - nestedRegionWrapGutter;
+    const blockFromTop = nestedRegionWrapGutter > 0;
+
     obstacleRects.push({
       x: region.x - articleBox.x - inset - nestedRegionWrapGutter,
-      y: region.y - articleBox.y - nestedRegionWrapGutter,
+      y: blockFromTop ? 0 : regionTop,
       width: region.width + nestedRegionWrapGutter * 2,
-      height: region.height + nestedRegionWrapGutter * 2,
+      height: blockFromTop
+        ? regionTop + region.height + nestedRegionWrapGutter * 2
+        : region.height + nestedRegionWrapGutter * 2,
     });
   }
 
