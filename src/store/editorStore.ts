@@ -241,6 +241,12 @@ import {
   getEditorialTextColumnCount,
 } from "@/engines/MasterPage/EditorialPageStyle";
 
+// Pale newsprint blue behind CliffFrontSep15's related-news box (story 9).
+// Kept light enough that black body type stays comfortably above the contrast
+// floor on newsprint and the tint survives CMYK conversion without banding --
+// the wash Indian dailies use to set a sidebar off from its parent package.
+const CLIFF_SEP15_RELATED_NEWS_TINT = "#e8f1f9";
+
 const MIN_STORY_SIZE: Size = {
   width: 180,
   height: 240,
@@ -4154,6 +4160,15 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         if (isEightColumnTwoColumnSlot) {
           resolvedColumnCount = 1;
         }
+        // CliffFrontSep15's related-news box is a 2-column slot, but it reads as
+        // one standing block on the printed page, not as a miniature two-column
+        // story -- two columns inside a box this narrow left ~14ch measures.
+        // Setting one column also drops storyColumnSpan to 1, which takes the
+        // headline-to-body step off the two-column branch (fontSize * 0.24, the
+        // widest of the three) and onto the default fontSize * 0.08.
+        if (isCliffFrontSep15RelatedNews) {
+          resolvedColumnCount = 1;
+        }
 
         const defaultTypography = getDefaultStoryTypographySettings(slot.priority);
         const isAkhandEditorial5AMiddleBand = isAkhandEditorial5A && slot.storyNumber === 3;
@@ -4410,6 +4425,23 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             ...prototypeArticle,
             headline: item?.headline ?? `Article ${slot.storyNumber}`,
             columnCount: resolvedColumnCount,
+            // The related-news box drops its hairline frame and stands on a pale
+            // newsprint tint instead -- the light blue wash Indian dailies use to
+            // mark a sidebar off from the package it sits inside. Scoped to this
+            // one slot; every other box keeps its frame and the paper colour.
+            ...(isCliffFrontSep15RelatedNews
+              ? {
+                  containerStyles: {
+                    ...((prototypeArticle as any).containerStyles ?? {}),
+                    article: {
+                      ...(((prototypeArticle as any).containerStyles?.article) ?? {}),
+                      containerBackgroundColor: CLIFF_SEP15_RELATED_NEWS_TINT,
+                      containerBorderWidth: 0,
+                      containerBorderRadius: 0,
+                    },
+                  },
+                }
+              : {}),
             // Youth UPDATE's "SHORT NEWS" banner is painted as a hardcoded
             // overlay above this box (see youthUpdateShortNewsBanner in
             // EditorCanvas.tsx) -- the headline's own top inset is normally
@@ -4446,6 +4478,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             ...(isAkhandEditorial5A && slot.storyNumber === 4 ? { headlineToBylineExtraGap: 7 } : {}),
             ...(isAkhandVicharManthan6A && slot.storyNumber === 2 ? { headlineToBylineExtraGap: -2 } : {}),
             ...(isEightColumnTwoColumnSlot ? { headlineToBylineExtraGap: 4 } : {}),
+            // The related-news box carries no byline, so the headline-to-body
+            // step was the full datelineToContent floor (17pt) and read as a
+            // hole in a box only 161pt deep. Body top snaps to the baseline
+            // grid, so this figure is not continuous: anything from 0 to -8
+            // still lands on 17pt and -10 takes the next baseline down, 5pt.
+            ...(isCliffFrontSep15RelatedNews ? { headlineToBylineExtraGap: -10 } : {}),
             // This template's kicker label (the part through the colon)
             // matches the page's own cyan theme instead of the standard
             // kicker red. Narrow/badge kickers ignore this field by design
@@ -4466,7 +4504,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             enablePullQuote: Boolean(item?.pullQuoteText),
             ...(isEightColumnTwoColumnSlot ? { tightTwoColumnBylineToBodyGap: true } : {}),
             ...(isShortEightColumnNarrowSlot ? { suppressSubheadline: true } : {}),
-            ...(isCliffFrontSep15RelatedNews ? { suppressByline: true } : {}),
+            ...(isCliffFrontSep15RelatedNews
+              ? { suppressByline: true, suppressArticleContainerBorder: true }
+              : {}),
             ...(isEightColumnThreeColumnSlot ? { suppressInlineSubheadings: true } : {}),
             ...(isCliffInsideSixColumnTemplate ? { suppressArticleContainerBorder: true } : {}),
             ...(options?.pageKind === "front" ? { frontPageStyle: FRONT_PAGE_ARTICLE_STYLE } : {}),
