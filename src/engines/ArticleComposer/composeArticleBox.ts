@@ -4816,16 +4816,26 @@ function composeArticleBoxPass(
     isAkhandCompactAuthorArticle &&
     Boolean((articleData.editorPortraitUrl ?? "").trim() || (articleData.editorName ?? "").trim());
 
+  // A nested box's rectangle is used as a text obstacle as-is, with no gutter,
+  // so the parent's copy sets flush against the nested box's frame -- on
+  // CliffFrontSep15 the middle package's body text ran into the related-news
+  // box's border. Every other obstacle in this function keeps air around
+  // itself (the editorial float image 6pt, the leader portrait 1pt); give this
+  // one the same. Scoped to CliffFrontSep15 so the other nested-sidebar
+  // templates (CliffFront11A, the L-Wrap, the editorial author rail) keep the
+  // wrap they were tuned against.
+  const nestedRegionWrapGutter = editorialTemplateId === "CliffFrontSep15" ? 6 : 0;
+
   for (const region of settings.reservedRegions ?? []) {
     if (isEditorialLeaderArticle || isAkhandCompactAuthorArticle) {
       continue;
     }
 
     obstacleRects.push({
-      x: region.x - articleBox.x - inset,
-      y: region.y - articleBox.y,
-      width: region.width,
-      height: region.height,
+      x: region.x - articleBox.x - inset - nestedRegionWrapGutter,
+      y: region.y - articleBox.y - nestedRegionWrapGutter,
+      width: region.width + nestedRegionWrapGutter * 2,
+      height: region.height + nestedRegionWrapGutter * 2,
     });
   }
 
@@ -5100,9 +5110,20 @@ function composeArticleBoxPass(
   const imageOccupiesFirstColumn =
     Boolean(image) &&
     rangesOverlap(firstColumnX, firstColumnRight, image!.x, image!.x + image!.width);
+  // A left/top-left alignment used to be taken as proof the photo sits in the
+  // box's FIRST column, which forces the byline down past the whole image.
+  // That is wrong when the story also pins the photo to a later column:
+  // CliffFrontSep15's middle package aligns top-left but sets imageColumnStart 2,
+  // so column 1 carries the bullets and the byline -- and the byline was being
+  // dropped to the photo's foot, leaving a white band under the bullets.
+  // Require the image to actually start in the first column; the geometric
+  // `imageOccupiesFirstColumn` test below still catches a photo that reaches
+  // into column 1 by width. Only stories setting imageColumnStart > 1 change,
+  // which today is CliffFrontSep15 story 8 and nothing else.
   const imageStartsFirstColumn =
-    resolvedImageSettings.imageAlignment === "top-left" ||
-    resolvedImageSettings.imageAlignment === "left";
+    (resolvedImageSettings.imageAlignment === "top-left" ||
+      resolvedImageSettings.imageAlignment === "left") &&
+    (resolvedImageSettings.imageColumnStart ?? 1) <= 1;
   const forceBylineBelowFirstColumnImage = Boolean(
     image && (imageStartsFirstColumn || imageOccupiesFirstColumn),
   );
