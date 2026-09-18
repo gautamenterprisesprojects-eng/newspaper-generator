@@ -12,6 +12,7 @@ import { PDFDocument } from "pdf-lib";
 import { AdvertisementManagerPanel } from "@/components/editor/AdvertisementManagerPanel";
 import { ArticleInspectorPanel } from "@/components/editor/ArticleInspectorPanel";
 import { AssetManagerPanel } from "@/components/editor/AssetManagerPanel";
+import { FontDiagnosticsPanel } from "@/components/editor/FontDiagnosticsPanel";
 import { HeaderManagerPanel } from "@/components/editor/HeaderManagerPanel";
 import { InlineObjectTextEditor } from "@/components/editor/InlineObjectTextEditor";
 import { PagePreviewOverlay } from "@/components/editor/PagePreviewOverlay";
@@ -63,7 +64,7 @@ import {
 import {
   createInitialFontManagerState,
   getNewspaperFontStack,
-  waitUntilNewspaperFontsLoaded,
+  waitForNewspaperFonts,
   waitUntilAllNewspaperFontsLoaded,
   assertCliffDemo3DisplayFontsEngaged,
   primeNewspaperFontsOnCanvas,
@@ -2231,13 +2232,7 @@ export function EditorCanvas() {
   useEffect(() => {
     let active = true;
 
-    // Retry until every Devanagari face reports loaded (20s ceiling), pulling
-    // each one in through the FontFace API on every pass. A single
-    // document.fonts.load() attempt at mount left faces that were not ready on
-    // the first try unloaded for good, so the page composed with fallback
-    // metrics and stayed that way. Restores the 17 Sep priming that the server
-    // sync had reverted.
-    waitUntilNewspaperFontsLoaded()
+    waitForNewspaperFonts()
       .then((state) => {
         if (active) {
           setFontManager(state);
@@ -7097,6 +7092,12 @@ export function EditorCanvas() {
           </button>
         </section>
       </div>
+
+      {fontManager.status !== "loaded" ? (
+        <div className="font-diagnostics-shell">
+          <FontDiagnosticsPanel fontManager={fontManager} />
+        </div>
+      ) : null}
 
       <Stage
         ref={stageRef}
