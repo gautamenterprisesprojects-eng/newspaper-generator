@@ -3,7 +3,7 @@ import path from "node:path";
 import type { NewswireStory } from "@/lib/newswire";
 import { getNmsBundleDir } from "./nmsBundleStorage";
 import type { NmsBundleArticle, NmsBundlePayload } from "./nmsBundleTypes";
-import { textValue } from "./nmsBundleTypes";
+import { pickNmsArticleImageUrl, textValue } from "./nmsBundleTypes";
 
 const words = (text: string) => text.trim().split(/\s+/u).filter(Boolean);
 
@@ -34,7 +34,7 @@ const cleanNmsBody = (body: string, headline: string) => {
 export const nmsBundleArticleToNewswireStory = (article: NmsBundleArticle, index: number): NewswireStory => {
   const headline = textValue(article.headline) || textValue(article.originalHeadline) || `NMS Story ${index + 1}`;
   const body = cleanNmsBody(textValue(article.body) || textValue(article.originalBody) || "", headline);
-  const imageUrl = textValue(article.coverImage?.url) || textValue(article.images?.find((image) => textValue(image.url))?.url);
+  const imageUrl = pickNmsArticleImageUrl(article);
   const place = textValue(article.place);
   const category = textValue(article.category) || "National";
   const reporterName = textValue(article.reporter?.nameHi) || textValue(article.reporter?.name) || "द क्लिफ न्यूज़";

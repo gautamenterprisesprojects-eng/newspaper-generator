@@ -1,5 +1,7 @@
 import type { PrintPDFFontAsset } from "@/engines/PrintPDFEngine/PrintPDFTypes";
 import { createCanvasFontString } from "@/engines/TypographyEngine/TextMeasure";
+import { isCliffDemo3PortalSession } from "@/lib/nms/cliffDemo3Publisher";
+import { getNmsExportRecipe } from "@/lib/nms/cliffDemo3ManualRecipe";
 import type {
   FontAvailabilityDiagnostic,
   FontManagerState,
@@ -7,7 +9,7 @@ import type {
   NewspaperFontRole,
 } from "./FontManagerTypes";
 
-export const FONT_VERSION = "Noto Devanagari static TTF 2026-07";
+export const FONT_VERSION = "cliffdemo3 parity burn-gate 2026-09-17";
 
 export const NEWSPAPER_FONT_FAMILIES = {
   sans: "Cliff Noto Sans Devanagari",
@@ -61,6 +63,37 @@ const hashStableText = (value: string) => {
   return hash >>> 0;
 };
 
+
+export const resolveNewspaperCanvasFontStyle = (
+  fontFamily: string,
+  fontStyle?: string | null,
+): string => {
+  const weightMatch = String(fontStyle ?? "").match(/\b(400|500|550|600|700|800|900|bold)\b/i);
+  const requested = weightMatch
+    ? (weightMatch[1].toLowerCase() === "bold" ? 700 : Number(weightMatch[1]))
+    : 400;
+
+  const primaryFamily = fontFamily.split(",")[0]?.replace(/['"]/g, "").trim().toLowerCase() ?? "";
+  const candidates = NEWSPAPER_FONT_DEFINITIONS.filter(
+    (font) => font.family.replace(/['"]/g, "").trim().toLowerCase() === primaryFamily,
+  );
+  if (candidates.length === 0) {
+    return String(requested);
+  }
+
+  const weights = [...new Set(candidates.map((font) => font.weight))].sort((a, b) => a - b);
+  let best = weights[0];
+  for (const weight of weights) {
+    if (weight <= requested) {
+      best = weight;
+    }
+  }
+  return String(best);
+};
+
+export const isDevanagariNewspaperText = (text: string | null | undefined) =>
+  /[\u0900-\u097F]/u.test(String(text ?? ""));
+
 export const selectNewspaperHeadlineFont = ({
   text,
   priority,
@@ -68,6 +101,13 @@ export const selectNewspaperHeadlineFont = ({
   contentLanguage,
   slotKey,
 }: HeadlineFontSelectionInput): NewspaperHeadlineFontSelection => {
+  // NMS export only (?nmsExport=1 + bundle recipe): headline face per story
+  // role from the recipe. Wizard sessions skip this and keep the committed
+  // rotation below -- cliffdemo3 included.
+  const recipePick = getNmsExportRecipe()?.fonts.headlineByPriority?.[priority];
+  if (recipePick?.family && !(contentLanguage === "english" && !isDevanagariNewspaperText(text))) {
+    return { fontFamily: recipePick.family, fontStyle: recipePick.weight };
+  }
   if (contentLanguage === "english") {
     return { fontFamily: NEWSPAPER_FONT_STACKS.serif, fontStyle: "700" };
   }
@@ -248,8 +288,14 @@ const getBrowserFontEntries = (): FontFace[] => {
   return fonts;
 };
 
-export const getNewspaperFontStack = (role: NewspaperFontRole) =>
-  NEWSPAPER_FONT_STACKS[role];
+export const getNewspaperFontStack = (role: NewspaperFontRole) => {
+  // NMS export only: a recipe may ask for the primary face without the
+  // Noto/serif chain behind it. Wizard sessions always get the full stack.
+  if (getNmsExportRecipe()?.fonts.primaryOnlyNoStackFallback) {
+    return NEWSPAPER_FONT_FAMILIES[role];
+  }
+  return NEWSPAPER_FONT_STACKS[role];
+};
 
 export const getNewspaperFontFamily = (role: NewspaperFontRole) =>
   NEWSPAPER_FONT_FAMILIES[role];
@@ -289,6 +335,69 @@ const getFontStatus = (font: NewspaperFontDefinition) => {
   );
 };
 
+
+export const createAllFontDiagnostics = (): FontAvailabilityDiagnostic[] =>
+  NEWSPAPER_FONT_DEFINITIONS.map((font) => {
+    const loaded = getFontStatus(font);
+    const requestedFont = toFontCheckString(font);
+    const measurementFont = createCanvasFontString(font.cssFamily, 16, `${font.weight}`);
+
+    return {
+      id: font.id,
+      role: font.role,
+      requestedFont,
+      resolvedFont: font.family,
+      measurementFont,
+      renderFont: font.cssFamily,
+      pdfFont: font.source,
+      source: font.source,
+      loaded,
+      fallback: !loaded,
+      status: loaded ? "loaded" : "fallback",
+      version: FONT_VERSION,
+    };
+  });
+
+export const waitForAllNewspaperFonts = async (): Promise<FontManagerState> => {
+  if (typeof document === "undefined" || !document.fonts?.ready) {
+    return {
+      ready: true,
+      status: "loaded",
+      diagnostics: [],
+      warning: null,
+    };
+  }
+
+  await loadAllNewspaperFontFaces();
+  await document.fonts.ready;
+
+  const diagnostics = createAllFontDiagnostics();
+  const fallback = diagnostics.some((font) => font.fallback);
+
+  return {
+    ready: !fallback,
+    status: fallback ? "fallback" : "loaded",
+    diagnostics,
+    warning: fallback
+      ? "One or more newspaper fonts are not loaded; export is blocked to avoid fallback metrics."
+      : null,
+  };
+};
+
+export const waitUntilAllNewspaperFontsLoaded = async (timeoutMs = 45000): Promise<FontManagerState> => {
+  const deadline = Date.now() + Math.max(1000, timeoutMs);
+  let last = await waitForAllNewspaperFonts();
+
+  while (last.status !== "loaded" && Date.now() < deadline) {
+    await loadAllNewspaperFontFaces();
+    primeNewspaperFontsOnCanvas();
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    last = await waitForAllNewspaperFonts();
+  }
+
+  return last;
+};
+
 export const createFontDiagnostics = (): FontAvailabilityDiagnostic[] =>
   REQUIRED_FONT_DEFINITIONS.map((font) => {
     const loaded = getFontStatus(font);
@@ -319,27 +428,43 @@ export const createFontDiagnostics = (): FontAvailabilityDiagnostic[] =>
  * Georgia and then paint headlines in Rozha once those files arrived.
  */
 export const loadAllNewspaperFontFaces = async () => {
-  if (typeof document === "undefined" || !document.fonts?.load) {
+  if (typeof document === "undefined" || !document.fonts) {
     return;
   }
 
+  await Promise.all(
+    NEWSPAPER_FONT_DEFINITIONS.map(async (font) => {
+      try {
+        const sourceUrl =
+          font.source.startsWith("http")
+            ? font.source
+            : `${window.location.origin}${font.source.startsWith("/") ? "" : "/"}${font.source}`;
+        const face = new FontFace(font.family, `url("${sourceUrl}")`, {
+          weight: String(font.weight),
+          style: font.style || "normal",
+        });
+        const loaded = await face.load();
+        document.fonts.add(loaded);
+      } catch {
+        await document.fonts.load(toFontCheckString(font), "मानसून").catch(() => undefined);
+      }
+    }),
+  );
   await Promise.all([
-    ...NEWSPAPER_FONT_DEFINITIONS.map((font) =>
-      document.fonts.load(toFontCheckString(font), "मानसून").catch(() => undefined),
-    ),
     document.fonts.load(`400 16px "Tinos"`).catch(() => undefined),
     document.fonts.load(`700 16px "Tinos"`).catch(() => undefined),
   ]);
   await document.fonts.ready;
 };
 
-const primeNewspaperFontsOnCanvas = () => {
-  if (typeof document === "undefined") {
+export const primeNewspaperFontsOnCanvas = (target?: CanvasRenderingContext2D | null) => {
+  if (typeof document === "undefined" && !target) {
     return;
   }
 
-  const canvas = document.createElement("canvas");
-  const context = canvas.getContext("2d");
+  const context =
+    target ??
+    document.createElement("canvas").getContext("2d");
   if (!context) {
     return;
   }
@@ -356,6 +481,205 @@ const primeNewspaperFontsOnCanvas = () => {
  * Retries because Chromium headless often reports check()=false until the
  * face has been used on a canvas once.
  */
+
+/**
+ * cliffdemo3 only. Proves canvas will paint display faces, not Noto-as-Rozha.
+ * Manual PageMint export uses the same DOM canvas path; if Rozha metrics match
+ * Noto, headless fell back and we must not ship that PDF.
+ */
+export type CliffDemo3FontFaceProof = {
+  role: string;
+  family: string;
+  weight: number;
+  style: string;
+  status: "loaded" | "missing" | "mismatch";
+  checkOk: boolean;
+  metricWidth?: number;
+  referenceWidth?: number;
+};
+
+export type CliffDemo3FontProofReport = {
+  engaged: boolean;
+  faces: CliffDemo3FontFaceProof[];
+};
+
+/**
+ * cliffdemo3 only. Proves canvas paints the same faces manual composition uses:
+ * display headlines + ExtraCondensed body (400/550/600) + Sans (400/700) + Tinos 400.
+ * Fail closed — never ship with silent Noto/system fallback.
+ */
+export const assertCliffDemo3DisplayFontsEngaged = async (): Promise<CliffDemo3FontProofReport> => {
+  if (typeof window === "undefined" || !isCliffDemo3PortalSession()) {
+    return { engaged: true, faces: [] };
+  }
+  if (typeof document === "undefined" || !document.fonts) {
+    throw new Error("cliffdemo3 export blocked: document.fonts unavailable");
+  }
+
+  await loadAllNewspaperFontFaces();
+  await document.fonts.ready;
+  primeNewspaperFontsOnCanvas();
+
+  // Explicit loads for faces that composition uses but soft-path may skip.
+  await Promise.all([
+    document.fonts.load(`550 16px "${NEWSPAPER_FONT_FAMILIES.bodySerifCondensed}"`).catch(() => undefined),
+    document.fonts.load(`600 16px "${NEWSPAPER_FONT_FAMILIES.bodySerifCondensed}"`).catch(() => undefined),
+    document.fonts.load(`400 16px "${NEWSPAPER_FONT_FAMILIES.sans}"`).catch(() => undefined),
+    document.fonts.load(`700 16px "${NEWSPAPER_FONT_FAMILIES.sans}"`).catch(() => undefined),
+    document.fonts.load(`400 16px "Tinos"`).catch(() => undefined),
+    document.fonts.load(`700 16px "Tinos"`).catch(() => undefined),
+  ]);
+  primeNewspaperFontsOnCanvas();
+
+  const required: Array<{ role: string; family: string; weight: number; style: string }> = [
+    { role: "headline-lead", family: NEWSPAPER_FONT_FAMILIES.headlineRozha, weight: 400, style: "normal" },
+    { role: "headline-major", family: NEWSPAPER_FONT_FAMILIES.headlineAmita, weight: 700, style: "normal" },
+    { role: "headline-brief", family: NEWSPAPER_FONT_FAMILIES.headlineRanga, weight: 700, style: "normal" },
+    { role: "headline-secondary", family: NEWSPAPER_FONT_FAMILIES.headlineKalam, weight: 700, style: "normal" },
+    { role: "body-hindi-regular", family: NEWSPAPER_FONT_FAMILIES.bodySerifCondensed, weight: 400, style: "normal" },
+    { role: "body-hindi", family: NEWSPAPER_FONT_FAMILIES.bodySerifCondensed, weight: 550, style: "normal" },
+    { role: "inline-strip-bold", family: NEWSPAPER_FONT_FAMILIES.bodySerifCondensed, weight: 600, style: "normal" },
+    { role: "subhead-caption-regular", family: NEWSPAPER_FONT_FAMILIES.sans, weight: 400, style: "normal" },
+    { role: "subhead-byline-bold", family: NEWSPAPER_FONT_FAMILIES.sans, weight: 700, style: "normal" },
+    { role: "body-english", family: "Tinos", weight: 400, style: "normal" },
+  ];
+
+  const faces: CliffDemo3FontFaceProof[] = [];
+  const sampleHi = "जम्मू मानसून";
+  const sampleEn = "Cliff News body";
+
+  for (const font of required) {
+    const check = `${font.weight} 48px "${font.family}"`;
+    const probe = font.family === "Tinos" ? sampleEn : sampleHi;
+    let ok = false;
+    try {
+      ok = document.fonts.check(check, probe);
+    } catch {
+      ok = false;
+    }
+    const proof: CliffDemo3FontFaceProof = {
+      role: font.role,
+      family: font.family,
+      weight: font.weight,
+      style: font.style,
+      status: ok ? "loaded" : "missing",
+      checkOk: ok,
+    };
+    faces.push(proof);
+    if (!ok) {
+      console.error("[cliffdemo3 fonts] face not engaged", proof);
+      throw new Error(
+        `cliffdemo3 export blocked: font not engaged (${font.family} ${font.weight} / ${font.role})`,
+      );
+    }
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = 8;
+  canvas.height = 8;
+  canvas.style.cssText = "position:fixed;left:-10000px;top:0;opacity:0;pointer-events:none;";
+  document.body.appendChild(canvas);
+  try {
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      throw new Error("cliffdemo3 export blocked: no 2d context for font proof");
+    }
+    const sample = "जम्मू जाने की बना रहे थे योजना";
+
+    const measure = (spec: string) => {
+      ctx.font = spec;
+      return ctx.measureText(sample).width;
+    };
+
+    const rozha = measure(`400 48px "${NEWSPAPER_FONT_FAMILIES.headlineRozha}"`);
+    const noto = measure(`400 48px "${NEWSPAPER_FONT_FAMILIES.serif}"`);
+    const amita = measure(`700 48px "${NEWSPAPER_FONT_FAMILIES.headlineAmita}"`);
+    const notoBold = measure(`700 48px "${NEWSPAPER_FONT_FAMILIES.serif}"`);
+    const extra550 = measure(`550 48px "${NEWSPAPER_FONT_FAMILIES.bodySerifCondensed}"`);
+    const noto550ish = measure(`400 48px "${NEWSPAPER_FONT_FAMILIES.serif}"`);
+    const sans400 = measure(`400 48px "${NEWSPAPER_FONT_FAMILIES.sans}"`);
+    const tinos = (() => {
+      ctx.font = `400 48px "Tinos"`;
+      return ctx.measureText(sampleEn).width;
+    })();
+    const georgia = (() => {
+      ctx.font = `400 48px Georgia, serif`;
+      return ctx.measureText(sampleEn).width;
+    })();
+
+    if (Math.abs(rozha - noto) < 0.75) {
+      throw new Error(
+        `cliffdemo3 export blocked: Rozha canvas metrics match Noto (${rozha.toFixed(2)}≈${noto.toFixed(2)}); display face not painting`,
+      );
+    }
+    if (Math.abs(amita - notoBold) < 0.75) {
+      throw new Error(
+        `cliffdemo3 export blocked: Amita canvas metrics match Noto Bold (${amita.toFixed(2)}≈${notoBold.toFixed(2)}); display face not painting`,
+      );
+    }
+    // ExtraCondensed Medium must not paint as generic serif.
+    if (Math.abs(extra550 - noto550ish) < 0.75) {
+      throw new Error(
+        `cliffdemo3 export blocked: ExtraCondensed 550 metrics match Noto (${extra550.toFixed(2)}≈${noto550ish.toFixed(2)}); body face not painting`,
+      );
+    }
+    // Sans must not paint as serif Noto.
+    if (Math.abs(sans400 - noto) < 0.75) {
+      throw new Error(
+        `cliffdemo3 export blocked: Sans Devanagari metrics match Noto Serif (${sans400.toFixed(2)}≈${noto.toFixed(2)}); sans face not painting`,
+      );
+    }
+    // Tinos must engage (not identical to empty/system failure → width 0).
+    if (!(tinos > 1)) {
+      throw new Error("cliffdemo3 export blocked: Tinos 400 did not measure on canvas");
+    }
+
+    for (const face of faces) {
+      if (face.role === "headline-lead") {
+        face.metricWidth = Number(rozha.toFixed(2));
+        face.referenceWidth = Number(noto.toFixed(2));
+      }
+      if (face.role === "headline-major") {
+        face.metricWidth = Number(amita.toFixed(2));
+        face.referenceWidth = Number(notoBold.toFixed(2));
+      }
+      if (face.role === "body-hindi") {
+        face.metricWidth = Number(extra550.toFixed(2));
+        face.referenceWidth = Number(noto550ish.toFixed(2));
+      }
+      if (face.role === "subhead-caption-regular") {
+        face.metricWidth = Number(sans400.toFixed(2));
+        face.referenceWidth = Number(noto.toFixed(2));
+      }
+      if (face.role === "body-english") {
+        face.metricWidth = Number(tinos.toFixed(2));
+        face.referenceWidth = Number(georgia.toFixed(2));
+      }
+    }
+
+    console.log("[cliffdemo3 fonts] canvas engagement ok", {
+      rozha: Number(rozha.toFixed(2)),
+      noto: Number(noto.toFixed(2)),
+      amita: Number(amita.toFixed(2)),
+      notoBold: Number(notoBold.toFixed(2)),
+      extra550: Number(extra550.toFixed(2)),
+      sans400: Number(sans400.toFixed(2)),
+      tinos: Number(tinos.toFixed(2)),
+      faces: faces.map((f) => ({
+        role: f.role,
+        family: f.family,
+        weight: f.weight,
+        style: f.style,
+        status: f.status,
+      })),
+    });
+  } finally {
+    canvas.remove();
+  }
+
+  return { engaged: true, faces };
+};
+
 export const waitUntilNewspaperFontsLoaded = async (timeoutMs = 20000): Promise<FontManagerState> => {
   const deadline = Date.now() + Math.max(1000, timeoutMs);
   let last = await waitForNewspaperFonts();

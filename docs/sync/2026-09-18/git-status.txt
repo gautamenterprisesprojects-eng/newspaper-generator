@@ -1,0 +1,63 @@
+ M .dockerignore
+ M .gitignore
+ M docker-compose.yml
+M  package.json
+A  public/editor-rail/vikash-tiwari.png
+A  src/app/api/editor-rail/portrait/route.ts
+M  src/app/api/newswire/route.ts
+ M src/app/api/print-image/route.ts
+ M src/app/globals.css
+MM src/components/editor/EditorCanvas.tsx
+A  src/components/editor/EditorRailFront.tsx
+M  src/components/editor/GenerationWizardModal.tsx
+MM src/components/editor/NmsHeadlessExportBridge.tsx
+M  src/components/editor/PortalLaunchBootstrap.tsx
+MM src/engines/ArticleComposer/composeArticleBox.ts
+M  src/engines/DocumentEngine/DocumentEngine.ts
+MM src/engines/FontManager/FontManagerEngine.ts
+M  src/engines/ImagePlacement/ImagePlacementEngine.ts
+M  src/engines/IncrementalComposition/IncrementalCompositionEngine.ts
+A  src/engines/MasterPage/EditorRailFrontGeometry.ts
+M  src/engines/MasterPage/YouthUpdateConfig.ts
+A  src/engines/MasterPage/drawEditorRailFront.ts
+M  src/engines/MasterPage/drawYouthUpdateEditorialRail.ts
+A  src/engines/TemplateLayout/CliffFrontSep15Tests.ts
+M  src/engines/TemplateLayout/TemplateLayoutEngine.ts
+M  src/engines/TemplateLayout/TemplateRegistry.ts
+M  src/engines/TemplateLayout/TemplateTests.ts
+M  src/engines/TemplateLayout/TemplateTypes.ts
+ M src/engines/TypographyEngine/TextMeasure.ts
+A  src/lib/nms/cliffDemo3Publisher.ts
+A  src/lib/nms/cliffDemo3PublisherTests.ts
+AM src/lib/nms/nmsBundleStories.ts
+MM src/lib/nms/nmsBundleTypes.ts
+AD src/lib/nms/nmsHeadlessFonts.ts
+MM src/lib/nms/nmsHeadlessPdfRenderer.ts
+MM src/lib/nms/nmsNewsFill.ts
+MM src/lib/nms/nmsPdfJob.ts
+AM src/lib/nms/nmsSequentialEdition.ts
+AM src/lib/nms/nmsSequentialEditionTests.ts
+MM src/store/editorStore.ts
+M  src/store/publisherEditorialAuthorStore.ts
+MM src/types/editor.ts
+?? backups/
+?? docs/NMS_BUNDLE_RECEIVER_SERVER_CHANGE.md
+?? docs/NMS_PAGEMINT_PDF_RUNBOOK.md
+?? docs/PAGEMINT_NMS_REAL_PDF_COMPATIBILITY_PLAN.md
+?? docs/SERVER_SYNC_2026-09-18.md
+?? docs/cliffdemo3-nms-adapter-fix.md
+?? docs/cliffdemo3-nms-adapter-fix.md.before-planner-20260914-024116.bak
+?? docs/sync/
+?? scripts/nms-verify/
+?? scripts/verify-nms-typography.sh
+?? src/app/api/reference-layout-prototype/
+?? src/app/reference-layout-prototype/
+?? src/components/editor/NmsHeadlessExportBridge.tsx.before-cliffdemo3-.bak
+?? src/components/editor/NmsHeadlessExportBridge.tsx.before-cliffdemo3-20260914-020814.bak
+?? src/components/editor/NmsHeadlessExportBridge.tsx.before-planner-20260914-024116.bak
+?? src/lib/nms/cliffDemo3CarriedPalette.ts
+?? src/lib/nms/cliffDemo3DeterministicPalette.ts
+?? src/lib/nms/cliffDemo3ManualRecipe.ts
+?? src/lib/nms/cliffDemo3PortalPublicationProfile.ts
+?? src/lib/nms/nmsBundleEditorialAuthors.ts
+?? src/lib/referenceLayoutPrototype/

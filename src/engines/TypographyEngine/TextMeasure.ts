@@ -37,6 +37,7 @@ export const clearTextMeasurementCache = () => {
   for (const cache of widthCaches.values()) {
     cache.clear();
   }
+  contextCache.clear();
 };
 
 if (typeof document !== "undefined" && document.fonts) {
@@ -77,13 +78,10 @@ export const createCanvasTextMeasure = (
     return cached;
   }
 
-  const canvas =
-    typeof OffscreenCanvas !== "undefined"
-      ? new OffscreenCanvas(1, 1)
-      : typeof document !== "undefined"
-        ? document.createElement("canvas")
-        : null;
-
+  // Must be a document canvas, not OffscreenCanvas: Chromium's offscreen 2D
+  // context often ignores CSS @font-face, so measureText returns fallback
+  // (Noto/serif) widths while the Konva preview on a DOM canvas paints Rozha.
+  const canvas = typeof document !== "undefined" ? document.createElement("canvas") : null;
   const context = canvas?.getContext("2d");
 
   if (!context) {
@@ -91,6 +89,11 @@ export const createCanvasTextMeasure = (
   }
 
   context.font = createCanvasFontString(fontFamily, fontSize, fontStyle);
+  try {
+    context.fillText("मानसून Aa", 0, 16);
+  } catch {
+    // ignore
+  }
 
   let widths = widthCaches.get(cacheKey);
   if (!widths) {
@@ -162,15 +165,16 @@ export const measureTextInkMetrics = (
   const hit = memo.get(input.text);
   if (hit) return hit;
 
-  const canvas =
-    typeof OffscreenCanvas !== "undefined"
-      ? new OffscreenCanvas(1, 1)
-      : typeof document !== "undefined"
-        ? document.createElement("canvas")
-        : null;
+  const canvas = typeof document !== "undefined" ? document.createElement("canvas") : null;
   const context = canvas?.getContext("2d");
   if (!context) return null;
 
+  context.font = createCanvasFontString(input.fontFamily, input.fontSize, input.fontStyle);
+  try {
+    context.fillText("मानसून Aa", 0, 16);
+  } catch {
+    // ignore
+  }
   context.font = createCanvasFontString(input.fontFamily, input.fontSize, input.fontStyle);
   const metrics = context.measureText(input.text);
   // fontBoundingBox* is unavailable in some engines; without it there is no

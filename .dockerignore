@@ -8,3 +8,5 @@ artifacts
 *.log
 Thumbs.db
 .data
+
+backups

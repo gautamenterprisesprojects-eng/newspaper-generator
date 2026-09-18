@@ -1,6 +1,6 @@
 ﻿import type { NmsBundlePayload, StoredNmsBundle } from "./nmsBundleTypes";
 import { isAllowedNmsPageMintTarget } from "./nmsBundleTypes";
-import { buildNmsSequentialEdition } from "./nmsSequentialEdition";
+import { buildNmsSequentialEdition, resolveNmsFrontTemplateId } from "./nmsSequentialEdition";
 import { postNmsPdfCallback } from "./nmsPdfCallback";
 import { markNmsBundleUsed } from "./nmsBundleStorage";
 import { cleanupOldNmsArtifacts } from "./nmsRetention";
@@ -11,7 +11,8 @@ export const generateNmsPdfJob = async (payload: NmsBundlePayload, stored?: Stor
   }
 
   const nmsArticles = Array.isArray(payload.articles) ? payload.articles : [];
-  const editionPlan = await buildNmsSequentialEdition(nmsArticles);
+  const frontTemplateId = resolveNmsFrontTemplateId(payload);
+  const editionPlan = await buildNmsSequentialEdition(nmsArticles, undefined, frontTemplateId);
   const articles = editionPlan.pages.flatMap((page) => page.articles);
   console.log("[NMS PDF job] sequential edition planned", {
     nmsArticleCount: editionPlan.nmsArticleCount,

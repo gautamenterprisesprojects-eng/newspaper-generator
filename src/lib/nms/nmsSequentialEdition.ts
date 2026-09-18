@@ -1,26 +1,67 @@
-import { TEMPLATE_REGISTRY } from "@/engines/TemplateLayout/TemplateRegistry";
+import { isFrontPageTemplate, TEMPLATE_REGISTRY } from "@/engines/TemplateLayout/TemplateRegistry";
 import type { TemplateId } from "@/engines/TemplateLayout/TemplateTypes";
-import type { NmsBundleArticle } from "./nmsBundleTypes";
+import { EDITOR_RAIL_FRONT_TEMPLATE_ID } from "@/engines/MasterPage/YouthUpdateConfig";
+import type { NmsBundleArticle, NmsBundlePayload } from "./nmsBundleTypes";
+import { textValue } from "./nmsBundleTypes";
 import { fetchNationalAndMadhyaPradeshFill } from "./nmsNewsFill";
 
 /**
  * NMS PageMint editions always open with this wizard front layout:
- * "द क्लिफ न्यूज़ फ्रंट पेज (8 बॉक्स)".
+ * "एडिटर रेल फ्रंट पेज (8 बॉक्स)" (CliffFrontEditorRail8A).
  */
-export const NMS_FRONT_TEMPLATE_ID: TemplateId = "CliffFront8A";
-export const NMS_FRONT_TEMPLATE_NAME = "द क्लिफ न्यूज़ फ्रंट पेज (8 बॉक्स)";
+export const NMS_FRONT_TEMPLATE_ID: TemplateId = EDITOR_RAIL_FRONT_TEMPLATE_ID;
+export const NMS_FRONT_TEMPLATE_NAME =
+  TEMPLATE_REGISTRY[EDITOR_RAIL_FRONT_TEMPLATE_ID]?.name ?? "एडिटर रेल फ्रंट पेज (8 बॉक्स)";
+
+export const resolveNmsFrontTemplateId = (payload?: NmsBundlePayload): TemplateId => {
+  const extended = payload as NmsBundlePayload & {
+    layout?: unknown;
+    frontPageLayout?: unknown;
+    meta?: { layout?: unknown };
+  };
+  const candidates = [
+    textValue(extended?.layout),
+    textValue(extended?.frontPageLayout),
+    extended?.meta && typeof extended.meta === "object" ? textValue(extended.meta.layout) : "",
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    if (candidate in TEMPLATE_REGISTRY && isFrontPageTemplate(candidate as TemplateId)) {
+      return candidate as TemplateId;
+    }
+  }
+
+  return NMS_FRONT_TEMPLATE_ID;
+};
+
+const frontLayoutName = (templateId: TemplateId) =>
+  TEMPLATE_REGISTRY[templateId]?.name ?? NMS_FRONT_TEMPLATE_NAME;
 
 /**
  * Same inside-page catalogue the generation wizard offers (not Youth UPDATE,
  * not editorial). Box counts come from TEMPLATE_REGISTRY so a "7A" name that
  * actually has 7 slots is planned as 7, not the wizard preview's rounded count.
  */
+/**
+ * Wizard default inside layout (GenerationWizardModal DEFAULT_INSIDE_LAYOUT).
+ * NMS leftover pages use this first — the dense 8-column mix is not the
+ * suggested inside sheet.
+ */
+export const NMS_INSIDE_TEMPLATE_ID: TemplateId = "IndianFront6A";
+export const NMS_INSIDE_TEMPLATE_NAME = "इंडियन फ्रंट 6A";
+
 export const NMS_INSIDE_LAYOUTS: Array<{ id: TemplateId; name: string }> = [
+  { id: "IndianFront6A", name: "इंडियन फ्रंट 6A" },
+  { id: "IndianFront7A", name: "इंडियन फ्रंट 7A" },
+  { id: "IndianMixed7A", name: "इंडियन मिक्स्ड 7A" },
+  { id: "CliffInsideSixColumn7A", name: "6 Column Inside Anchor Rail" },
+  { id: "CliffInsideSixColumn8B", name: "6 Column Inside City Stack" },
+  { id: "CliffInsideSixColumn7C", name: "6 Column Inside Offset Lead" },
+  { id: "CliffInsideSixColumn8D", name: "6 Column Inside Uneven Mosaic" },
   { id: "CliffInsideEightColumn8A", name: "8 Column Inside Banner Mix" },
   { id: "CliffInsideEightColumn8B", name: "8 Column Inside City Mix" },
   { id: "CliffInsideEightColumn7C", name: "8 Column Inside Anchor Mix" },
   { id: "CliffInsideEightColumn8D", name: "8 Column Inside Lead Mix" },
-  { id: "IndianFront6A", name: "इंडियन फ्रंट 6A" },
   { id: "IndianFront7A", name: "इंडियन फ्रंट 7A" },
   { id: "IndianFront7B", name: "इंडियन फ्रंट 7B" },
   { id: "IndianMixed7A", name: "इंडियन मिक्स्ड 7A" },
@@ -73,12 +114,13 @@ export const getNmsTemplateBoxCount = (templateId: TemplateId) => {
 
 export const pickNmsInsideTemplateId = (
   usedTemplateIds: ReadonlySet<TemplateId>,
-  random: () => number = Math.random,
+  _random: () => number = Math.random,
 ): TemplateId => {
   const pool = NMS_INSIDE_LAYOUTS.map((layout) => layout.id);
   const unused = pool.filter((id) => !usedTemplateIds.has(id));
   const candidates = unused.length > 0 ? unused : pool;
-  return candidates[Math.floor(random() * candidates.length)] ?? pool[0];
+  // Keep the wizard listed order instead of shuffling.
+  return candidates[0] ?? pool[0];
 };
 
 const insideLayoutName = (templateId: TemplateId) =>
@@ -89,6 +131,7 @@ const insideLayoutName = (templateId: TemplateId) =>
 export const planNmsSequentialPages = (
   nmsArticles: NmsBundleArticle[],
   pickInside: (usedTemplateIds: ReadonlySet<TemplateId>) => TemplateId = (used) => pickNmsInsideTemplateId(used),
+  frontTemplateId: TemplateId = NMS_FRONT_TEMPLATE_ID,
 ): Array<Omit<NmsEditionPagePlan, "articles" | "fillArticleCount"> & {
   nmsArticles: NmsBundleArticle[];
   fillNeeded: number;
@@ -103,13 +146,13 @@ export const planNmsSequentialPages = (
     fillNeeded: number;
   }> = [];
 
-  const frontBoxCount = getNmsTemplateBoxCount(NMS_FRONT_TEMPLATE_ID);
+  const frontBoxCount = getNmsTemplateBoxCount(frontTemplateId);
   const frontNms = remaining.splice(0, frontBoxCount);
   pages.push({
     pageNumber: 1,
     pageKind: "front",
-    templateId: NMS_FRONT_TEMPLATE_ID,
-    templateName: NMS_FRONT_TEMPLATE_NAME,
+    templateId: frontTemplateId,
+    templateName: frontLayoutName(frontTemplateId),
     boxCount: frontBoxCount,
     nmsArticleCount: frontNms.length,
     nmsArticles: frontNms,
@@ -140,8 +183,9 @@ export const planNmsSequentialPages = (
 export const buildNmsSequentialEdition = async (
   nmsArticles: NmsBundleArticle[],
   pickInside?: (usedTemplateIds: ReadonlySet<TemplateId>) => TemplateId,
+  frontTemplateId: TemplateId = NMS_FRONT_TEMPLATE_ID,
 ): Promise<NmsEditionPlan> => {
-  const planned = planNmsSequentialPages(nmsArticles, pickInside);
+  const planned = planNmsSequentialPages(nmsArticles, pickInside, frontTemplateId);
   const usedIds = new Set(nmsArticles.map((article, index) => articleKey(article, index)));
   const pages: NmsEditionPagePlan[] = [];
 

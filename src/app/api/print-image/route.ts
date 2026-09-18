@@ -87,16 +87,28 @@ export async function GET(request: Request) {
     }
   }
 
-  const response = await fetch(sourceUrl, {
-    cache: "no-store",
-    headers: {
-      Accept: "image/avif,image/webp,image/png,image/jpeg,image/*;q=0.8",
-      "User-Agent": "NewspaperGeneratorPrintExport/1.0",
-    },
-  });
+  const printImageHeaders = {
+    Accept: "image/avif,image/webp,image/png,image/jpeg,image/*;q=0.8,*/*;q=0.5",
+    "User-Agent": "NewspaperGeneratorPrintExport/1.0",
+  } as const;
+  let response: Response | null = null;
+  let lastStatus = 0;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    response = await fetch(sourceUrl, {
+      cache: "no-store",
+      redirect: "follow",
+      headers: printImageHeaders,
+    });
+    lastStatus = response.status;
+    if (response.ok) {
+      break;
+    }
+    response = null;
+    await new Promise((resolve) => setTimeout(resolve, 200 * (attempt + 1)));
+  }
 
-  if (!response.ok) {
-    return NextResponse.json({ error: `Image fetch failed with ${response.status}.` }, { status: 502 });
+  if (!response) {
+    return NextResponse.json({ error: `Image fetch failed with ${lastStatus}.` }, { status: 502 });
   }
 
   const contentType = response.headers.get("content-type") ?? "application/octet-stream";

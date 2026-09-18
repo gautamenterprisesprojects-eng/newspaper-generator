@@ -17,6 +17,13 @@ export type NmsBundleImage = {
   path?: unknown;
 };
 
+export type NmsLocalizedArticleFields = {
+  secondary_headline?: unknown;
+  subheadings?: unknown;
+  image_caption?: unknown;
+  image_url?: unknown;
+};
+
 export type NmsBundleArticle = {
   newsId?: unknown;
   language?: unknown;
@@ -29,13 +36,47 @@ export type NmsBundleArticle = {
     name?: unknown;
     nameHi?: unknown;
     nameEn?: unknown;
+    designation?: unknown;
+    printDesignation?: unknown;
+    printPlaceName?: unknown;
+    place?: unknown;
+    photoUrl?: unknown;
+    avatarUrl?: unknown;
+  };
+  reporterPlace?: unknown;
+  reporterPhotoUrl?: unknown;
+  byline?: {
+    photoUrl?: unknown;
+    name?: unknown;
+    designation?: unknown;
+    place?: unknown;
+    text?: unknown;
   };
   place?: unknown;
+  city?: unknown;
+  city_name?: unknown;
   category?: unknown;
+  kicker?: unknown;
+  subheadline?: unknown;
+  secondary_headline?: unknown;
+  subheadings?: unknown;
+  caption?: unknown;
+  imageCaption?: unknown;
+  image_caption?: unknown;
+  imageUrl?: unknown;
+  image_url?: unknown;
+  image_link?: unknown;
   tags?: unknown;
   images?: NmsBundleImage[];
   coverImage?: NmsBundleImage | null;
+  media?: {
+    image_url?: unknown;
+    image_link?: unknown;
+  };
   websiteLinks?: unknown;
+  ui_hindi?: NmsLocalizedArticleFields;
+  ui_english?: NmsLocalizedArticleFields;
+  article?: NmsLocalizedArticleFields;
   createdAt?: unknown;
   processedAt?: unknown;
   forwardedAt?: unknown;
@@ -69,6 +110,25 @@ export type NmsBundlePayload = {
   pdfCallback?: NmsCallbackConfig;
   count?: unknown;
   articles?: NmsBundleArticle[];
+  /** cliffdemo3 only — full manual PageMint recipe from NMS */
+  pageMintRecipe?: unknown;
+  /** cliffdemo3 only — exact Manual-run palette/options for NMS parity */
+  cliffdemo3ManualPalette?: unknown;
+  /** @deprecated alias of cliffdemo3ManualPalette */
+  manualBatchPalette?: unknown;
+  /** cliffdemo3 only — portal publication profile for masthead city/volume */
+  portalPublicationProfile?: {
+    city?: string;
+    cover_price?: string | number;
+    publication_start_year?: number | string | null;
+    last_volume_number?: number | string | null;
+    front_page_header_url?: string;
+    remaining_page_header_url?: string;
+    newspaper_name?: string;
+  };
+  layout?: unknown;
+  frontPageLayout?: unknown;
+  meta?: unknown;
   editionPlan?: {
     pages: Array<{
       pageNumber: number;
@@ -135,6 +195,23 @@ export type NmsPdfJobResult = {
 export const ALLOWED_NMS_PAGEMINT_IDS = new Set(["cliffdemo3"]);
 
 export const textValue = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+
+export const pickNmsArticleImageUrl = (article: NmsBundleArticle) => {
+  const nested = article.ui_hindi || article.ui_english || article.article;
+  const cover = article.coverImage;
+  const images = Array.isArray(article.images) ? article.images : [];
+  const selected = images.find((image) => image?.isCover) ?? images.find((image) => textValue(image?.url));
+  return (
+    textValue(cover && typeof cover === "object" ? cover.url : "") ||
+    textValue(selected?.url) ||
+    textValue(article.imageUrl) ||
+    textValue(article.image_url) ||
+    textValue(article.image_link) ||
+    textValue(nested?.image_url) ||
+    textValue(article.media?.image_url) ||
+    textValue(article.media?.image_link)
+  );
+};
 
 export const getNmsPageMintTargetId = (payload: NmsBundlePayload) =>
   textValue(payload.pagemint_target_id) ||

@@ -1,7 +1,9 @@
 import {
   NMS_FRONT_TEMPLATE_ID,
   NMS_FRONT_TEMPLATE_NAME,
+  NMS_INSIDE_TEMPLATE_ID,
   getNmsTemplateBoxCount,
+  pickNmsInsideTemplateId,
   planNmsSequentialPages,
 } from "./nmsSequentialEdition";
 import type { NmsBundleArticle } from "./nmsBundleTypes";
@@ -24,6 +26,8 @@ const scriptedPicker = (ids: TemplateId[]) => {
 };
 
 assert(getNmsTemplateBoxCount("CliffFront8A") === 8, "CliffFront8A is the 8-box front");
+assert(pickNmsInsideTemplateId(new Set()) === NMS_INSIDE_TEMPLATE_ID, "first leftover page uses the wizard inside layout");
+assert(getNmsTemplateBoxCount("IndianFront6A") === 6, "wizard inside layout is 6 boxes");
 assert(getNmsTemplateBoxCount("AdvancedInfographicSplit7A") === 7, "Infographic Split 7A has 7 boxes");
 assert(getNmsTemplateBoxCount("IndianMixed7A") === 7, "Indian Mixed 7A has 7 boxes");
 assert(getNmsTemplateBoxCount("CliffInsideSixColumn8B") === 8, "6 Column Inside City Stack has 8 boxes");

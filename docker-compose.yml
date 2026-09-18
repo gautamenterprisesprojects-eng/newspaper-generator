@@ -18,6 +18,21 @@ services:
       NMS_GENERATED_PDF_DIR: /app/data/nms-generated-pdfs
       NMS_USED_BUNDLE_RETENTION_HOURS: ${NMS_USED_BUNDLE_RETENTION_HOURS:-1}
       NMS_GENERATED_PDF_RETENTION_HOURS: ${NMS_GENERATED_PDF_RETENTION_HOURS:-30}
+      NODE_OPTIONS: --max-old-space-size=4096
+      # cliffdemo3 only: server-side portal profile fetch for masthead city/volume
+      PAGEMINT_PORTAL_API_BASE: ${PAGEMINT_PORTAL_API_BASE:-http://newspaper_api_server:8080/api/v1}
+      PAGEMINT_PORTAL_JWT_SECRET: ${PAGEMINT_PORTAL_JWT_SECRET:?PAGEMINT_PORTAL_JWT_SECRET must be set}
+      PAGEMINT_CLIFFDEMO3_PORTAL_PUBLISHER_ID: ${PAGEMINT_CLIFFDEMO3_PORTAL_PUBLISHER_ID:-91e4a212-5920-4cf5-b5a3-4aa39bdfca5b}
+      PAGEMINT_CLIFFDEMO3_PORTAL_DEVICE_ID: ${PAGEMINT_CLIFFDEMO3_PORTAL_DEVICE_ID:-e0c54c5a-c2ae-4cd0-9194-8ad451b46c12}
     volumes:
       - ./data/nms-bundles:/app/data/nms-bundles
       - ./data/nms-generated-pdfs:/app/data/nms-generated-pdfs
+    networks:
+      - default
+      - portal-tier
+
+networks:
+  default:
+  portal-tier:
+    external: true
+    name: newspaper-portal_portal-tier

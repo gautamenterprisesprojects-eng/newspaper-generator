@@ -1939,6 +1939,8 @@ type NewswireImportOptions = {
    * existing editorial image behavior is untouched by this flag.
    */
   isBatchGeneration?: boolean;
+  /** NMS bundle: reserve a circular reporter portrait beside the byline. */
+  nmsBylinePortrait?: boolean;
   editorialAuthorDefaults?: {
     name: string;
     imageUrl: string;
@@ -4524,6 +4526,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             ...(options?.pageKind !== "editorial"
               ? { articleEndBreathingSpaceEnabled: false }
               : {}),
+            ...(options?.nmsBylinePortrait ? { nmsBylinePortrait: true } : {}),
             ...(() => {
               const nested = nestedInsideParent.map((slot: any) => ({
                 x: slot.x,
@@ -4546,11 +4549,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           return baseStory;
         }
 
+        const storyBylineName = (typeof item.bylineName === "string" && item.bylineName.trim()) ? item.bylineName.trim() : bylineName;
         const initialArticleData = createArticleDataFromNewswireStory(
           baseStory,
           item,
           language,
-          bylineName,
+          storyBylineName,
           options.subheadingStyle,
           capacity,
           options.inlineColumnSubheadings,

@@ -1,13 +1,15 @@
 ﻿import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { NmsBundleArticle, NmsBundlePayload } from "./nmsBundleTypes";
+import { CLIFFDEMO3_PAGEMINT_ID, isCliffDemo3PublisherIdentity } from "./cliffDemo3Publisher";
+import { fetchCliffDemo3PortalPublicationProfile } from "./cliffDemo3PortalPublicationProfile";
 import { getNumericTargetUserId } from "./nmsBundleTypes";
 import { getNmsGeneratedPdfDir, sanitizeFilePart, storeNmsExportPayload } from "./nmsBundleStorage";
 
 type HeadlessWindow = typeof window & {
   __NMS_EXPORT_READY?: boolean;
   __NMS_EXPORT_ERROR?: string;
-  __PAGEMINT_EXPORT_CURRENT_DOCUMENT_PDF?: () => Promise<number[]>;
+  __PAGEMINT_EXPORT_CURRENT_DOCUMENT_PDF?: () => Promise<number[] | string>;
   __NMS_EXPORT_DEBUG?: unknown;
 };
 
@@ -30,10 +32,30 @@ export const generateNmsRealEditorPdf = async (payload: NmsBundlePayload, articl
   const pdfPath = path.join(pdfDir, filename);
   const baseUrl = getInternalBaseUrl().replace(/\/+$/, "");
   const exportJobId = String(payload.job_id || payload.bundle_id || Date.now());
+  // cliffdemo3 only: attach the same portal publication profile the manual
+  // wizard loads via PortalLaunchBootstrap (city / volume / year / price).
+  let portalPublicationProfile = null;
+  if (isCliffDemo3PublisherIdentity(String(payload.pagemint_user_id || payload.pagemint_target_id || ""))) {
+    try {
+      portalPublicationProfile = await fetchCliffDemo3PortalPublicationProfile(
+        String(payload.pagemint_user_id || payload.pagemint_target_id || ""),
+      );
+      if (portalPublicationProfile) {
+        console.log("[NMS real PDF] cliffdemo3 portal publication profile", {
+          city: portalPublicationProfile.city ?? null,
+          last_volume_number: portalPublicationProfile.last_volume_number ?? null,
+          publication_start_year: portalPublicationProfile.publication_start_year ?? null,
+        });
+      }
+    } catch (error) {
+      console.warn("[NMS real PDF] cliffdemo3 portal profile fetch failed", error);
+    }
+  }
   const exportPayloadFile = await storeNmsExportPayload({
     ...payload,
     count: articles.length,
     articles,
+    ...(portalPublicationProfile ? { portalPublicationProfile } : {}),
   });
   const plannedPages = Array.isArray(payload.editionPlan?.pages) ? payload.editionPlan.pages : [];
   const exportPageCount = Math.max(1, plannedPages.length || Math.ceil(articles.length / 8));
@@ -57,6 +79,14 @@ export const generateNmsRealEditorPdf = async (payload: NmsBundlePayload, articl
     pageCount: String(exportPageCount),
     pageSections: JSON.stringify(pageSections),
   });
+  // cliffdemo3 only: stamp portal identity so isCliffDemo3PortalSession() is true
+  // and FontManager strips Noto/serif stacks. Other publishers never hit this branch.
+  const cliffTarget = String(payload.pagemint_user_id || payload.pagemint_target_id || "").trim();
+  if (isCliffDemo3PublisherIdentity(cliffTarget)) {
+    exportParams.set("publisherId", CLIFFDEMO3_PAGEMINT_ID);
+    exportParams.set("username", CLIFFDEMO3_PAGEMINT_ID);
+    exportParams.set("publisherUsername", CLIFFDEMO3_PAGEMINT_ID);
+  }
   const exportUrl = `${baseUrl}/?${exportParams.toString()}`;
   const timeoutMs = Number(process.env.NMS_HEADLESS_EXPORT_TIMEOUT_MS || 180000);
 
@@ -74,7 +104,7 @@ export const generateNmsRealEditorPdf = async (payload: NmsBundlePayload, articl
   const browser = await chromium.launch({
     headless: true,
     executablePath: getChromeExecutablePath(),
-    args: ["--no-sandbox", "--disable-setuid-sandbox", "--font-render-hinting=medium"],
+    args: ["--no-sandbox", "--disable-setuid-sandbox", "--font-render-hinting=medium", "--disable-dev-shm-usage", "--js-flags=--max-old-space-size=4096"],
   });
 
   try {
@@ -103,19 +133,22 @@ export const generateNmsRealEditorPdf = async (payload: NmsBundlePayload, articl
     }, undefined, { timeout: timeoutMs });
     console.log("[NMS real PDF] editor export bridge is ready");
     await page.evaluate(async () => document.fonts?.ready);
-    const exportDebug = await page.evaluate(() => (window as HeadlessWindow).__NMS_EXPORT_DEBUG ?? null);
-    const bytes = await page.evaluate(async () => {
+    const exported = await page.evaluate(async () => {
       const exporter = (window as HeadlessWindow).__PAGEMINT_EXPORT_CURRENT_DOCUMENT_PDF;
       if (!exporter) throw new Error("PageMint editor PDF exporter is not available.");
       return exporter();
     });
+    const exportDebug = await page.evaluate(() => (window as HeadlessWindow).__NMS_EXPORT_DEBUG ?? null);
+    const pdfBuffer = typeof exported === "string"
+      ? Buffer.from(exported, "base64")
+      : Buffer.from(Array.isArray(exported) ? exported : []);
 
-    if (!Array.isArray(bytes) || bytes.length < 1000) {
+    if (pdfBuffer.length < 1000) {
       throw new Error("PageMint real editor export returned an empty PDF.");
     }
 
-    await writeFile(pdfPath, Buffer.from(bytes));
-    console.log("[NMS real PDF] wrote PageMint editor PDF", { pdfPath, bytes: bytes.length });
+    await writeFile(pdfPath, pdfBuffer);
+    console.log("[NMS real PDF] wrote PageMint editor PDF", { pdfPath, bytes: pdfBuffer.length });
     await writeFile(`${pdfPath}.json`, `${JSON.stringify({
       renderer: "pagemint-editor-headless",
       job_id: payload.job_id ?? null,

@@ -18,3 +18,7 @@ artifacts/
 artifacts-*.png
 *-validation*.png
 localhost-dom.html
+verify-out/
+data/
+backups/
+*.bak

@@ -18,7 +18,10 @@ const normalizeFallbackRecord = (record: Record<string, unknown>, category: stri
   const media = typeof record.media === "object" && record.media ? record.media as Record<string, unknown> : {};
   const headline = textValue(uiHindi.title) || textValue(record.title) || textValue(article.headline) || `PageMint fallback story ${index + 1}`;
   const body = textValue(uiHindi.long_500) || textValue(uiHindi.medium_300) || textValue(uiHindi.short_250) || textValue(record.long_500) || textValue(record.medium_300) || textValue(article.long_description) || textValue(article.short_description);
-  const imageUrl = textValue(uiHindi.image_url) || textValue(record.image_url) || textValue(record.image_link) || textValue(media.image_link);
+  // Same preference order as the wizard's newswire route: the publisher's own
+  // CDN URL first. `ui_hindi.image_url` is the upstream /media/news-image/<id>
+  // form, which 404s and used to leave every fill photo as a grey box.
+  const imageUrl = textValue(record.image_url) || textValue(record.image_link) || textValue(media.image_link) || textValue(uiHindi.image_url);
   const place = textValue(uiHindi.place) || textValue(uiHindi.city) || textValue(record.place) || textValue(record.city);
 
   return {

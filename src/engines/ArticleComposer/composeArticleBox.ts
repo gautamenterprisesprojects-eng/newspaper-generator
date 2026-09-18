@@ -28,7 +28,8 @@ import {
   optimizeImageForEditorialQuality,
 } from "@/engines/EditorialLayoutQuality/EditorialLayoutQualityEngine";
 import { composeFactBox } from "@/engines/FactBoxEngine/FactBoxEngine";
-import { getNewspaperFontStack, selectNewspaperHeadlineFont } from "@/engines/FontManager/FontManagerEngine";
+import { getNewspaperFontStack, resolveNewspaperCanvasFontStyle, selectNewspaperHeadlineFont } from "@/engines/FontManager/FontManagerEngine";
+import { getNmsExportRecipe } from "@/lib/nms/cliffDemo3ManualRecipe";
 import { getHyphenationJustificationSettings } from "@/engines/HyphenationJustification/HyphenationJustificationTypes";
 import { placeImage } from "@/engines/ImagePlacement/ImagePlacementEngine";
 import { computeImageCoverCrop } from "@/engines/ImagePlacement/computeImageCoverCrop";
@@ -550,6 +551,25 @@ export const composeArticleBox = (
 };
 
 
+
+const shiftTextBlockX = <T extends { x: number; lineBoxes: Array<{ x: number; segments?: Array<{ x: number }> }>; layoutBounds?: { x: number }; frameBounds?: { x: number } }>(
+  block: T,
+  deltaX: number,
+): T => ({
+  ...block,
+  x: block.x + deltaX,
+  lineBoxes: block.lineBoxes.map((line) => ({
+    ...line,
+    x: line.x + deltaX,
+    segments: (line.segments ?? []).map((segment) => ({
+      ...segment,
+      x: segment.x + deltaX,
+    })),
+  })),
+  ...(block.layoutBounds ? { layoutBounds: { ...block.layoutBounds, x: block.layoutBounds.x + deltaX } } : {}),
+  ...(block.frameBounds ? { frameBounds: { ...block.frameBounds, x: block.frameBounds.x + deltaX } } : {}),
+});
+
 const buildJustifiedRichSegments = (
   renderText: string,
   richLine: RichTextTypographyLine | undefined,
@@ -780,7 +800,14 @@ const createRichTextBlock = (
   return createTextBlock(x, y, width, fallbackText, style, metrics, baselineGrid, richLines, justifyMode, justifyEngineMode);
 };
 
+
+
 const fillHeadlineLineEdges = (block: ArticleLayoutTextBlock, sourceLineWidths: number[]): ArticleLayoutTextBlock => {
+  // NMS export only: the bundle recipe may switch the width-fill off. The
+  // wizard never reaches this branch and keeps the committed fill below.
+  if (getNmsExportRecipe()?.typographyFit.stretchDisplayHeadlines === false) {
+    return block;
+  }
   const filledLineBoxes = block.lineBoxes.map((line, lineIndex) => {
     const targetWidth = block.width * 0.99;
     const currentWidth = sourceLineWidths[lineIndex] ?? line.measuredWidth ?? line.renderedWidth ?? line.width;
@@ -2958,10 +2985,18 @@ function composeArticleBoxPass(
   // contentLanguage being "english" (set only by the newswire import path
   // for stories actually fetched in English), so Hindi/Devanagari body copy
   // -- on Youth UPDATE's own front page included -- is completely unaffected.
+  // cliffdemo3 NMS export only: the bundle recipe may name a different Hindi
+  // body face (e.g. Cliff Noto Sans Devanagari). Wizard sessions never reach
+  // this branch -- they keep the ExtraCondensed body exactly as before.
+  const nmsExportBodyFamily = getNmsExportRecipe()?.fonts.body.hindi;
+  const usesNmsRecipeBody =
+    Boolean(nmsExportBodyFamily) && nmsExportBodyFamily !== "Cliff Noto Serif Devanagari ExtraCondensed";
   const bodyFontFamily =
     articleBox.contentLanguage === "english"
       ? settings.youthUpdateEnglishBodyFontFamily ?? ENGLISH_NEWSPAPER_BODY_FONT_FAMILY
-      : getNewspaperFontStack("bodySerifCondensed");
+      : usesNmsRecipeBody
+        ? String(nmsExportBodyFamily)
+        : getNewspaperFontStack("bodySerifCondensed");
   const editorialStyles = createEditorialStyles({
     priority,
     headlineSize: headlineMaxFontSize,
@@ -2988,7 +3023,9 @@ function composeArticleBoxPass(
   const headlineStyle = {
     ...editorialStyles.headline,
     fontFamily: selectedHeadlineFont.fontFamily,
-    fontStyle: selectedHeadlineFont.fontStyle,
+    fontStyle: getNmsExportRecipe()
+      ? resolveNewspaperCanvasFontStyle(selectedHeadlineFont.fontFamily, selectedHeadlineFont.fontStyle)
+      : selectedHeadlineFont.fontStyle,
     ...(isWideBottomFrontPackage
       ? { lineHeight: 1.12 }
       : isFrontPageTwoColumnBox
@@ -3042,7 +3079,7 @@ function composeArticleBoxPass(
           lineHeight: isLowerFrontPagePackage ? 11 / pinnedBodyType.fontSizePt : pinnedBodyType.lineHeight,
         }
       : { fontSize: resolvedBodyFontSize }),
-    ...(articleBox.contentLanguage === "english" ? {} : { fontStyle: "550" }),
+    ...(articleBox.contentLanguage === "english" ? {} : { fontStyle: usesNmsRecipeBody ? "400" : "550" }),
     align: typographyControls.bodyAlignment,
     letterSpacing: resolveCharacterSpacing({
       tracking: typographyControls.bodyTracking,
@@ -5671,6 +5708,27 @@ function composeArticleBoxPass(
     };
   }
 
+
+  let bylinePortrait: ArticleLayoutRegion | null = null;
+  const nmsBylinePortraitUrl = (articleData.editorPortraitUrl ?? "").trim();
+  if (
+    nmsBylinePortraitUrl &&
+    settings.nmsBylinePortrait !== false &&
+    !settings.editorialPageStyle &&
+    byline.text
+  ) {
+    const portraitSize = Math.min(32, Math.max(24, byline.height + 6));
+    const portraitGap = 6;
+    bylinePortrait = {
+      x: inset,
+      y: byline.y + Math.max(0, (byline.height - portraitSize) / 2),
+      width: portraitSize,
+      height: portraitSize,
+      fill: "transparent",
+    };
+    byline = shiftTextBlockX(byline, portraitSize + portraitGap);
+  }
+
   return {
     kicker,
     strap,
@@ -5679,6 +5737,7 @@ function composeArticleBoxPass(
     subheadline,
     inlineSubheadline: inlineSubheadline.length > 0 ? inlineSubheadline : undefined,
     byline,
+    bylinePortrait,
     image,
     editorialFloatImage,
     factBox,

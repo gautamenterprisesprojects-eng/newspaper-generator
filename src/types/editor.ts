@@ -925,6 +925,8 @@ export type ArticleCompositionSettings = {
   enablePullQuote: boolean;
   opticalTypography: boolean;
   productionView?: boolean;
+  /** NMS export: show reporter/editor avatar beside the byline with alpha preserved. */
+  nmsBylinePortrait?: boolean;
   storyHierarchyStyle?: StoryHierarchyVisualStyle;
   /** Hard cap for this story's headline lines. Used by template-specific boxes. */
   headlineMaxLines?: number;
@@ -1370,6 +1372,8 @@ export type ArticleLayout = {
   subheadline: ArticleLayoutTextBlock;
   inlineSubheadline?: ArticleLayoutTextBlock[] | null;
   byline: BylineLayout;
+  /** Small reporter/editor passport beside the byline (NMS transparent PNG/WebP). */
+  bylinePortrait?: ArticleLayoutRegion | null;
   image: ArticleLayoutRegion | null;
   editorialFloatImage?: (ArticleLayoutRegion & {
     source: "articleImage";

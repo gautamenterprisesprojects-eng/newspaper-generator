@@ -12,6 +12,7 @@ import { PDFDocument } from "pdf-lib";
 import { AdvertisementManagerPanel } from "@/components/editor/AdvertisementManagerPanel";
 import { ArticleInspectorPanel } from "@/components/editor/ArticleInspectorPanel";
 import { AssetManagerPanel } from "@/components/editor/AssetManagerPanel";
+import { FontDiagnosticsPanel } from "@/components/editor/FontDiagnosticsPanel";
 import { HeaderManagerPanel } from "@/components/editor/HeaderManagerPanel";
 import { InlineObjectTextEditor } from "@/components/editor/InlineObjectTextEditor";
 import { PagePreviewOverlay } from "@/components/editor/PagePreviewOverlay";
@@ -63,11 +64,13 @@ import {
 import {
   createInitialFontManagerState,
   getNewspaperFontStack,
-  loadAllNewspaperFontFaces,
-  waitUntilNewspaperFontsLoaded,
+  waitForNewspaperFonts,
+  waitUntilAllNewspaperFontsLoaded,
+  assertCliffDemo3DisplayFontsEngaged,
+  primeNewspaperFontsOnCanvas,
 } from "@/engines/FontManager/FontManagerEngine";
 import type { FontManagerState } from "@/engines/FontManager/FontManagerTypes";
-import { createCanvasFontString } from "@/engines/TypographyEngine/TextMeasure";
+import { clearTextMeasurementCache, createCanvasFontString } from "@/engines/TypographyEngine/TextMeasure";
 import {
   createPerformanceProfiler,
   getMemoryUsageMb,
@@ -131,6 +134,7 @@ import {
 import { computeEvenCategoryTargets, computeWeightedCategoryTargets, shuffleNewswireStories } from "@/lib/newswireCategoryMix";
 import {
   CLIFFDEMO3_NMS_CATEGORY,
+  isCliffDemo3PortalSession,
   isCliffDemo3PublisherSession,
   shouldUseNmsBundleFeed,
 } from "@/lib/nms/cliffDemo3Publisher";
@@ -2228,7 +2232,7 @@ export function EditorCanvas() {
   useEffect(() => {
     let active = true;
 
-    waitUntilNewspaperFontsLoaded()
+    waitForNewspaperFonts()
       .then((state) => {
         if (active) {
           setFontManager(state);
@@ -3719,7 +3723,6 @@ export function EditorCanvas() {
     // just those lines. Awaiting it here, right before the canvas exists,
     // removes that race outright.
     if (typeof window.document !== "undefined" && window.document.fonts?.load) {
-      await loadAllNewspaperFontFaces();
       await Promise.all([
         window.document.fonts.load(`400 16px "Tinos"`).catch(() => undefined),
         window.document.fonts.load(`700 16px "Tinos"`).catch(() => undefined),
@@ -4175,11 +4178,45 @@ export function EditorCanvas() {
     }
   }
 
+  // cliffdemo3 only: expose store for NMS/manual parity harnesses. Other IDs unchanged.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!isCliffDemo3PortalSession()) return;
+    (window as typeof window & {
+      __PAGEMINT_CLIFFDEMO3_STORE__?: {
+        getState: typeof useEditorStore.getState;
+        setState: typeof useEditorStore.setState;
+      };
+    }).__PAGEMINT_CLIFFDEMO3_STORE__ = {
+      getState: useEditorStore.getState,
+      setState: useEditorStore.setState,
+    };
+    return () => {
+      delete (window as typeof window & { __PAGEMINT_CLIFFDEMO3_STORE__?: unknown }).__PAGEMINT_CLIFFDEMO3_STORE__;
+    };
+  }, []);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     (window as typeof window & {
       __PAGEMINT_EXPORT_CURRENT_DOCUMENT_PDF?: () => Promise<number[]>;
     }).__PAGEMINT_EXPORT_CURRENT_DOCUMENT_PDF = async () => {
+      // cliffdemo3 NMS only: fail closed if display fonts are not painting.
+      // Manual wizard for other IDs is unchanged (gate requires nmsExport + cliffdemo3).
+      if (
+        typeof window !== "undefined" &&
+        new URLSearchParams(window.location.search).get("nmsExport") === "1" &&
+        isCliffDemo3PortalSession()
+      ) {
+        const fontState = await waitUntilAllNewspaperFontsLoaded(45000);
+        if (!fontState?.ready) {
+          throw new Error(`cliffdemo3 fonts not ready before PDF burn: ${fontState?.status || "unknown"}`);
+        }
+        clearTextMeasurementCache();
+        primeNewspaperFontsOnCanvas();
+        await globalThis.document.fonts?.ready;
+        await assertCliffDemo3DisplayFontsEngaged();
+      }
       const { pdfBytes, failedPages } = await buildDocumentPdfBytes();
       if (failedPages.length > 0) {
         throw new Error(`PageMint PDF export had ${failedPages.length} failed page(s).`);
@@ -7055,6 +7092,12 @@ export function EditorCanvas() {
           </button>
         </section>
       </div>
+
+      {fontManager.status !== "loaded" ? (
+        <div className="font-diagnostics-shell">
+          <FontDiagnosticsPanel fontManager={fontManager} />
+        </div>
+      ) : null}
 
       <Stage
         ref={stageRef}
