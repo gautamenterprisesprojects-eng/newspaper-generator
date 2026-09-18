@@ -4836,19 +4836,27 @@ function composeArticleBoxPass(
       continue;
     }
 
-    // The band left above a cut-in is often only deep enough for a single line,
-    // which sets one orphan row of the parent's copy across the top of the box.
-    // Block the strip from the top of the parent instead, so the parent's copy
-    // starts below the cut-in in those columns. The band's depth moves with the
-    // headline, so this cannot be a fixed fraction.
+    // The band between the parent's body top and a cut-in's top is decided by
+    // the parent's headline depth, which the template cannot know, so it is
+    // never a fixed fraction. Two cases:
+    //
+    //  - deep enough for real copy (two lines or more): let the parent's text
+    //    set there, as a runaround does. Blocking it left a visible white hole
+    //    above every cut-in whose parent had a short headline.
+    //  - shallower than that: block the strip from the top of the parent, so a
+    //    single orphan row cannot sit alone across the top of the box.
+    //
+    // `bodyY` is where this parent's copy starts; both figures are box-relative.
     const gutter = region.cutIn ? CUT_IN_RUNAROUND_GUTTER : 0;
     const regionTop = region.y - articleBox.y - gutter;
+    const bandAboveCutIn = regionTop - bodyY;
+    const blockBandAbove = region.cutIn && bandAboveCutIn < bodyLineHeight * 2;
 
     obstacleRects.push({
       x: region.x - articleBox.x - inset - gutter,
-      y: region.cutIn ? 0 : regionTop,
+      y: blockBandAbove ? 0 : regionTop,
       width: region.width + gutter * 2,
-      height: region.cutIn
+      height: blockBandAbove
         ? regionTop + region.height + gutter * 2
         : region.height + gutter * 2,
     });
