@@ -1066,8 +1066,14 @@ const CLIFF_FRONT_SEP15: TemplateDefinition = {
       columnStart: 5,
       columnSpan: 2,
       priority: "brief",
-      insetInto: { parentStoryNumber: 8, topFraction: 0.22 },
-      bottomTrimFraction: 0.42,
+      // Raised one text line (0.22 -> 0.18) so the box reaches the top of the
+      // middle package's text area. At 0.22 it started a line below, leaving a
+      // band only deep enough for a single orphan row of story 8's copy across
+      // the top of the sidebar. bottomTrimFraction moves 0.42 -> 0.40 to hold
+      // the foot on the same line, so the box grows upward only: top 78.5pt ->
+      // 64.2pt below the package, bottom unchanged.
+      insetInto: { parentStoryNumber: 8, topFraction: 0.18 },
+      bottomTrimFraction: 0.4,
     },
     { storyNumber: 10, row: 5, columnStart: 1, columnSpan: 1, priority: "brief" },
     { storyNumber: 11, row: 5, columnStart: 2, columnSpan: 5, priority: "major" },
