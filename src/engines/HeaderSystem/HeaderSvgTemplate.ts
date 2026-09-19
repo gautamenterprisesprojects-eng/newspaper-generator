@@ -37,7 +37,7 @@ export type FrontHeaderDynamicValues = {
   /** Publisher-editable "सुविचार" (thought of the day) free text, wrapped into the masthead's own thought box (see wrapThoughtIntoTspans) -- undefined/blank leaves the template's own baked-in default text untouched. */
   dailyThought?: string;
 };
-type FrontHeaderTemplateField = Exclude<keyof FrontHeaderDynamicValues, "issue" | "teaserHeadline" | "teaserImageUrl">;
+type FrontHeaderTemplateField = Exclude<keyof FrontHeaderDynamicValues, "issue" | "teaserHeadline" | "teaserImageUrl" | "dailyThought">;
 
 export type InsideHeaderDynamicValues = {
   category: string;
