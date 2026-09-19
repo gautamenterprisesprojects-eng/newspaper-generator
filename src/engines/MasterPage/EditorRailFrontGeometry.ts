@@ -310,8 +310,16 @@ export const getEditorRailFrontGeometry = (
 const escapeXmlText = (value: string) =>
   value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
+/**
+ * Some exports (see "sub editor rail 2.svg") put an invisible bounding-box
+ * <rect> between the group's opening tag and its <text> -- an Illustrator
+ * artifact, not present in every export. `(?:(?!</g>)[\s\S])*?` skips past
+ * any such intervening element without assuming there is or isn't one,
+ * while still refusing to cross into the next group if this one is ever
+ * missing a <text> altogether.
+ */
 const replaceGroupText = (svgText: string, groupId: string, value: string): string => {
-  const pattern = new RegExp(`(<g id="${groupId}">\\s*<text[^>]*>)[\\s\\S]*?(</text>)`);
+  const pattern = new RegExp(`(<g id="${groupId}">(?:(?!</g>)[\\s\\S])*?<text[^>]*>)[\\s\\S]*?(</text>)`);
   return svgText.replace(pattern, (_match, open: string, close: string) => `${open}${escapeXmlText(value)}${close}`);
 };
 
