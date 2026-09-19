@@ -102,14 +102,23 @@ export const resolveEditorRailFrontContent = ({
   const liveImage = (imageUrl ?? "").trim();
   const liveDesignation = (designation ?? "").trim();
   return {
+    // Only a real live photo swaps the portrait -- when none is supplied,
+    // imageUrl stays empty and the substitution step leaves the artwork's
+    // own baked-in default photo alone (see substituteEditorRailFrontSvg),
+    // rather than forcing in some other default image of unknown crop/pose.
     imageUrl: liveImage,
     name: liveName || formatEditorRailFrontLabel(EDITOR_RAIL_FRONT_DEFAULT_NAME),
     place: livePlace || formatEditorRailFrontLabel(EDITOR_RAIL_FRONT_DEFAULT_PLACE),
-    designation: liveDesignation,
+    designation: liveDesignation || EDITOR_RAIL_FRONT_DEFAULT_DESIGNATION,
     overlayPhoto: Boolean(liveImage),
     overlayName: true,
-    overlayPlace: Boolean(livePlace),
-    overlayDesignation: Boolean(liveDesignation),
+    // Place/designation always resolve to a real string above (live value or
+    // the default), so they should always be substituted in -- gating these
+    // on the *pre-fallback* live value (as before) meant the computed
+    // default was silently never written, leaving whatever text happened to
+    // already be baked into the artwork file at the time of the last deploy.
+    overlayPlace: true,
+    overlayDesignation: true,
   };
 };
 

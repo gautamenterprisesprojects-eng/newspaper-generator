@@ -26,12 +26,22 @@ assert.equal(fromRail[0]?.location, "भोपाल");
 assert.equal(fromRail[0]?.designation, "संपादक");
 
 const empty = resolveEditorRailFrontContent({});
+// Only the photo stays gated on a real live value -- with none supplied, it
+// leaves the artwork's own baked-in default portrait alone rather than
+// forcing in some other default image of unknown crop/pose (see
+// EDITOR_RAIL_FRONT_DEFAULT_IMAGE_URL vs the artwork's own photo -- they are
+// NOT interchangeable, the former has no visible hands/pose).
 assert.equal(empty.overlayPhoto, false);
 assert.equal(empty.overlayName, true);
-assert.equal(empty.overlayPlace, false);
-assert.equal(empty.overlayDesignation, false);
+// Place/designation always resolve to a real string (live value or
+// default), so they must always be substituted in too -- gating on the
+// pre-fallback live value here was the actual bug that shipped: the
+// computed default was silently never written into the artwork.
+assert.equal(empty.overlayPlace, true);
+assert.equal(empty.overlayDesignation, true);
 assert.equal(empty.name, "राज बड़खाने");
 assert.equal(empty.place, "जबलपुर");
+assert.equal(empty.designation, "ब्यूरो चीफ");
 
 const live = resolveEditorRailFrontContent({
   name: "अमित शर्मा",
