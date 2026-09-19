@@ -55,6 +55,7 @@ export const createDefaultPublicationProfile = (
   registrationNumber: input.registrationNumber ?? "",
   volumeLabel: input.volumeLabel ?? "1",
   issueLabel: input.issueLabel ?? "",
+  dailyThought: input.dailyThought ?? "",
   primaryColor: input.primaryColor ?? "#17130f",
   secondaryColor: input.secondaryColor ?? "#0f6f83",
   textColor: input.textColor ?? "#17130f",
