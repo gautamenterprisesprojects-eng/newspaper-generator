@@ -1829,18 +1829,27 @@ const CLIFF_FRONT_YOUTH_UPDATE_1A: TemplateDefinition = {
  * left one-column rail on the top two bands, lead beside it, staggered mid
  * band, full-width three-way foot. It is not publisher-exclusive: it uses
  * the normal Hindi front masthead (Youth UPDATE's coded header stays on the
- * Youth UPDATE templates). Story 1 is a dynamic red editor rail (photo,
- * name + place, vertical designation); story 3 is an ordinary article box,
+ * Youth UPDATE templates). Story 1 is the Cliff Sandesh artwork editor rail
+ * (photo / name / place / designation overlays); story 3 is an ordinary box,
  * not the Youth UPDATE SHORT NEWS overlay.
  */
 const CLIFF_FRONT_EDITOR_RAIL_8A: TemplateDefinition = {
   id: "CliffFrontEditorRail8A",
   name: "एडिटर रेल फ्रंट पेज (8 बॉक्स)",
   storyCount: 8,
+  // Row 1's ratio is set so its height exactly matches box 1's own aspect
+  // ratio -- the "sub editor rail.svg" artwork is a fixed 144x360 (2:5)
+  // vertical card, and box 1 is a single column (~144.96pt wide on the
+  // standard 12.5in/6-col/0.084in-gutter front page). 144.96 * (360/144) =
+  // 362.4pt, i.e. baseRatio 362.4 / 1260.36 (contentHeight - the 2.4in front
+  // masthead) = 0.2876 -- so the rail artwork fills box 1 edge-to-edge with
+  // no letterboxing, instead of being squeezed into a box ~2.6x taller than
+  // its own artwork. Story 2 (the lead) shares this row, so it gets shorter
+  // too -- the freed height is redistributed to rows 2/3 below.
   rowRhythm: [
-    { row: 1, baseRatio: 0.45, receivesRemainingSpace: false, minimumHeight: 260 },
-    { row: 2, baseRatio: 0.3, receivesRemainingSpace: false, minimumHeight: 170 },
-    { row: 3, baseRatio: 0.25, receivesRemainingSpace: true, minimumHeight: 150 },
+    { row: 1, baseRatio: 0.2876, receivesRemainingSpace: false, minimumHeight: 260 },
+    { row: 2, baseRatio: 0.399, receivesRemainingSpace: false, minimumHeight: 170 },
+    { row: 3, baseRatio: 0.3135, receivesRemainingSpace: true, minimumHeight: 150 },
   ],
   slots: [
     { storyNumber: 1, row: 1, columnStart: 1, columnSpan: 1, priority: "brief" },
@@ -1848,9 +1857,12 @@ const CLIFF_FRONT_EDITOR_RAIL_8A: TemplateDefinition = {
     { storyNumber: 3, row: 2, columnStart: 1, columnSpan: 1, priority: "brief" },
     { storyNumber: 4, row: 2, columnStart: 2, columnSpan: 3, priority: "major" },
     { storyNumber: 5, row: 2, columnStart: 5, columnSpan: 2, priority: "secondary" },
-    { storyNumber: 6, row: 3, columnStart: 1, columnSpan: 2, priority: "secondary" },
-    { storyNumber: 7, row: 3, columnStart: 3, columnSpan: 2, priority: "secondary" },
-    { storyNumber: 8, row: 3, columnStart: 5, columnSpan: 2, priority: "secondary" },
+    // Foot band was three equal (2/2/2) columns, all "secondary" -- read as
+    // a flat, symmetric row. Uneven by priority instead: a wide secondary
+    // lead-in, a narrower secondary companion, and a single-column brief.
+    { storyNumber: 6, row: 3, columnStart: 1, columnSpan: 3, priority: "secondary" },
+    { storyNumber: 7, row: 3, columnStart: 4, columnSpan: 2, priority: "secondary" },
+    { storyNumber: 8, row: 3, columnStart: 6, columnSpan: 1, priority: "brief" },
   ],
 };
 

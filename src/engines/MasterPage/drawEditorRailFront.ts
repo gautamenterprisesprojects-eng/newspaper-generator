@@ -1,8 +1,8 @@
-import { getNewspaperFontStack } from "@/engines/FontManager/FontManagerEngine";
 import {
+  EDITOR_RAIL_FRONT_ARTWORK_URL,
   EDITOR_RAIL_FRONT_COLORS,
-  getEditorRailFrontGeometry,
-  getEditorRailFrontPhotoDraw,
+  getEditorRailFrontContainDest,
+  resolveEditorRailFrontSvgSource,
   type EditorRailFrontContent,
   type EditorRailFrontRect,
 } from "./EditorRailFrontGeometry";
@@ -12,99 +12,70 @@ const getPrintableImageSource = (source: string) =>
     ? `/api/print-image?url=${encodeURIComponent(source)}`
     : source;
 
-const fillPolygon = (context: CanvasRenderingContext2D, points: number[]) => {
-  context.beginPath();
-  context.moveTo(points[0], points[1]);
-  for (let index = 2; index < points.length; index += 2) {
-    context.lineTo(points[index], points[index + 1]);
+const loadImage = (source: string) =>
+  new Promise<HTMLImageElement | null>((resolve) => {
+    const img = new window.Image();
+    const printable = getPrintableImageSource(source);
+    if (/^https?:/i.test(printable)) {
+      img.crossOrigin = "anonymous";
+    }
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = printable;
+  });
+
+const imageToDataUrl = async (source: string): Promise<string | undefined> => {
+  const image = await loadImage(source);
+  if (!image || image.naturalWidth <= 0) return undefined;
+  const canvas = document.createElement("canvas");
+  canvas.width = image.naturalWidth;
+  canvas.height = image.naturalHeight;
+  const context = canvas.getContext("2d");
+  if (!context) return undefined;
+  context.drawImage(image, 0, 0);
+  try {
+    return canvas.toDataURL("image/png");
+  } catch {
+    return undefined;
   }
-  context.closePath();
-  context.fill();
 };
 
 /**
- * PDF-export twin of EditorRailFront.tsx. Both read getEditorRailFrontGeometry
- * so the screen and the sheet cannot drift.
+ * PDF-export twin of EditorRailFront.tsx. Both resolve the same live-
+ * substituted SVG via resolveEditorRailFrontSvgSource, so the screen and the
+ * sheet cannot drift -- the artwork's own name/place/designation <text> and
+ * portrait <image> carry the live values, drawn as one contain-fitted image
+ * rather than a flattened background plus separate canvas-drawn overlays.
  */
 export const drawEditorRailFrontToCanvas = async (
   context: CanvasRenderingContext2D,
   box: EditorRailFrontRect,
   content: EditorRailFrontContent,
 ) => {
-  const geometry = getEditorRailFrontGeometry(box, content);
-  const sans = getNewspaperFontStack("sans");
-
-  if (typeof document !== "undefined" && document.fonts?.load) {
-    await document.fonts.load(`700 ${Math.ceil(geometry.designation.fontSize)}px ${sans}`).catch(() => undefined);
-  }
-
   context.save();
   context.fillStyle = EDITOR_RAIL_FRONT_COLORS.background;
-  context.fillRect(geometry.box.x, geometry.box.y, geometry.box.width, geometry.box.height);
+  context.fillRect(box.x, box.y, box.width, box.height);
 
-  if (content.imageUrl) {
-    const image = await new Promise<HTMLImageElement | null>((resolve) => {
-      const img = new window.Image();
-      const source = getPrintableImageSource(content.imageUrl);
-      if (/^https?:/i.test(source)) {
-        img.crossOrigin = "anonymous";
-      }
-      img.onload = () => resolve(img);
-      img.onerror = () => resolve(null);
-      img.src = source;
+  const photoDataUrl = content.overlayPhoto && content.imageUrl
+    ? await imageToDataUrl(content.imageUrl)
+    : undefined;
+
+  try {
+    const svgSource = await resolveEditorRailFrontSvgSource(EDITOR_RAIL_FRONT_ARTWORK_URL, {
+      name: content.name,
+      place: content.overlayPlace ? content.place : "",
+      designation: content.overlayDesignation ? content.designation : "",
+      photoDataUrl,
     });
-    if (image && image.naturalWidth > 0 && image.naturalHeight > 0) {
-      const photoDraw = getEditorRailFrontPhotoDraw(image, geometry.photo);
-      context.drawImage(
-        image,
-        photoDraw.crop.x,
-        photoDraw.crop.y,
-        photoDraw.crop.width,
-        photoDraw.crop.height,
-        photoDraw.dest.x,
-        photoDraw.dest.y,
-        photoDraw.dest.width,
-        photoDraw.dest.height,
-      );
+    const artworkImage = await loadImage(svgSource);
+    if (artworkImage && artworkImage.naturalWidth > 0) {
+      const dest = getEditorRailFrontContainDest(box);
+      context.drawImage(artworkImage, dest.x, dest.y, dest.width, dest.height);
     }
+  } catch {
+    // No artwork this render -- leave the background fill rather than a
+    // broken/partial draw.
   }
 
-  context.fillStyle = EDITOR_RAIL_FRONT_COLORS.namePlate;
-  context.fillRect(
-    geometry.namePlate.x,
-    geometry.namePlate.y,
-    geometry.namePlate.width,
-    geometry.namePlate.height,
-  );
-  context.fillStyle = EDITOR_RAIL_FRONT_COLORS.accentBar;
-  fillPolygon(context, geometry.accentPoints);
-  context.strokeStyle = EDITOR_RAIL_FRONT_COLORS.plateStroke;
-  context.lineWidth = geometry.plateStrokeWidth;
-  context.strokeRect(
-    geometry.namePlate.x + geometry.plateStrokeWidth / 2,
-    geometry.namePlate.y + geometry.plateStrokeWidth / 2,
-    geometry.namePlate.width - geometry.plateStrokeWidth,
-    geometry.namePlate.height - geometry.plateStrokeWidth,
-  );
-
-  context.fillStyle = EDITOR_RAIL_FRONT_COLORS.type;
-  context.textAlign = "left";
-  context.textBaseline = "top";
-  context.font = `700 ${geometry.name.fontSize}px ${sans}`;
-  context.fillText(geometry.name.text, geometry.name.x, geometry.name.y, geometry.name.width);
-  if (geometry.place.text) {
-    context.font = `700 ${geometry.place.fontSize}px ${sans}`;
-    context.fillText(geometry.place.text, geometry.place.x, geometry.place.y, geometry.place.width);
-  }
-
-  context.translate(
-    geometry.designation.x + geometry.designation.width / 2,
-    geometry.designation.y + geometry.designation.height / 2,
-  );
-  context.rotate(-Math.PI / 2);
-  context.textAlign = "center";
-  context.textBaseline = "middle";
-  context.font = `700 ${geometry.designation.fontSize}px ${sans}`;
-  context.fillText(geometry.designation.text, 0, 0, geometry.designation.height);
   context.restore();
 };
