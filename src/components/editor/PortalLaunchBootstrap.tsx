@@ -89,6 +89,7 @@ type PublisherProfileResponse = {
   // saas_handlers.go) before this profile fetch ever runs — the DB already
   // holds the freshly-incremented value by the time the batch iframe loads.
   last_volume_number?: number | string | null;
+  daily_thought?: string;
 };
 
 export function PortalLaunchBootstrap() {
@@ -294,6 +295,15 @@ export function PortalLaunchBootstrap() {
         const volumeNumber = Number(profile.last_volume_number);
         if (Number.isFinite(volumeNumber) && volumeNumber > 0) {
           patch.volumeLabel = String(volumeNumber);
+        }
+        // The dailyThought launch param (set in the first effect above) wins
+        // when present -- it's the dashboard's current, possibly-unsaved
+        // textbox value. Falling back to the persisted daily_thought here
+        // covers every launch that doesn't carry a fresh one: an older
+        // bookmarked/reopened composer URL, or a launch path that predates
+        // this field being added to buildGeneratorParams.
+        if (!searchParams.get("dailyThought")?.trim() && typeof profile.daily_thought === "string" && profile.daily_thought.trim()) {
+          patch.dailyThought = profile.daily_thought;
         }
 
         if (Object.keys(patch).length > 0) {
