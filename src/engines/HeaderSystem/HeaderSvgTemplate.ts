@@ -581,7 +581,7 @@ const inlineRemoteImage = async (url: string): Promise<string | undefined> => {
  * at least one recognised name, falling through to today's per-file/generic
  * logic otherwise.
  */
-const FRONT_NAMED_FIELDS = ["place", "day", "date", "ank", "thought"] as const;
+const FRONT_NAMED_FIELDS = ["place", "day", "date", "ank"] as const;
 const INSIDE_NAMED_FIELDS = ["place", "day", "date", "pagenumber", "category"] as const;
 
 type NamedTextElement = {
@@ -693,8 +693,6 @@ export const applyNamedFrontHeaderDynamicValues = (svgText: string, values: Fron
         return original ? wrapReplacementPreservingTspanStyle(element.body, substituteDateWords(original, dateParts)) : null;
       case "ank":
         return ankDigits ? wrapReplacementPreservingTspanStyle(element.body, padToOriginalWidth(original, ankDigits)) : null;
-      case "thought":
-        return values.dailyThought?.trim() ? wrapThoughtIntoTspans(element.body, values.dailyThought) : null;
       default:
         return null;
     }
@@ -779,7 +777,16 @@ export const resolveFrontHeaderSvgSource = async (
         : isHindiKeFoolHeaderUrl(templateUrl)
           ? applyHindiKeFoolFrontHeaderDynamicValues(rawSvg, resolvedValues)
           : applyGenericFrontHeaderDynamicValues(rawSvg, resolvedValues));
-  return `data:image/svg+xml;base64,${utf8ToBase64(patchedSvg)}`;
+  // Independent of whichever path above handled place/day/date/ank -- a
+  // `<text id="thought">` box (currently only Dainik Miraz's) isn't part of
+  // any of those publisher-specific/generic matchers, and deliberately isn't
+  // folded into FRONT_NAMED_FIELDS either: that field only activates when a
+  // file's OTHER fields (place/day/date/ank) are ALSO named to the
+  // convention, and Miraz's aren't -- letting "thought" alone flip a file
+  // onto the named path silently stopped its real day/date/ank fields (which
+  // rely on the generic content-based matcher) from updating at all.
+  const finalSvg = applyThoughtBoxToSvg(patchedSvg, resolvedValues.dailyThought);
+  return `data:image/svg+xml;base64,${utf8ToBase64(finalSvg)}`;
 };
 
 export const resolveInsideHeaderSvgSource = async (
@@ -929,6 +936,32 @@ const wrapThoughtIntoTspans = (body: string, thought: string): string | null => 
       return `<tspan ${xAttr} y="${line.y}" ${classAttr}>${text}</tspan>`;
     })
     .join("");
+};
+
+/**
+ * Applied to a front header's patched SVG regardless of which path above
+ * produced it (named/per-publisher/generic) -- a `<text id="thought">` box
+ * is identified directly by that id, independent of the g-wrapper name
+ * lookup the rest of this file's named-field system uses, so a publisher
+ * whose OTHER fields aren't built to the named-layer convention (Miraz's
+ * place/day/date/ank aren't) still gets its thought box substituted without
+ * that file being routed onto the (for it, incomplete) named path.
+ */
+const applyThoughtBoxToSvg = (svgText: string, dailyThought: string | undefined): string => {
+  if (!dailyThought?.trim()) {
+    return svgText;
+  }
+  const thoughtTextPattern = /(<text\b[^>]*\bid="thought"[^>]*>)([\s\S]*?)(<\/text>)/;
+  const match = svgText.match(thoughtTextPattern);
+  if (!match) {
+    return svgText;
+  }
+  const [fullMatch, openTag, body, closeTag] = match;
+  const replacementBody = wrapThoughtIntoTspans(body, dailyThought);
+  if (replacementBody === null) {
+    return svgText;
+  }
+  return svgText.replace(fullMatch, `${openTag}${replacementBody}${closeTag}`);
 };
 
 const liveWeekdayForMatch = (matchedWord: string, live: LiveDateParts): string =>
