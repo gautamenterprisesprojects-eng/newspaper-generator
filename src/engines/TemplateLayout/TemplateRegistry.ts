@@ -1835,8 +1835,8 @@ const CLIFF_FRONT_YOUTH_UPDATE_1A: TemplateDefinition = {
  */
 const CLIFF_FRONT_EDITOR_RAIL_8A: TemplateDefinition = {
   id: "CliffFrontEditorRail8A",
-  name: "एडिटर रेल फ्रंट पेज (8 बॉक्स)",
-  storyCount: 8,
+  name: "एडिटर रेल फ्रंट पेज (9 बॉक्स)",
+  storyCount: 9,
   // Row 1's ratio is set so its height exactly matches box 1's own aspect
   // ratio -- the "sub editor rail.svg" artwork is a fixed 144x360 (2:5)
   // vertical card, and box 1 is a single column (~144.96pt wide on the
@@ -1853,7 +1853,11 @@ const CLIFF_FRONT_EDITOR_RAIL_8A: TemplateDefinition = {
   ],
   slots: [
     { storyNumber: 1, row: 1, columnStart: 1, columnSpan: 1, priority: "brief" },
-    { storyNumber: 2, row: 1, columnStart: 2, columnSpan: 5, priority: "lead" },
+    // Lead gave up its 6th column to a new narrow companion box beside it,
+    // matching the rail's own 1-column width rather than running the lead
+    // the full remaining width on its own.
+    { storyNumber: 2, row: 1, columnStart: 2, columnSpan: 4, priority: "lead" },
+    { storyNumber: 9, row: 1, columnStart: 6, columnSpan: 1, priority: "brief" },
     { storyNumber: 3, row: 2, columnStart: 1, columnSpan: 1, priority: "brief" },
     { storyNumber: 4, row: 2, columnStart: 2, columnSpan: 3, priority: "major" },
     { storyNumber: 5, row: 2, columnStart: 5, columnSpan: 2, priority: "secondary" },
