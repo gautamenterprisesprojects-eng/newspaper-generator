@@ -195,12 +195,7 @@ import { getYouthUpdateInsideRailItems } from "@/store/youthUpdateInsideRailStor
 import { getYouthUpdateRightDividers, getYouthUpdateHatchDividerTicks } from "@/engines/MasterPage/YouthUpdateBodyDividers";
 import { drawYouthUpdateEditorialRailToCanvas } from "@/engines/MasterPage/drawYouthUpdateEditorialRail";
 import { drawEditorRailFrontToCanvas } from "@/engines/MasterPage/drawEditorRailFront";
-import {
-  EDITOR_RAIL_FRONT_DEFAULT_IMAGE_URL,
-  EDITOR_RAIL_FRONT_DEFAULT_NAME,
-  EDITOR_RAIL_FRONT_DEFAULT_PLACE,
-  resolveEditorRailFrontContent,
-} from "@/engines/MasterPage/EditorRailFrontGeometry";
+import { resolveEditorRailFrontContent } from "@/engines/MasterPage/EditorRailFrontGeometry";
 import { drawYouthUpdateShortNewsBannerToCanvas } from "@/engines/MasterPage/drawYouthUpdateShortNewsBanner";
 import { drawYouthUpdateInsideHeaderToCanvas } from "@/engines/MasterPage/drawYouthUpdateInsideHeader";
 import { drawYouthUpdateInsideTeaserStripToCanvas } from "@/engines/MasterPage/drawYouthUpdateInsideTeaserStrip";
@@ -2810,9 +2805,9 @@ export function EditorCanvas() {
   const editorRailFrontContent = useMemo(
     () =>
       resolveEditorRailFrontContent({
-        name: EDITOR_RAIL_FRONT_DEFAULT_NAME,
-        imageUrl: EDITOR_RAIL_FRONT_DEFAULT_IMAGE_URL,
-        place: EDITOR_RAIL_FRONT_DEFAULT_PLACE,
+        name: editorialAuthorSelection?.name,
+        imageUrl: editorialAuthorSelection?.imageUrl,
+        place: editorialAuthorSelection?.location,
         designation: editorialAuthorSelection?.designation,
       }),
     [editorialAuthorSelection],
@@ -3894,9 +3889,9 @@ export function EditorCanvas() {
       }
     }
 
-    // Youth UPDATE fronts keep the jpg overlay. CliffFrontEditorRail8A draws
-    // a dynamic red author rail from the publisher's saved editor photo / name
-    // / designation.
+    // Youth UPDATE fronts keep the jpg overlay. CliffFrontEditorRail8A paints
+    // the Cliff Sandesh artwork template and overlays the publisher/NMS
+    // photo, name, place and designation.
     if (isYouthUpdateFrontExport) {
       const railBox = getHardcodedEditorialRailBox(pageStoryLayouts.map((item) => ({ story: item.story })));
       if (railBox) {
@@ -3913,15 +3908,29 @@ export function EditorCanvas() {
       const railBox = getHardcodedEditorialRailBox(pageStoryLayouts.map((item) => ({ story: item.story })));
       if (railBox) {
         try {
+          // NmsHeadlessExportBridge's own bundle fetch (fonts wait, then a
+          // ~2MB payload fetch) is what actually calls setAuthors/
+          // setHydrated on this store, and nothing gates PDF export against
+          // it finishing first -- the same race already fixed for batch
+          // generation (see authorStoreDeadline above), just never applied
+          // here. Confirmed live: a real NMS job rendered box 1 with pure
+          // defaults (name/place/photo) even though the bundle's
+          // editorial_authors was fully populated by the time the PDF was
+          // burned -- the store's setAuthors call simply hadn't landed yet
+          // at the moment this ran.
+          const railAuthorDeadline = Date.now() + 8000;
+          while (!usePublisherEditorialAuthorStore.getState().hydrated && Date.now() < railAuthorDeadline) {
+            await sleep(150);
+          }
           const author = usePublisherEditorialAuthorStore.getState().selectedAuthors[0]
             ?? usePublisherEditorialAuthorStore.getState().defaults;
           await drawEditorRailFrontToCanvas(
             context,
             railBox,
             resolveEditorRailFrontContent({
-              name: EDITOR_RAIL_FRONT_DEFAULT_NAME,
-              imageUrl: EDITOR_RAIL_FRONT_DEFAULT_IMAGE_URL,
-              place: EDITOR_RAIL_FRONT_DEFAULT_PLACE,
+              name: author?.name,
+              imageUrl: author?.imageUrl,
+              place: author?.location,
               designation: author?.designation,
             }),
           );
