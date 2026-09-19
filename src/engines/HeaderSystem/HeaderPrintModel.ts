@@ -209,6 +209,7 @@ export const buildHeaderPrintModel = async (
         issue: header.issueLabel,
         teaserHeadline: frontHeaderTeaser?.headline,
         teaserImageUrl: frontHeaderTeaser?.imageUrl,
+        dailyThought: header.dailyThought,
       }).catch(() => headerBannerSource)
     : isLiveInsideSvg && header.header.kind === "inside"
       ? await resolveInsideHeaderSvgSource(headerBannerSource, {

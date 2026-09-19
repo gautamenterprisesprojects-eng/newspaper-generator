@@ -93,6 +93,7 @@ export const resolvePageHeader = (
       headerSetId: headerSet.id,
       profileId: profile.id,
       issueLabel: profile.issueLabel,
+      dailyThought: profile.dailyThought,
       pageId: page.id,
       pageNumber,
       sectionName,

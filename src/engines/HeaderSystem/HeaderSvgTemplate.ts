@@ -34,6 +34,8 @@ export type FrontHeaderDynamicValues = {
   issue?: string;
   teaserHeadline?: string;
   teaserImageUrl?: string;
+  /** Publisher-editable "सुविचार" (thought of the day) free text, wrapped into the masthead's own thought box (see wrapThoughtIntoTspans) -- undefined/blank leaves the template's own baked-in default text untouched. */
+  dailyThought?: string;
 };
 type FrontHeaderTemplateField = Exclude<keyof FrontHeaderDynamicValues, "issue" | "teaserHeadline" | "teaserImageUrl">;
 
@@ -579,7 +581,7 @@ const inlineRemoteImage = async (url: string): Promise<string | undefined> => {
  * at least one recognised name, falling through to today's per-file/generic
  * logic otherwise.
  */
-const FRONT_NAMED_FIELDS = ["place", "day", "date", "ank"] as const;
+const FRONT_NAMED_FIELDS = ["place", "day", "date", "ank", "thought"] as const;
 const INSIDE_NAMED_FIELDS = ["place", "day", "date", "pagenumber", "category"] as const;
 
 type NamedTextElement = {
@@ -691,6 +693,8 @@ export const applyNamedFrontHeaderDynamicValues = (svgText: string, values: Fron
         return original ? wrapReplacementPreservingTspanStyle(element.body, substituteDateWords(original, dateParts)) : null;
       case "ank":
         return ankDigits ? wrapReplacementPreservingTspanStyle(element.body, padToOriginalWidth(original, ankDigits)) : null;
+      case "thought":
+        return values.dailyThought?.trim() ? wrapThoughtIntoTspans(element.body, values.dailyThought) : null;
       default:
         return null;
     }
@@ -864,6 +868,67 @@ const wrapReplacementPreservingTspanStyle = (body: string, replacement: string):
   }
   const openTag = tspanMatch[0].replace(/\s+(x|y)="[^"]*"/g, "");
   return `${openTag}${escapeXmlText(replacement)}</tspan>`;
+};
+
+const tspanLinePattern = /<tspan\b([^>]*)>([\s\S]*?)<\/tspan>/g;
+
+/**
+ * A publisher-editable free-text field ("thought"/suvichar box) is laid out
+ * as N same-styled `<tspan>` lines stacked at a fixed y-step (see Dainik
+ * Miraz's own file) rather than one run like every other named field --
+ * there's no live value to substitute in place, the publisher's own words
+ * have to be wrapped to fit. Re-wraps `thought` across the original tspan
+ * count, reusing their shared x/class styling, and centers it vertically
+ * (blank tspans above/below) when it uses fewer lines than the box has.
+ * Any words beyond the box's own line count are dropped rather than
+ * overflowing the art -- the portal's own input should cap length before it
+ * gets here, this is just the backstop.
+ */
+const wrapThoughtIntoTspans = (body: string, thought: string): string | null => {
+  const lines: Array<{ attrs: string; text: string; y: number }> = [];
+  let match: RegExpExecArray | null;
+  tspanLinePattern.lastIndex = 0;
+  while ((match = tspanLinePattern.exec(body))) {
+    const yMatch = match[1].match(/\by="(-?[\d.]+)"/);
+    lines.push({ attrs: match[1], text: stripXmlTags(match[2]), y: yMatch ? parseFloat(yMatch[1]) : 0 });
+  }
+  if (lines.length === 0) {
+    return null;
+  }
+
+  const xAttr = lines[0].attrs.match(/\bx="[^"]*"/)?.[0] ?? 'x="0"';
+  const classAttr = lines[0].attrs.match(/\bclass="[^"]*"/)?.[0] ?? "";
+  // The only signal this file has for the box's real pixel width without
+  // measuring rendered glyphs is how long the design's own placeholder
+  // lines were -- reuse that as the wrap budget.
+  const charBudget = Math.max(...lines.map((line) => line.text.length), 20);
+
+  const words = thought.trim().split(/\s+/).filter(Boolean);
+  const wrapped: string[] = [];
+  let current = "";
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (candidate.length > charBudget && current) {
+      wrapped.push(current);
+      current = word;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current) {
+    wrapped.push(current);
+  }
+
+  const usedLines = wrapped.slice(0, lines.length);
+  const blankAbove = Math.floor((lines.length - usedLines.length) / 2);
+
+  return lines
+    .map((line, index) => {
+      const lineIndex = index - blankAbove;
+      const text = lineIndex >= 0 && lineIndex < usedLines.length ? escapeXmlText(usedLines[lineIndex]) : "";
+      return `<tspan ${xAttr} y="${line.y}" ${classAttr}>${text}</tspan>`;
+    })
+    .join("");
 };
 
 const liveWeekdayForMatch = (matchedWord: string, live: LiveDateParts): string =>

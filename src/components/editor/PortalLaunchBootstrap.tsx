@@ -114,6 +114,7 @@ export function PortalLaunchBootstrap() {
         : pageCount;
     const selectedPageNumber = clampSelectedPageNumber(searchParams.get("selectedPageNumber"), editionPageCount);
     const issueNumber = searchParams.get("issueNumber")?.trim() || "";
+    const dailyThought = searchParams.get("dailyThought")?.trim() || "";
     // India-only product: fall back to the IST calendar day, not UTC --
     // toISOString() is UTC and during 00:00-05:29 IST still reports the
     // previous day (see the matching fix in the portal's dashboard today()).
@@ -152,6 +153,10 @@ export function PortalLaunchBootstrap() {
         publicationNameHindi: newspaperName || state.document.metadata.newspaperName,
         date: publicationDate,
         issueLabel: issueNumber,
+        // Blank clears nothing here -- HeaderSvgTemplate's own "thought" case
+        // treats an empty dailyThought as "no override" and leaves the
+        // template's baked-in default suvichar text showing.
+        dailyThought,
       });
     }
 
@@ -250,7 +255,7 @@ export function PortalLaunchBootstrap() {
                 designation: String(author?.designation ?? author?.title ?? "").trim(),
                 location: String(author?.location ?? author?.place ?? author?.city ?? "").trim(),
               }))
-              .filter((author) => author.name || author.imageUrl)
+              .filter((author) => author.name || author.imageUrl || author.designation || author.location)
           : [];
         const editorialAuthorName = String(profile.editorial_author_name ?? "").trim();
         const editorialAuthorImageUrl = String(profile.editorial_author_image_url ?? "").trim();

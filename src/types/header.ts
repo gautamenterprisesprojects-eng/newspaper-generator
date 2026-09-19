@@ -46,6 +46,7 @@ export type PublicationProfile = {
   registrationNumber?: string;
   volumeLabel?: string;
   issueLabel?: string;
+  dailyThought?: string;
   primaryColor: string;
   secondaryColor: string;
   textColor: string;
@@ -188,6 +189,7 @@ export type ResolvedPageHeader = {
   headerSetId: string;
   profileId: string;
   issueLabel?: string;
+  dailyThought?: string;
   pageId: string;
   pageNumber: number;
   sectionName: string;

@@ -320,6 +320,7 @@ export function PageHeader({
           issue: resolvedHeader.issueLabel,
           teaserHeadline: frontHeaderTeaser?.headline,
           teaserImageUrl: frontHeaderTeaser?.imageUrl,
+          dailyThought: resolvedHeader.dailyThought,
         }
       : null;
   // `right.text` is already the combined "{{city}},{{day}} {{dayOfMonth}}
