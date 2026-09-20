@@ -884,9 +884,9 @@ const tspanLinePattern = /<tspan\b([^>]*)>([\s\S]*?)<\/tspan>/g;
  * as N same-styled `<tspan>` lines stacked at a fixed y-step (see Dainik
  * Miraz's own file) rather than one run like every other named field --
  * there's no live value to substitute in place, the publisher's own words
- * have to be wrapped to fit. Re-wraps `thought` across the original tspan
- * count, reusing their shared x/class styling, and centers it vertically
- * (blank tspans above/below) when it uses fewer lines than the box has.
+ * have to be wrapped to fit. Re-wraps `thought` into at most the original
+ * tspan count, reusing their shared x/class styling, at an opened-up line
+ * step, and centers the block within the placeholder's vertical span.
  * Any words beyond the box's own line count are dropped rather than
  * overflowing the art -- the portal's own input should cap length before it
  * gets here, this is just the backstop.
@@ -927,13 +927,23 @@ const wrapThoughtIntoTspans = (body: string, thought: string): string | null => 
   }
 
   const usedLines = wrapped.slice(0, lines.length);
-  const blankAbove = Math.floor((lines.length - usedLines.length) / 2);
+  const ys = lines.map((line) => line.y);
+  const firstY = Math.min(...ys);
+  const span = Math.max(...ys) - firstY;
+  const placeholderStep = lines.length > 1 ? span / (lines.length - 1) : 0;
+  // The placeholder's own grid is set solid (step == font size), which
+  // reads as a dense block of real prose. Open it up to 1.5x, as long as
+  // the used lines still fit the original vertical span; otherwise fall
+  // back to the placeholder's step so nothing spills out of the box.
+  const openedStep = placeholderStep * 1.5;
+  const step = usedLines.length > 1 && (usedLines.length - 1) * openedStep <= span ? openedStep : placeholderStep;
+  const blockHeight = (usedLines.length - 1) * step;
+  const startY = firstY + (span - blockHeight) / 2;
 
-  return lines
-    .map((line, index) => {
-      const lineIndex = index - blankAbove;
-      const text = lineIndex >= 0 && lineIndex < usedLines.length ? escapeXmlText(usedLines[lineIndex]) : "";
-      return `<tspan ${xAttr} y="${line.y}" ${classAttr}>${text}</tspan>`;
+  return usedLines
+    .map((text, index) => {
+      const y = Number((startY + index * step).toFixed(2));
+      return `<tspan ${xAttr} y="${y}" ${classAttr}>${escapeXmlText(text)}</tspan>`;
     })
     .join("");
 };
