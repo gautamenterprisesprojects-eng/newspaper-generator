@@ -438,53 +438,78 @@ export function NmsHeadlessExportBridge() {
           };
         }).portalPublicationProfile
           || (payload as NmsBundlePayload & { meta?: { portalPublicationProfile?: unknown } }).meta?.portalPublicationProfile;
-        if (recipe && portalProfile) {
-          const patch = buildPublicationProfilePatchFromPortal(portalProfile as {
+        const cliffDemo3Target = isCliffDemo3PublisherIdentity(
+          String(payload.pagemint_user_id || payload.pagemint_target_id || "").trim(),
+        );
+        if (recipe && cliffDemo3Target) {
+          const patch: {
             city?: string;
-            cover_price?: string | number;
-            publication_start_year?: number | string | null;
-            last_volume_number?: number | string | null;
-          });
+            price?: string;
+            establishedText?: string;
+            volumeLabel?: string;
+          } = portalProfile
+            ? buildPublicationProfilePatchFromPortal(portalProfile as {
+                city?: string;
+                cover_price?: string | number;
+                publication_start_year?: number | string | null;
+                last_volume_number?: number | string | null;
+              })
+            : {};
+          // The masthead city should follow the specific API-enabled reporter
+          // or sub-editor this bundle belongs to (their registered print
+          // place name / district / city -- editorialAuthorsFromNmsPayload
+          // above already resolved this the same way the byline does), not
+          // the portal's single publisher-wide default. Falls back to the
+          // portal's city when the bundle carries no resolvable place.
+          const reporterLocation = bundleAuthors[0]?.location?.trim();
+          if (reporterLocation) {
+            patch.city = reporterLocation;
+          }
           const headerState = useEditorStore.getState().document.headerSystem;
           const profileId = headerState.activeHeaderSetId
             ? headerState.headerSets[headerState.activeHeaderSetId]?.publicationProfileId
             : null;
           if (profileId && Object.keys(patch).length > 0) {
             useEditorStore.getState().updatePublicationProfile(profileId, patch);
-            console.log("[NMS export bridge] applied cliffdemo3 portal publication profile", patch);
-          }
-          // Same portal header artwork the manual wizard applies (edition[0] or legacy fields).
-          const portalFull = portalProfile as {
-            city?: string;
-            cover_price?: string | number;
-            publication_start_year?: number | string | null;
-            last_volume_number?: number | string | null;
-            front_page_header_url?: string;
-            remaining_page_header_url?: string;
-            editions?: Array<{ front_header_url?: string; inside_header_url?: string }>;
-            theme_color?: string;
-          };
-          const selectedEdition = Array.isArray(portalFull.editions) ? portalFull.editions[0] : undefined;
-          const frontHeaderUrl = selectedEdition?.front_header_url || portalFull.front_page_header_url || "";
-          const insideHeaderUrl = selectedEdition?.inside_header_url || portalFull.remaining_page_header_url || "";
-          if (frontHeaderUrl || insideHeaderUrl) {
-            const [frontMaskColors, insideMaskColors] = await Promise.all([
-              frontHeaderUrl ? sampleImageColorsAt(frontHeaderUrl, getHeaderMaskSamplePoints("front")) : Promise.resolve(null),
-              insideHeaderUrl ? sampleImageColorsAt(insideHeaderUrl, getHeaderMaskSamplePoints("inside")) : Promise.resolve(null),
-            ]);
-            if (frontHeaderUrl) {
-              useEditorStore.getState().setHeaderBannerImage("front", frontHeaderUrl, frontMaskColors ?? undefined);
-            }
-            if (insideHeaderUrl) {
-              useEditorStore.getState().setHeaderBannerImage("inside", insideHeaderUrl, insideMaskColors ?? undefined);
-            }
-            console.log("[NMS export bridge] applied cliffdemo3 portal header artwork", {
-              hasFront: Boolean(frontHeaderUrl),
-              hasInside: Boolean(insideHeaderUrl),
+            console.log("[NMS export bridge] applied cliffdemo3 publication profile", {
+              ...patch,
+              citySource: reporterLocation ? "nmsReporterPlace" : (portalProfile ? "portal" : "none"),
             });
           }
-          if (portalFull.theme_color) {
-            useEditorStore.getState().setHeaderAccentColor(portalFull.theme_color);
+          // Same portal header artwork the manual wizard applies (edition[0] or legacy fields).
+          if (portalProfile) {
+            const portalFull = portalProfile as {
+              city?: string;
+              cover_price?: string | number;
+              publication_start_year?: number | string | null;
+              last_volume_number?: number | string | null;
+              front_page_header_url?: string;
+              remaining_page_header_url?: string;
+              editions?: Array<{ front_header_url?: string; inside_header_url?: string }>;
+              theme_color?: string;
+            };
+            const selectedEdition = Array.isArray(portalFull.editions) ? portalFull.editions[0] : undefined;
+            const frontHeaderUrl = selectedEdition?.front_header_url || portalFull.front_page_header_url || "";
+            const insideHeaderUrl = selectedEdition?.inside_header_url || portalFull.remaining_page_header_url || "";
+            if (frontHeaderUrl || insideHeaderUrl) {
+              const [frontMaskColors, insideMaskColors] = await Promise.all([
+                frontHeaderUrl ? sampleImageColorsAt(frontHeaderUrl, getHeaderMaskSamplePoints("front")) : Promise.resolve(null),
+                insideHeaderUrl ? sampleImageColorsAt(insideHeaderUrl, getHeaderMaskSamplePoints("inside")) : Promise.resolve(null),
+              ]);
+              if (frontHeaderUrl) {
+                useEditorStore.getState().setHeaderBannerImage("front", frontHeaderUrl, frontMaskColors ?? undefined);
+              }
+              if (insideHeaderUrl) {
+                useEditorStore.getState().setHeaderBannerImage("inside", insideHeaderUrl, insideMaskColors ?? undefined);
+              }
+              console.log("[NMS export bridge] applied cliffdemo3 portal header artwork", {
+                hasFront: Boolean(frontHeaderUrl),
+                hasInside: Boolean(insideHeaderUrl),
+              });
+            }
+            if (portalFull.theme_color) {
+              useEditorStore.getState().setHeaderAccentColor(portalFull.theme_color);
+            }
           }
         }
 
