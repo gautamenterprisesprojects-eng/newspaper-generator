@@ -129,3 +129,19 @@ measurement shim. They do not affect the production browser/PDF path.
 
 No Cliff News Portal source, container, nginx configuration, or database was accessed or changed for this
 feature.
+
+## Follow-up fixes: spacing and sub-editor-owned news
+
+Two production follow-ups were added after the original reporter-line feature:
+
+1. The two byline rows use compact `1.25` leading, and the layout reserves at least 5pt between the dotted
+   divider and body copy (including wide eight-column layouts). This prevents reporter/publication overlap
+   and divider/body collisions without changing ordinary PageMint composition.
+2. The explicitly activated NMS recipe remains authoritative if the headless browser normalizes its query
+   string. Reporter resolution now falls back through the top-level reporter, rewritten nested reporter,
+   and structured byline name. A sub-editor's own upload therefore prints that sub-editor's name, while an
+   assigned reporter's article continues to print the reporter who uploaded it.
+
+The focused test now exercises direct composition, front-page newswire import, long reporter names,
+reporter-missing internet fill, wide-template divider clearance, and the sub-editor-owned article case.
+Expected result: `NMS reporter byline tests passed: 17`.

@@ -39,6 +39,7 @@ const run = async () => {
     "@/engines/StoryHierarchy/StoryHierarchyEngine"
   );
   const { composeArticleBox } = await import("./composeArticleBox");
+  const { useEditorStore } = await import("@/store/editorStore");
   const {
     CLIFFDEMO3_MANUAL_RECIPE,
     resolvePageMintRecipeFromPayload,
@@ -129,6 +130,53 @@ const run = async () => {
     { ...article, nmsReporterNameAboveByline: "डॉ. सत्यप्रकाश विश्वकर्मा" },
     settings,
   );
+  (globalThis.window as unknown as { location: { search: string } }).location.search = "";
+  const explicitRecipeNms = composeArticleBox(box, article, settings);
+  const importReporterName = "मुकेश भदौरिया";
+  const importHeadline = "सब-एडिटर की अपनी अपलोड की हुई खबर";
+  const importStories = Array.from({ length: 9 }, (_, index) => ({
+    id: `nms-import-${index + 1}`,
+    language: "hindi" as const,
+    category: "National",
+    headline: index === 0 ? importHeadline : `फिल समाचार ${index + 1}`,
+    subheadline: "",
+    body: "समाचार का मुख्य पाठ पूरे पृष्ठ परीक्षण के लिए पर्याप्त लंबा है। ".repeat(80),
+    shortBody: "समाचार का मुख्य पाठ। ".repeat(20),
+    mediumBody: "समाचार का मुख्य पाठ। ".repeat(80),
+    longBody: "समाचार का मुख्य पाठ। ".repeat(160),
+    summary: [],
+    caption: "",
+    imageCaption: "",
+    imageUrl: "",
+    place: "भोपाल",
+    sourceTitle: "NMS",
+    sourceUrl: "",
+    publishedAt: null,
+    bylineName: "",
+    ...(index === 0 ? { nmsReporterNameAboveByline: importReporterName } : {}),
+  }));
+  useEditorStore.getState().importNewswireStories("NMS Bundle", importStories, {
+    templateId: "CliffFrontEditorRail8A",
+    pageKind: "front",
+    languageMode: "hindi",
+    bylineName: "द क्लिफ न्यूज़",
+    colouredHeadings: false,
+    tintedStoryBackground: true,
+    inlineColumnSubheadings: true,
+    subheadingStyle: {
+      backgroundColor: "#111111",
+      textColor: "#ffffff",
+      borderColor: "#111111",
+      backgroundOpacity: 1,
+    },
+    bodyAlignment: "justify",
+  });
+  const importedOwnStory = useEditorStore.getState().stories.find(
+    (story) => JSON.stringify(story.articleData.headline).includes(importHeadline),
+  );
+  const importedOwnLayout = importedOwnStory
+    ? composeArticleBox(importedOwnStory, importedOwnStory.articleData, importedOwnStory.compositionSettings)
+    : null;
   setActivePageMintRecipe(null);
   Reflect.deleteProperty(globalThis, "window");
 
@@ -161,6 +209,10 @@ const run = async () => {
     (longReporter.byline.lineBoxes[0]?.renderedWidth ?? Infinity) <= longReporter.byline.width,
     "a long reporter name must fit within the byline width",
   );
+  assert(
+    explicitRecipeNms.byline.wrappedLines[0] === reporterName,
+    "an explicitly activated NMS recipe must survive browser query normalization",
+  );
 
   const assertDividerClearsBody = (layout: typeof nms, label: string) => {
     const divider = layout.decorativeDividers?.find((candidate) => candidate.style === "dotted");
@@ -183,8 +235,16 @@ const run = async () => {
   );
   assertDividerClearsBody(nmsWithoutReporter, "single-line NMS byline");
   assertDividerClearsBody(wideNmsWithoutReporter, "wide eight-column NMS byline");
+  assert(
+    importedOwnStory?.articleData.nmsReporterNameAboveByline === importReporterName,
+    "front-page import must preserve a sub-editor uploader as the article reporter",
+  );
+  assert(
+    importedOwnLayout?.byline.wrappedLines[0] === importReporterName,
+    "front-page composition must print the sub-editor uploader above the publication byline",
+  );
 
-  console.log("NMS reporter byline tests passed: 14");
+  console.log("NMS reporter byline tests passed: 17");
 };
 
 run();

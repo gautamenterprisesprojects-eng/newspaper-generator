@@ -223,4 +223,9 @@ export const isNmsExportSession = (): boolean =>
  * behaviour for every publisher, cliffdemo3 included.
  */
 export const getNmsExportRecipe = (): CliffDemo3PageMintRecipe | null =>
-  isNmsExportSession() ? getActivePageMintRecipe() : null;
+  typeof window !== "undefined" &&
+  (window as typeof window & { [RECIPE_WINDOW_KEY]?: CliffDemo3PageMintRecipe })[RECIPE_WINDOW_KEY]?.schemaVersion
+    ? (window as typeof window & { [RECIPE_WINDOW_KEY]?: CliffDemo3PageMintRecipe })[RECIPE_WINDOW_KEY] ?? null
+    : isNmsExportSession()
+      ? getActivePageMintRecipe()
+      : null;

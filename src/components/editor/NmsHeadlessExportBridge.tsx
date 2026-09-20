@@ -232,10 +232,24 @@ const toNewswireStory = (
   const subheadline = extractNmsSubheadline(article, subheadings);
   const imageCaption = extractNmsImageCaption(article);
   const category = textValue(article.category) || "National";
-  const explicitReporterName = textValue(article.reporter?.nameHi) || textValue(article.reporter?.name);
-  const reporterName = explicitReporterName || "द क्लिफ न्यूज़";
   const bylineObj =
-    article.byline && typeof article.byline === "object" ? (article.byline as { designation?: unknown; place?: unknown }) : null;
+    article.byline && typeof article.byline === "object"
+      ? (article.byline as { name?: unknown; designation?: unknown; place?: unknown })
+      : null;
+  const nestedReporter =
+    article.article && typeof article.article === "object"
+      ? (article.article as typeof article.article & { reporter?: NmsBundleArticle["reporter"] }).reporter
+      : null;
+  // NMS normally carries the uploader in `reporter`. Keep the structured
+  // byline and nested article copies as fallbacks so a sub-editor's own upload
+  // cannot lose its author identity during bundle rewriting/normalization.
+  const explicitReporterName =
+    textValue(article.reporter?.nameHi) ||
+    textValue(article.reporter?.name) ||
+    textValue(nestedReporter?.nameHi) ||
+    textValue(nestedReporter?.name) ||
+    textValue(bylineObj?.name);
+  const reporterName = explicitReporterName || "द क्लिफ न्यूज़";
   const reporterDesignation =
     textValue(article.reporter?.printDesignation) ||
     textValue(article.reporter?.designation) ||
