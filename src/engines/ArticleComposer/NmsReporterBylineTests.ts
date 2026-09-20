@@ -114,6 +114,16 @@ const run = async () => {
     },
   });
   const nms = composeArticleBox(box, article, settings);
+  const nmsWithoutReporter = composeArticleBox(
+    box,
+    { ...article, nmsReporterNameAboveByline: "" },
+    settings,
+  );
+  const wideNmsWithoutReporter = composeArticleBox(
+    { ...box, width: 760, columnSpan: 8 } as typeof box,
+    { ...article, columnCount: 8, nmsReporterNameAboveByline: "" },
+    { ...settings, editorialTemplateId: "CliffInsideEightColumn" },
+  );
   const longReporter = composeArticleBox(
     box,
     { ...article, nmsReporterNameAboveByline: "डॉ. सत्यप्रकाश विश्वकर्मा" },
@@ -132,6 +142,13 @@ const run = async () => {
     nms.byline.height > ordinary.byline.height && nms.byline.height - ordinary.byline.height <= 12,
     "reporter must consume only one compact extra line",
   );
+  const reporterLine = nms.byline.lineBoxes[0];
+  const publicationLine = nms.byline.lineBoxes[1];
+  assert(
+    Boolean(reporterLine && publicationLine) &&
+      publicationLine.y - reporterLine.y >= reporterLine.style.fontSize + 1.5,
+    "reporter and publication rows must keep visible vertical separation",
+  );
   assert(
     nms.byline.lineBoxes[1]?.segments?.some((segment) => segment.role === "byline-dot") === true,
     "red dot must remain on the original publication/location line",
@@ -145,7 +162,29 @@ const run = async () => {
     "a long reporter name must fit within the byline width",
   );
 
-  console.log("NMS reporter byline tests passed: 9");
+  const assertDividerClearsBody = (layout: typeof nms, label: string) => {
+    const divider = layout.decorativeDividers?.find((candidate) => candidate.style === "dotted");
+    const firstBodyLineY = Math.min(
+      ...layout.body.columns.flatMap((column) => column.lines
+        .filter((line) => Boolean(divider) && line.x < divider!.x + divider!.width && line.x + line.width > divider!.x)
+        .map((line) => line.y)),
+    );
+    assert(Boolean(divider), `${label} must retain its dotted byline divider`);
+    assert(
+      divider !== undefined && Number.isFinite(firstBodyLineY) && firstBodyLineY - divider.y >= 5,
+      `${label} divider must keep at least 5pt before body text (actual: ${divider ? firstBodyLineY - divider.y : "missing"})`,
+    );
+  };
+
+  assertDividerClearsBody(nms, "two-line NMS byline");
+  assert(
+    nmsWithoutReporter.byline.wrappedLines.length === 1,
+    "an internet-filled story without a reporter must remain a one-line byline",
+  );
+  assertDividerClearsBody(nmsWithoutReporter, "single-line NMS byline");
+  assertDividerClearsBody(wideNmsWithoutReporter, "wide eight-column NMS byline");
+
+  console.log("NMS reporter byline tests passed: 14");
 };
 
 run();

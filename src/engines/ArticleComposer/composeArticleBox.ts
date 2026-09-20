@@ -230,6 +230,10 @@ const DEFAULT_SELECTIVE_DIVIDER_RATIO = 1 / 3;
 const BYLINE_DOT_COLOR = "#b42318";
 const BYLINE_DIVIDER_GAP = 1.5;
 const BYLINE_DIVIDER_TO_BODY = 5;
+const NMS_REPORTER_BYLINE_LINE_HEIGHT = 1.25;
+// The divider is rounded to a whole-point Y coordinate. Reserve an extra half
+// point so compact measured layouts still retain a full 5pt to the body row.
+const NMS_BYLINE_DIVIDER_TO_BODY = 5.5;
 
 type ArticleFitOverrides = Partial<EditorialFitCandidateSettings> & {
   imageHeightMode?: "auto" | "fixed";
@@ -4321,16 +4325,19 @@ function composeArticleBoxPass(
   const subheadlineBackground = null;
 
   const standardBylineText = formatByline(articleData);
-  const nmsReporterNameAboveByline = getNmsExportRecipe()?.importOptions.reporterNameAboveByline
+  const nmsExportRecipe = getNmsExportRecipe();
+  const nmsReporterBylineLayoutEnabled = Boolean(nmsExportRecipe?.importOptions.reporterNameAboveByline);
+  const nmsReporterNameAboveByline = nmsReporterBylineLayoutEnabled
     ? (articleData.nmsReporterNameAboveByline || "").replace(/\s+/gu, " ").trim()
     : "";
+  const hasNmsReporterLine = Boolean(nmsReporterNameAboveByline);
   const bylineLines = [nmsReporterNameAboveByline, standardBylineText].filter(Boolean);
   const bylineText = bylineLines.join("\n");
   const bylineStyle: ArticleTextStyle = {
     ...editorialStyles.dateline,
     align: "center",
     fontSize: 8.2,
-    lineHeight: 1,
+    lineHeight: hasNmsReporterLine ? NMS_REPORTER_BYLINE_LINE_HEIGHT : 1,
     fill: settings.tightBylineToBodyGap ? "#ffffff" : editorialStyles.dateline.fill,
   };
   const measureBylineLine = (text: string, width: number) => measureParagraph({
@@ -5360,9 +5367,12 @@ function composeArticleBoxPass(
   const bylineDividerGap = settings.frontPageStyle
     ? isBottomFrontThreeColumnPackage ? 5 : 2.5
     : BYLINE_DIVIDER_GAP;
-  const bylineDividerToBody = settings.frontPageStyle
+  const baseBylineDividerToBody = settings.frontPageStyle
     ? isBottomFrontThreeColumnPackage ? 5 : 2.5
     : BYLINE_DIVIDER_TO_BODY;
+  const bylineDividerToBody = nmsReporterBylineLayoutEnabled
+    ? Math.max(baseBylineDividerToBody, NMS_BYLINE_DIVIDER_TO_BODY)
+    : baseBylineDividerToBody;
   // The inline-bullet block above already reserves its own small gap after
   // its last line (inlineSubheadlineToBodyGap), which is right for the space
   // between bullets but reads as flush between the last bullet and the
@@ -5403,7 +5413,7 @@ function composeArticleBoxPass(
           ...bylineMetrics,
           overflow: false,
         },
-        compactHeadlineByline || twoColumnLeftPhoto ? { gridSize: 1 } : baselineGrid,
+        hasNmsReporterLine || compactHeadlineByline || twoColumnLeftPhoto ? { gridSize: 1 } : baselineGrid,
       ), bylineStyle)
     : byline;
 
@@ -5500,7 +5510,7 @@ function composeArticleBoxPass(
             byline.y +
               byline.height +
               bylineDividerGap +
-              (tightWideEightColumnBylineToBodyGap ? 0.5 : bylineDividerToBody) -
+              (tightWideEightColumnBylineToBodyGap && !nmsReporterBylineLayoutEnabled ? 0.5 : bylineDividerToBody) -
               rawLeadRegion.y,
           )
       : bylineRegion && rawLeadRegion && byline.text
