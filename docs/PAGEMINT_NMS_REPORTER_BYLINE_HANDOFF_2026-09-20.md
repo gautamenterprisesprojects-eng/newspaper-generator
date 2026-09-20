@@ -144,4 +144,18 @@ Two production follow-ups were added after the original reporter-line feature:
 
 The focused test now exercises direct composition, front-page newswire import, long reporter names,
 reporter-missing internet fill, wide-template divider clearance, and the sub-editor-owned article case.
+
+## Follow-up fix: editor rail consumed the first NMS article
+
+The `CliffFrontEditorRail8A` layout has nine template slots, but story 1 is fixed portrait/name artwork,
+not a printable article box. After the template gained its ninth slot, the NMS sequential planner used
+the raw `storyCount` and therefore planned nine articles for only eight visible news boxes. Rank-based
+placement could assign the first NMS article to story 1, where the rail artwork covered it; this also
+hid its reporter or sub-editor byline.
+
+The NMS planner now reports eight printable boxes for this template. During the headless PageMint import,
+story 1 receives an internal furniture placeholder and the eight planned articles are pinned in order to
+visible story numbers `2, 9, 3, 4, 5, 6, 7, 8`. This is confined to the NMS editor-rail export path. The
+regression suite checks that a sub-editor-owned article occupies visible story 2 and prints the uploader
+above the publication/place byline.
 Expected result: `NMS reporter byline tests passed: 17`.

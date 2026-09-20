@@ -43,6 +43,7 @@ import { buildPublicationProfilePatchFromPortal } from "@/lib/nms/cliffDemo3Port
 import { sampleImageColorsAt } from "@/lib/sampleImageColors";
 import { getHeaderMaskSamplePoints } from "@/engines/HeaderSystem/HeaderSlotGeometry";
 import { clearTextMeasurementCache } from "@/engines/TypographyEngine/TextMeasure";
+import { prepareNmsEditorRailImportStories } from "@/lib/nms/nmsEditorRailImport";
 
 const words = (text: string) => text.trim().split(/\s+/u).filter(Boolean);
 
@@ -614,7 +615,7 @@ export function NmsHeadlessExportBridge() {
 
           useEditorStore.getState().setActivePage(page.id);
           const maxSubheads = recipe?.subheads.maxSubheadingsPerStory;
-          const chunk = (planned.articles ?? []).map((article, articleIndex) => {
+          const mappedStories = (planned.articles ?? []).map((article, articleIndex) => {
             const story = toNewswireStory(article, pageIndex * 100 + articleIndex, {
               useNewspaperByline: reporterNameAboveByline,
               reporterNameAboveByline,
@@ -625,6 +626,7 @@ export function NmsHeadlessExportBridge() {
             }
             return story;
           });
+          const chunk = prepareNmsEditorRailImportStories(mappedStories, planned.templateId);
           if (chunk.length === 0) {
             throw new Error(`Queued page ${planned.pageNumber} (${planned.templateName}) has no articles.`);
           }

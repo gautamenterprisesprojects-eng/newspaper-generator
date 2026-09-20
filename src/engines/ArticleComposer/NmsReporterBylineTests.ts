@@ -40,6 +40,7 @@ const run = async () => {
   );
   const { composeArticleBox } = await import("./composeArticleBox");
   const { useEditorStore } = await import("@/store/editorStore");
+  const { prepareNmsEditorRailImportStories } = await import("@/lib/nms/nmsEditorRailImport");
   const {
     CLIFFDEMO3_MANUAL_RECIPE,
     resolvePageMintRecipeFromPayload,
@@ -155,7 +156,8 @@ const run = async () => {
     bylineName: "",
     ...(index === 0 ? { nmsReporterNameAboveByline: importReporterName } : {}),
   }));
-  useEditorStore.getState().importNewswireStories("NMS Bundle", importStories, {
+  const preparedImportStories = prepareNmsEditorRailImportStories(importStories.slice(0, 8), "CliffFrontEditorRail8A");
+  useEditorStore.getState().importNewswireStories("NMS Bundle", preparedImportStories, {
     templateId: "CliffFrontEditorRail8A",
     pageKind: "front",
     languageMode: "hindi",
@@ -173,6 +175,9 @@ const run = async () => {
   });
   const importedOwnStory = useEditorStore.getState().stories.find(
     (story) => JSON.stringify(story.articleData.headline).includes(importHeadline),
+  );
+  const editorRailFurnitureStory = useEditorStore.getState().stories.find(
+    (story) => story.templateStoryNumber === 1,
   );
   const importedOwnLayout = importedOwnStory
     ? composeArticleBox(importedOwnStory, importedOwnStory.articleData, importedOwnStory.compositionSettings)
@@ -240,11 +245,19 @@ const run = async () => {
     "front-page import must preserve a sub-editor uploader as the article reporter",
   );
   assert(
+    importedOwnStory?.templateStoryNumber === 2,
+    "the sub-editor's uploaded article must occupy the first visible news box, not the editor rail",
+  );
+  assert(
+    editorRailFurnitureStory?.id !== importedOwnStory?.id,
+    "the fixed editor rail must consume only its placeholder story",
+  );
+  assert(
     importedOwnLayout?.byline.wrappedLines[0] === importReporterName,
     "front-page composition must print the sub-editor uploader above the publication byline",
   );
 
-  console.log("NMS reporter byline tests passed: 17");
+  console.log("NMS reporter byline tests passed: 19");
 };
 
 run();

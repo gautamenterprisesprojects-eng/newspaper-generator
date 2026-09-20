@@ -109,6 +109,13 @@ export const getNmsTemplateBoxCount = (templateId: TemplateId) => {
   if (!definition) {
     throw new Error(`Unknown NMS layout template: ${templateId}`);
   }
+  // Story 1 on the editor-rail front is fixed page furniture (portrait,
+  // name, place and designation), not a printable article box. Keeping it
+  // out of NMS capacity prevents a real bundle article from being consumed
+  // behind that artwork.
+  if (templateId === EDITOR_RAIL_FRONT_TEMPLATE_ID) {
+    return definition.slots.filter((slot) => slot.storyNumber !== 1).length;
+  }
   return definition.storyCount;
 };
 
