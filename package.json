@@ -28,6 +28,7 @@
     "test:hyphenationjustification": "tsx src/engines/HyphenationJustification/HyphenationJustificationTests.ts",
     "test:imageplacement": "tsx src/engines/ImagePlacement/ImagePlacementTests.ts",
     "test:nmsedition": "tsx src/lib/nms/nmsSequentialEditionTests.ts",
+    "test:nmsreporterbyline": "tsx src/engines/ArticleComposer/NmsReporterBylineTests.ts",
     "test:newspaperjustify": "tsx src/engines/NewspaperJustification/NewspaperJustificationTests.ts",
     "test:pagetemplate": "tsx src/engines/PageTemplateEngine/PageTemplateTests.ts",
     "test:presscolourbar": "tsx src/engines/MasterPage/PressColourBarTests.ts",

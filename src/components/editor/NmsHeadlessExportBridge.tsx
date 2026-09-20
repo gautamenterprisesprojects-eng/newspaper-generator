@@ -212,7 +212,19 @@ const namespaceActivePageStories = (pageIndex: number) => {
   });
 };
 
-const toNewswireStory = (article: NmsBundleArticle, index: number): NewswireStory => {
+type NmsBylineOptions = {
+  useNewspaperByline: boolean;
+  reporterNameAboveByline: boolean;
+};
+
+const toNewswireStory = (
+  article: NmsBundleArticle,
+  index: number,
+  bylineOptions: NmsBylineOptions = {
+    useNewspaperByline: false,
+    reporterNameAboveByline: false,
+  },
+): NewswireStory => {
   const headline = textValue(article.headline) || textValue(article.originalHeadline) || `NMS Story ${index + 1}`;
   const body = cleanNmsBody(textValue(article.body) || textValue(article.originalBody) || "", headline);
   const imageUrl = pickNmsArticleImageUrl(article);
@@ -220,7 +232,8 @@ const toNewswireStory = (article: NmsBundleArticle, index: number): NewswireStor
   const subheadline = extractNmsSubheadline(article, subheadings);
   const imageCaption = extractNmsImageCaption(article);
   const category = textValue(article.category) || "National";
-  const reporterName = textValue(article.reporter?.nameHi) || textValue(article.reporter?.name) || "द क्लिफ न्यूज़";
+  const explicitReporterName = textValue(article.reporter?.nameHi) || textValue(article.reporter?.name);
+  const reporterName = explicitReporterName || "द क्लिफ न्यूज़";
   const bylineObj =
     article.byline && typeof article.byline === "object" ? (article.byline as { designation?: unknown; place?: unknown }) : null;
   const reporterDesignation =
@@ -253,7 +266,13 @@ const toNewswireStory = (article: NmsBundleArticle, index: number): NewswireStor
     sourceTitle: "NMS",
     sourceUrl: "",
     publishedAt: null,
-    bylineName,
+    // When the recipe keeps the publication byline, leave this empty so the
+    // import's page-level byline remains authoritative. The original reporter
+    // is carried separately and becomes a compact line above it.
+    bylineName: bylineOptions.useNewspaperByline ? "" : bylineName,
+    ...(bylineOptions.reporterNameAboveByline && explicitReporterName
+      ? { nmsReporterNameAboveByline: explicitReporterName }
+      : {}),
     photoCredit: "",
   } as NewswireStory;
 };
@@ -507,6 +526,11 @@ export function NmsHeadlessExportBridge() {
           payload.pagemint_user_id || payload.pagemint_target_id || "",
         ).trim();
         const useDeterministicCliffDemo3Palette = isCliffDemo3PublisherIdentity(pageMintTarget);
+        const reporterNameAboveByline = Boolean(
+          useDeterministicCliffDemo3Palette &&
+          bylineFromNewspaperName &&
+          recipe?.importOptions.reporterNameAboveByline === true,
+        );
         const carriedPalette = resolveCliffDemo3CarriedPaletteFromPayload(pageMintTarget, {
           cliffdemo3ManualPalette: (payload as { cliffdemo3ManualPalette?: unknown }).cliffdemo3ManualPalette,
           manualBatchPalette: (payload as { manualBatchPalette?: unknown }).manualBatchPalette,
@@ -552,7 +576,10 @@ export function NmsHeadlessExportBridge() {
           useEditorStore.getState().setActivePage(page.id);
           const maxSubheads = recipe?.subheads.maxSubheadingsPerStory;
           const chunk = (planned.articles ?? []).map((article, articleIndex) => {
-            const story = toNewswireStory(article, pageIndex * 100 + articleIndex);
+            const story = toNewswireStory(article, pageIndex * 100 + articleIndex, {
+              useNewspaperByline: reporterNameAboveByline,
+              reporterNameAboveByline,
+            });
             if (typeof maxSubheads === "number" && maxSubheads >= 0 && Array.isArray(story.summary)) {
               story.summary = story.summary.slice(0, maxSubheads);
               if (maxSubheads === 0) story.subheadline = "";

@@ -859,8 +859,17 @@ const applyNewspaperBylineSegments = (
     return block;
   }
 
+  const bylineLines = block.text
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const bylineLineIndex = bylineLines.findIndex((line) => line.includes(BYLINE_SEPARATOR));
+  if (bylineLineIndex < 0) return block;
+
   let fittedStyle = style;
-  const measuredWidth = measureRenderedTextWidth(block.text, fittedStyle);
+  // Preserve the established publication/place line exactly. If an unusually
+  // long reporter needs fitting, only its newly-added line is reduced below.
+  const measuredWidth = measureRenderedTextWidth(bylineLines[bylineLineIndex], fittedStyle);
   if (measuredWidth > block.width) {
     const scale = Math.max(0.72, Math.min(1, (block.width - 2) / Math.max(1, measuredWidth)));
     fittedStyle = {
@@ -869,7 +878,8 @@ const applyNewspaperBylineSegments = (
       lineHeight: style.lineHeight,
     };
   }
-  const [creditText = "", placeText = ""] = block.text.split(BYLINE_SEPARATOR).map((part) => part.trim());
+  const bylineLineText = bylineLines[bylineLineIndex];
+  const [creditText = "", placeText = ""] = bylineLineText.split(BYLINE_SEPARATOR).map((part) => part.trim());
   const separatorGap = Math.max(1.4, fittedStyle.fontSize * 0.18);
   const dotStyle: ArticleTextStyle = {
     ...fittedStyle,
@@ -889,8 +899,41 @@ const applyNewspaperBylineSegments = (
     ...block,
     style: fittedStyle,
     lineBoxes: block.lineBoxes.map((line, lineIndex) => {
-      if (lineIndex !== 0) {
-        return line;
+      if (lineIndex !== bylineLineIndex) {
+        const lineText = bylineLines[lineIndex] || line.text.trim();
+        let lineStyle = fittedStyle;
+        let lineWidth = measureRenderedTextWidth(lineText, lineStyle);
+        if (lineWidth > block.width) {
+          const scale = Math.max(0.72, Math.min(1, (block.width - 2) / Math.max(1, lineWidth)));
+          lineStyle = {
+            ...fittedStyle,
+            fontSize: Math.max(6, fittedStyle.fontSize * scale),
+            lineHeight: fittedStyle.lineHeight,
+          };
+          lineWidth = measureRenderedTextWidth(lineText, lineStyle);
+        }
+        const lineX = block.x + Math.max(0, (block.width - lineWidth) / 2);
+        return {
+          ...line,
+          text: lineText,
+          style: lineStyle,
+          measuredWidth: lineWidth,
+          renderedWidth: lineWidth,
+          segments: [{
+            x: lineX,
+            y: line.y,
+            width: lineWidth,
+            height: line.height,
+            text: lineText,
+            style: { ...lineStyle, align: "left" as const, wrap: "none" as const },
+            measuredWidth: lineWidth,
+            renderedWidth: lineWidth,
+            measuredFontFamily: lineStyle.fontFamily,
+            measuredFontSize: lineStyle.fontSize,
+            measuredFontStyle: lineStyle.fontStyle ?? "normal",
+            measuredFontWeight: lineStyle.fontStyle ?? "normal",
+          }],
+        };
       }
       return {
         ...line,
@@ -4277,7 +4320,12 @@ function composeArticleBoxPass(
   }
   const subheadlineBackground = null;
 
-  const bylineText = formatByline(articleData);
+  const standardBylineText = formatByline(articleData);
+  const nmsReporterNameAboveByline = getNmsExportRecipe()?.importOptions.reporterNameAboveByline
+    ? (articleData.nmsReporterNameAboveByline || "").replace(/\s+/gu, " ").trim()
+    : "";
+  const bylineLines = [nmsReporterNameAboveByline, standardBylineText].filter(Boolean);
+  const bylineText = bylineLines.join("\n");
   const bylineStyle: ArticleTextStyle = {
     ...editorialStyles.dateline,
     align: "center",
@@ -4285,9 +4333,9 @@ function composeArticleBoxPass(
     lineHeight: 1,
     fill: settings.tightBylineToBodyGap ? "#ffffff" : editorialStyles.dateline.fill,
   };
-  const bylineMetrics = measureParagraph({
-    text: bylineText,
-    width: contentWidth,
+  const measureBylineLine = (text: string, width: number) => measureParagraph({
+    text,
+    width,
     fontFamily: bylineStyle.fontFamily,
     fontSize: bylineStyle.fontSize,
     fontStyle: bylineStyle.fontStyle,
@@ -4295,6 +4343,28 @@ function composeArticleBoxPass(
     maxLines: 1,
     script: "mixed",
   });
+  const bylineMetrics = bylineLines.length <= 1
+    ? measureBylineLine(bylineText, contentWidth)
+    : (() => {
+        const lineMetrics = bylineLines.map((line) => measureBylineLine(
+          line,
+          Math.max(contentWidth, measureRenderedTextWidth(line, bylineStyle) + 1),
+        ));
+        const consumedWidth = Math.max(...lineMetrics.map((metrics) => metrics.consumedWidth));
+        const consumedHeight = lineMetrics.reduce((height, metrics) => height + metrics.consumedHeight, 0);
+        return {
+          ...lineMetrics[lineMetrics.length - 1],
+          lines: lineMetrics.flatMap((metrics) => metrics.lines),
+          wrappedLines: [...bylineLines],
+          lineCount: bylineLines.length,
+          consumedHeight,
+          consumedWidth,
+          paragraphWidth: consumedWidth,
+          paragraphHeight: consumedHeight,
+          overflow: lineMetrics.some((metrics) => metrics.overflow),
+          fullLineCount: bylineLines.length,
+        };
+      })();
   let byline = createTextBlock(0, 0, 1, "", bylineStyle, { ...bylineMetrics, wrappedLines: [], lineCount: 0, consumedHeight: 0 }, baselineGrid);
   let bylineDivider: ArticleDecorativeDivider | null = null;
   // Same fix as headlineToSubheadlineGap above: spacing.datelineToContent is a

@@ -35,6 +35,8 @@ export type CliffDemo3PageMintRecipe = {
     paletteMode: string;
     /** "newspaper_name" -> byline shows the publication name (wizard default); otherwise the bundle sender. */
     bylineSource?: string;
+    /** NMS-only opt-in: print the article reporter on a compact line above that byline. */
+    reporterNameAboveByline?: boolean;
   };
   fonts: {
     primaryOnlyNoStackFallback: boolean;

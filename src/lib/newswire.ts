@@ -217,6 +217,12 @@ export type NewswireStory = {
   kicker?: string;
   strap?: string;
   bylineName?: string;
+  /**
+   * NMS cliffdemo3 export only: one compact reporter-name line rendered above
+   * the normal publication-name/location byline. Ordinary newswire stories do
+   * not set this field, so the manual wizard and internet-fill path are unchanged.
+   */
+  nmsReporterNameAboveByline?: string;
   photoCredit?: string;
   factBoxHeading?: string;
   factBoxRows?: FactBoxRow[];

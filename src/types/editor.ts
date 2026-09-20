@@ -675,6 +675,8 @@ export type ArticleData = {
   badgeKickerEnabled?: boolean;
   inlineSubheadingColor?: string;
   author: string;
+  /** NMS cliffdemo3 export only; absent from every manual/newswire workflow. */
+  nmsReporterNameAboveByline?: string;
   /**
    * Editorial-page author block: the writer's portrait and the short summary
    * printed under their name.

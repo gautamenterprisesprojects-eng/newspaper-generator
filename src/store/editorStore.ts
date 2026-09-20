@@ -1563,6 +1563,10 @@ const createArticleDataFromNewswireStory = (
     badgeKickerEnabled: item.badgeKickerEnabled ?? story.articleData.badgeKickerEnabled,
     // Compact box: blank out author and location so byline row is not rendered.
     author: suppressByline ? "" : resolvedBylineName,
+    nmsReporterNameAboveByline:
+      !suppressByline && typeof item.nmsReporterNameAboveByline === "string"
+        ? item.nmsReporterNameAboveByline.replace(/\s+/gu, " ").trim() || undefined
+        : undefined,
     // Author-block fields, carried whether or not the byline prints: on an
     // editorial page the byline is suppressed and the portrait rail identifies
     // the writer instead, so the name has to survive that suppression.
