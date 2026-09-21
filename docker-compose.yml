@@ -5,6 +5,13 @@ services:
       dockerfile: Dockerfile
     container_name: newspaper_generator
     restart: always
+    # Hard ceiling so a runaway headless-Chromium burst gets OOM-killed inside
+    # this cgroup instead of starving nginx/sshd on the whole 8 GB VPS (which
+    # is exactly what happened on 2026-09-21 -- Cloudflare 522 on both sites).
+    # The generator itself needs ~1 GB; the rest is headroom for one or two
+    # NMS PDF renders (see NMS_PDF_MAX_CONCURRENCY in nmsPdfJob.ts).
+    mem_limit: 5g
+    memswap_limit: 5g
     ports:
       # Internal-only -- the host's own nginx (fronting the existing site)
       # reverse-proxies the public domain to this port. Not exposed publicly
