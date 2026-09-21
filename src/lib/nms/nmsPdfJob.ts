@@ -98,14 +98,14 @@ export const startNmsPdfJob = (payload: NmsBundlePayload, stored: StoredNmsBundl
     running: runningJobs,
     maxConcurrent: MAX_CONCURRENT_PDF_JOBS,
   });
-  pendingJobs.push(() =>
-    generateNmsPdfJob(payload, stored)
-      .catch((error: unknown) => {
-        console.error("[NMS PDF job] failed", error);
-      })
-      .finally(() => {
-        if (jobKey) activeJobIds.delete(jobKey);
-      }),
-  );
+  pendingJobs.push(async () => {
+    try {
+      await generateNmsPdfJob(payload, stored);
+    } catch (error: unknown) {
+      console.error("[NMS PDF job] failed", error);
+    } finally {
+      if (jobKey) activeJobIds.delete(jobKey);
+    }
+  });
   drainPdfQueue();
 };
